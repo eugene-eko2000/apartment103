@@ -1,65 +1,150 @@
 import Image from "next/image";
+import BookingWidget from "@/components/BookingWidget";
+import GalleryButton from "@/components/GalleryButton";
+
+const FEATURES = [
+  { icon: "🛏", label: "2 Bedrooms" },
+  { icon: "🚿", label: "2 Bathrooms" },
+  { icon: "👥", label: "Up to 5 guests" },
+  { icon: "🏔", label: "Lake & Mountain view" },
+  { icon: "📶", label: "Free Wi-Fi" },
+  { icon: "🅿️", label: "Free parking" },
+  { icon: "🍳", label: "Full kitchen" },
+];
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
+    <div className="min-h-screen" style={{ background: "#f8f6f2" }}>
+      {/* ── NAV ─────────────────────────────────────────── */}
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 shadow-sm">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
+              style={{ background: "linear-gradient(135deg, #0f766e, #0891b2)" }}
+            >
+              103
+            </span>
+            <span className="font-semibold text-gray-800">Apartment 103</span>
+          </div>
+          <nav className="hidden sm:flex items-center gap-6 text-sm text-gray-500">
+            <GalleryButton />
+            <a href="#" className="hover:text-teal-700 transition-colors">Amenities</a>
+            <a href="#" className="hover:text-teal-700 transition-colors">Location</a>
+            <a href="#" className="hover:text-teal-700 transition-colors">Reviews</a>
+          </nav>
+        </div>
+      </header>
+
+      {/* ── HERO ────────────────────────────────────────── */}
+      <div className="relative overflow-visible">
+        {/* Background photo */}
         <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
+          src="/hero.jpeg"
+          alt="Apartment view with Lake Walensee and mountains"
+          fill
           priority
+          className="object-cover object-center"
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+        {/* Dark overlay so text stays legible */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background: "rgba(30,30,30,0.30)",
+          }}
+        />
+
+        <div className="relative max-w-7xl mx-auto px-6 py-16 lg:py-20">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_480px] gap-12 items-start">
+            {/* Left — apartment info */}
+            <div className="text-white">
+              <div className="flex flex-wrap items-center gap-2 mb-5">
+                <span className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm text-white text-xs font-medium px-3 py-1.5 rounded-full">
+                  <span>📍</span>
+                  <span>Unterterzen, Switzerland</span>
+                </span>
+                <span className="flex items-center gap-1 bg-amber-400/90 text-amber-900 text-xs font-semibold px-3 py-1.5 rounded-full">
+                  ★ 4.9 · 48 reviews
+                </span>
+              </div>
+
+              <h1 className="text-4xl lg:text-5xl font-bold leading-tight mb-4">
+                Your perfect<br />
+                <span className="text-cyan-200">holiday escape</span>
+              </h1>
+
+              <p className="text-lg text-teal-100 mb-8 max-w-md leading-relaxed">
+                A cosy apartment nestled between the mountains and Lake Walensee.
+                Stunning alpine scenery, ski slopes and a lakeshore beach right
+                on your doorstep.
+              </p>
+
+              {/* Feature tags */}
+              <div className="flex flex-wrap gap-2">
+                {FEATURES.map((f) => (
+                  <span
+                    key={f.label}
+                    className="flex items-center gap-1.5 bg-white/15 backdrop-blur-sm px-3 py-1.5 rounded-full text-sm text-white"
+                  >
+                    <span>{f.icon}</span>
+                    <span>{f.label}</span>
+                  </span>
+                ))}
+              </div>
+
+            </div>
+
+            {/* Right — booking widget */}
+            <div className="lg:sticky lg:top-20">
+              <BookingWidget />
+            </div>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </div>
+
+      {/* ── ABOUT / HIGHLIGHTS ──────────────────────────── */}
+      <section className="max-w-7xl mx-auto px-6 py-16">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {[
+            {
+              icon: "🚂",
+              title: "45 min from Zurich",
+              desc: "Easy train connection to Zurich city centre — perfect for a day trip or a late arrival.",
+            },
+            {
+              icon: "⛷️",
+              title: "5 min to the ski lift",
+              desc: "Hit the slopes in minutes. Flumserberg ski resort is right above the village.",
+            },
+            {
+              icon: "🏖",
+              title: "2 min to the beach",
+              desc: "Lake Walensee's crystal-clear waters are a 2-minute stroll from the apartment.",
+            },
+          ].map((card) => (
+            <div
+              key={card.title}
+              className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100"
+            >
+              <div className="text-3xl mb-3">{card.icon}</div>
+              <h3 className="font-semibold text-gray-900 mb-2">{card.title}</h3>
+              <p className="text-gray-500 text-sm leading-relaxed">{card.desc}</p>
+            </div>
+          ))}
         </div>
-      </main>
+      </section>
+
+      {/* ── FOOTER ──────────────────────────────────────── */}
+      <footer className="border-t border-gray-200 bg-white">
+        <div className="max-w-7xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-400">
+          <span>© 2026 Apartment 103. All rights reserved.</span>
+          <div className="flex gap-6">
+            <a href="#" className="hover:text-teal-700 transition-colors">Privacy</a>
+            <a href="#" className="hover:text-teal-700 transition-colors">Terms</a>
+            <a href="#" className="hover:text-teal-700 transition-colors">Contact</a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
