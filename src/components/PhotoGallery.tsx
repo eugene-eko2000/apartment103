@@ -89,7 +89,7 @@ export default function PhotoGallery({ onClose }: Props) {
 
     const enterGrab = () => {
       drag.current.active = true;
-      document.body.style.cursor = 'grabbing';
+      el.style.cursor = 'grabbing';
       document.body.style.userSelect = 'none';
     };
 
@@ -120,7 +120,7 @@ export default function PhotoGallery({ onClose }: Props) {
       drag.current.wasGrabbed = drag.current.active;
       drag.current.pending = false;
       drag.current.active = false;
-      document.body.style.cursor = '';
+      el.style.cursor = '';
       document.body.style.userSelect = '';
     };
 
@@ -160,8 +160,13 @@ export default function PhotoGallery({ onClose }: Props) {
   }, [onClose, prev, next]);
 
   useEffect(() => {
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
     document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
+    document.body.style.paddingRight = `${scrollbarWidth}px`;
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
+    };
   }, []);
 
   return createPortal(
@@ -193,14 +198,14 @@ export default function PhotoGallery({ onClose }: Props) {
           ‹
         </button>
 
-        <div className="relative h-full w-full">
+        <div className="flex items-center justify-center h-full w-full">
           <Image
             key={PHOTOS[selected]}
             src={`/gallery/${PHOTOS[selected]}`}
             alt={`Apartment photo ${selected + 1}`}
-            fill
-            className="object-contain rounded-2xl"
-            sizes="(max-width: 1024px) 90vw, 900px"
+            width={900}
+            height={1000}
+            className="max-h-full max-w-full w-auto h-auto rounded-2xl"
             priority
           />
         </div>
@@ -243,7 +248,7 @@ export default function PhotoGallery({ onClose }: Props) {
               style={{ width: 44, height: 59, cursor: 'inherit' }}
             >
               <Image
-                src={`/gallery/${photo}`}
+                src={`/gallery/thumbs/${photo}`}
                 alt=""
                 fill
                 className="object-cover"
