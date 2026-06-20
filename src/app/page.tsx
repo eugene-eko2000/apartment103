@@ -14,7 +14,25 @@ const FEATURES = [
 
 export default function Home() {
   return (
-    <div className="min-h-screen" style={{ background: "#f8f6f2" }}>
+    <div>
+      {/* ── FIXED BACKGROUND ────────────────────────────── */}
+      <div className="fixed inset-0 -z-10">
+        <Image
+          src="/hero2.jpeg"
+          alt="Apartment view with Lake Walensee and mountains"
+          fill
+          priority
+          className="object-cover object-center"
+        />
+        <div
+          className="absolute inset-0"
+          style={{ background: "rgba(30,30,30,0.30)" }}
+        />
+      </div>
+
+      {/* ── SCROLLABLE CONTENT ──────────────────────────── */}
+      <div className="relative z-10">
+
       {/* ── NAV ─────────────────────────────────────────── */}
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
@@ -37,24 +55,8 @@ export default function Home() {
       </header>
 
       {/* ── HERO ────────────────────────────────────────── */}
-      <div className="relative overflow-visible">
-        {/* Background photo */}
-        <Image
-          src="/hero.jpeg"
-          alt="Apartment view with Lake Walensee and mountains"
-          fill
-          priority
-          className="object-cover object-center"
-        />
-        {/* Dark overlay so text stays legible */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background: "rgba(30,30,30,0.30)",
-          }}
-        />
-
-        <div className="relative max-w-7xl mx-auto px-6 py-16 lg:py-20">
+      <div className="min-h-[calc(100vh-4rem)]">
+        <div className="max-w-7xl mx-auto px-6 py-16 lg:py-20">
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_480px] gap-12 items-start">
             {/* Left — apartment info */}
             <div className="text-white">
@@ -145,6 +147,7 @@ export default function Home() {
           </div>
         </div>
       </footer>
+      </div>{/* end scrollable content */}
     </div>
   );
 }
