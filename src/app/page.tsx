@@ -30,11 +30,11 @@ export default function Home() {
         />
       </div>
 
-      {/* ── SCROLLABLE CONTENT ──────────────────────────── */}
-      <div className="relative z-10">
+      {/* ── FULL-VIEWPORT CONTENT ───────────────────────── */}
+      <div className="relative z-10 h-screen flex flex-col overflow-hidden">
 
       {/* ── NAV ─────────────────────────────────────────── */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 shadow-sm">
+      <header className="shrink-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span
@@ -55,12 +55,12 @@ export default function Home() {
       </header>
 
       {/* ── HERO ────────────────────────────────────────── */}
-      <div className="min-h-[calc(100vh-4rem)]">
-        <div className="max-w-7xl mx-auto px-6 py-16 lg:py-20">
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_480px] gap-12 items-start">
+      <div className="flex-1 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-6 py-6 lg:py-8 h-full">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_480px] gap-12 items-start h-full">
             {/* Left — apartment info */}
             <div className="text-white">
-              <div className="flex flex-wrap items-center gap-2 mb-5">
+              <div className="flex flex-wrap items-center gap-2 mb-4">
                 <span className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm text-white text-xs font-medium px-3 py-1.5 rounded-full">
                   <span>📍</span>
                   <span>Unterterzen, Switzerland</span>
@@ -70,12 +70,12 @@ export default function Home() {
                 </span>
               </div>
 
-              <h1 className="text-4xl lg:text-5xl font-bold leading-tight mb-4">
+              <h1 className="text-4xl lg:text-5xl font-bold leading-tight mb-3">
                 Your perfect<br />
                 <span className="text-cyan-200">holiday escape</span>
               </h1>
 
-              <p className="text-lg text-teal-100 mb-8 max-w-md leading-relaxed">
+              <p className="text-lg text-teal-100 mb-6 max-w-md leading-relaxed">
                 A cosy apartment nestled between the mountains and Lake Walensee.
                 Stunning alpine scenery, ski slopes and a lakeshore beach right
                 on your doorstep.
@@ -97,7 +97,7 @@ export default function Home() {
             </div>
 
             {/* Right — booking widget */}
-            <div className="lg:sticky lg:top-20">
+            <div className="overflow-y-auto max-h-full">
               <BookingWidget />
             </div>
           </div>
@@ -105,8 +105,8 @@ export default function Home() {
       </div>
 
       {/* ── ABOUT / HIGHLIGHTS ──────────────────────────── */}
-      <section className="max-w-7xl mx-auto px-6 py-16">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <section className="shrink-0 max-w-7xl mx-auto w-full px-6 py-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {[
             {
               icon: "🚂",
@@ -126,19 +126,21 @@ export default function Home() {
           ].map((card) => (
             <div
               key={card.title}
-              className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100"
+              className="bg-white rounded-2xl px-5 py-4 shadow-sm border border-gray-100 flex items-start gap-3"
             >
-              <div className="text-3xl mb-3">{card.icon}</div>
-              <h3 className="font-semibold text-gray-900 mb-2">{card.title}</h3>
-              <p className="text-gray-500 text-sm leading-relaxed">{card.desc}</p>
+              <span className="text-2xl mt-0.5 shrink-0">{card.icon}</span>
+              <div>
+                <h3 className="font-semibold text-gray-900 text-sm mb-0.5">{card.title}</h3>
+                <p className="text-gray-500 text-xs leading-relaxed">{card.desc}</p>
+              </div>
             </div>
           ))}
         </div>
       </section>
 
       {/* ── FOOTER ──────────────────────────────────────── */}
-      <footer className="border-t border-gray-200 bg-white">
-        <div className="max-w-7xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-400">
+      <footer className="shrink-0 border-t border-gray-200 bg-white">
+        <div className="max-w-7xl mx-auto px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-gray-400">
           <span>© 2026 Apartment 103. All rights reserved.</span>
           <div className="flex gap-6">
             <a href="#" className="hover:text-teal-700 transition-colors">Privacy</a>
@@ -147,7 +149,7 @@ export default function Home() {
           </div>
         </div>
       </footer>
-      </div>{/* end scrollable content */}
+      </div>{/* end full-viewport content */}
     </div>
   );
 }
