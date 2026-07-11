@@ -1,11 +1,12 @@
 # apartment103 backend
 
-FastAPI backend for apartment103, backed by MySQL. Currently a skeleton exposing a single `/health` endpoint.
+FastAPI backend for apartment103, backed by MySQL (relational data) and MongoDB via Beanie (price plans and cancellation policies). Currently a skeleton exposing a `/health` endpoint plus `/plans` and `/cancellation-policies`.
 
 ## Requirements
 
 - [uv](https://docs.astral.sh/uv/) — manages the Python version, the virtual environment, and dependencies. Install it with `curl -LsSf https://astral.sh/uv/install.sh | sh` (macOS/Linux) or `brew install uv`. You do **not** need to install Python 3.11 yourself; `uv` will fetch it automatically based on `pyproject.toml`.
 - MySQL 8.x running locally (or reachable) — only needed once the app starts using the database; the `/health` endpoint alone does not require it
+- MongoDB running locally (or reachable) — required for the `/plans` and `/cancellation-policies` endpoints, since Beanie connects to it on app startup
 
 ## Project layout
 
@@ -19,15 +20,24 @@ backend/
 │   ├── env.py              # wires Alembic to app.core.config + app.db.base metadata
 │   └── versions/           # migration scripts
 └── app/
-    ├── main.py            # FastAPI app + router registration
+    ├── main.py            # FastAPI app + router registration + Mongo/Beanie startup
     ├── core/
     │   └── config.py      # env-based settings (pydantic-settings)
     ├── db/
     │   ├── session.py     # SQLAlchemy engine/session setup, declarative Base
-    │   └── base.py        # imports every model so Alembic autogenerate sees them
+    │   ├── base.py        # imports every SQLAlchemy model so Alembic autogenerate sees them
+    │   └── mongo.py        # Mongo client + init_beanie wiring
+    ├── models/
+    │   ├── plan.py               # Plan Beanie document (name, cancellation policy link, default price, date-range rates)
+    │   └── cancellation_policy.py # CancellationPolicy Beanie document (name + days-before-checkin/refund rules)
+    ├── schemas/
+    │   ├── plan.py                # PlanCreate request schema
+    │   └── cancellation_policy.py # CancellationPolicyCreate request schema
     └── api/
         └── routes/
-            └── health.py  # GET /health
+            ├── health.py                # GET /health
+            ├── plans.py                 # CRUD for /plans
+            └── cancellation_policies.py # CRUD for /cancellation-policies
 ```
 
 ## Setup
@@ -54,12 +64,16 @@ backend/
    | `MYSQL_USER`     | MySQL user                          | `root`                 |
    | `MYSQL_PASSWORD` | MySQL password                      | *(empty)*              |
    | `MYSQL_DB`       | MySQL database name                 | `apartment103`         |
+   | `MONGO_URI`      | MongoDB connection URI              | `mongodb://localhost:27017` |
+   | `MONGO_DB`       | MongoDB database name               | `apartment103`         |
 
 3. (Optional, once you're using the database) create the database in MySQL:
 
    ```sql
    CREATE DATABASE apartment103 CHARACTER SET utf8mb4;
    ```
+
+4. Make sure a MongoDB instance is reachable at `MONGO_URI` — no schema setup is needed, Beanie creates the `plans` and `cancellation_policies` collections on first use.
 
 ## Running locally
 
@@ -76,6 +90,36 @@ The API will be available at `http://localhost:8000`.
 - Health check: `http://localhost:8000/health` → `{"status": "ok"}`
 - Interactive docs (Swagger UI): `http://localhost:8000/docs`
 - OpenAPI schema: `http://localhost:8000/openapi.json`
+
+## Price plans and cancellation policies (MongoDB / Beanie)
+
+A `CancellationPolicy` is a named list of refund rules (`days_before_checkin`, `refund_percentage` from `0.0` to `1.0`), stored in its own `cancellation_policies` collection so it can be reused across plans. A `Plan` has a `name`, a `default_price`, a link to a `CancellationPolicy`, and a list of date-range overrides (`begin_date`, `end_date`, `daily_rate`).
+
+```
+POST   /cancellation-policies        create a policy
+GET    /cancellation-policies        list policies
+GET    /cancellation-policies/{id}   get a policy
+PUT    /cancellation-policies/{id}   replace a policy
+DELETE /cancellation-policies/{id}   delete a policy
+
+POST   /plans        create a plan (body includes cancellation_policy_id)
+GET    /plans         list plans (cancellation policy resolved inline)
+GET    /plans/{id}     get a plan (cancellation policy resolved inline)
+PUT    /plans/{id}     replace a plan
+DELETE /plans/{id}     delete a plan
+```
+
+Create a policy first, then reference its id when creating a plan:
+
+```bash
+curl -X POST localhost:8000/cancellation-policies \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Flexible", "rules": [{"days_before_checkin": 7, "refund_percentage": 1.0}]}'
+
+curl -X POST localhost:8000/plans \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Standard", "cancellation_policy_id": "<policy id>", "default_price": 100.0, "date_ranges": [{"begin_date": "2026-12-20", "end_date": "2026-12-31", "daily_rate": 150.0}]}'
+```
 
 ## Running tests
 

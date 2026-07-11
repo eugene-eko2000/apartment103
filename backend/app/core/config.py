@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     mysql_password: str = ""
     mysql_db: str = "apartment103"
 
+    mongo_uri: str = "mongodb://localhost:27017"
+    mongo_db: str = "apartment103"
+
     @property
     def database_url(self) -> str:
         return (
