@@ -61,11 +61,20 @@ const PHOTOS = [
   '20260614_145239.jpeg',
 ];
 
-interface Props {
-  onClose: () => void;
+export interface GalleryDict {
+  closeGallery: string;
+  previousPhoto: string;
+  nextPhoto: string;
+  photo: string;
+  apartmentPhoto: string;
 }
 
-export default function PhotoGallery({ onClose }: Props) {
+interface Props {
+  onClose: () => void;
+  dict: GalleryDict;
+}
+
+export default function PhotoGallery({ onClose, dict }: Props) {
   const [selected, setSelected] = useState(0);
   const stripRef = useRef<HTMLDivElement>(null);
   const thumbRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -178,7 +187,7 @@ export default function PhotoGallery({ onClose }: Props) {
       {/* Close button */}
       <button
         onClick={onClose}
-        aria-label="Close gallery"
+        aria-label={dict.closeGallery}
         className="absolute top-6 right-8 z-10 text-white/70 hover:text-white transition-colors text-5xl leading-none"
       >
         ✕
@@ -192,7 +201,7 @@ export default function PhotoGallery({ onClose }: Props) {
         <button
           onClick={prev}
           disabled={selected === 0}
-          aria-label="Previous photo"
+          aria-label={dict.previousPhoto}
           className="absolute left-6 z-10 text-white text-5xl px-2 py-3 rounded-full bg-black/20 hover:bg-black/50 disabled:opacity-0 transition-all"
         >
           ‹
@@ -202,7 +211,7 @@ export default function PhotoGallery({ onClose }: Props) {
           <Image
             key={PHOTOS[selected]}
             src={`/gallery/${PHOTOS[selected]}`}
-            alt={`Apartment photo ${selected + 1}`}
+            alt={`${dict.apartmentPhoto} ${selected + 1}`}
             width={900}
             height={1000}
             className="max-h-full max-w-full w-auto h-auto rounded-2xl"
@@ -213,7 +222,7 @@ export default function PhotoGallery({ onClose }: Props) {
         <button
           onClick={next}
           disabled={selected === PHOTOS.length - 1}
-          aria-label="Next photo"
+          aria-label={dict.nextPhoto}
           className="absolute right-6 z-10 text-white text-5xl px-2 py-3 rounded-full bg-black/20 hover:bg-black/50 disabled:opacity-0 transition-all"
         >
           ›
@@ -238,7 +247,7 @@ export default function PhotoGallery({ onClose }: Props) {
               key={photo}
               ref={el => { thumbRefs.current[i] = el; }}
               onClick={() => setSelected(i)}
-              aria-label={`Photo ${i + 1}`}
+              aria-label={`${dict.photo} ${i + 1}`}
               className={[
                 'relative shrink-0 rounded-md overflow-hidden transition-all duration-150',
                 i === selected

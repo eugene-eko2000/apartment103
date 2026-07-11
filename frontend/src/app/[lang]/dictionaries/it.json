@@ -1,0 +1,86 @@
+{
+  "meta": {
+    "title": "Apartment 103 — Casa vacanze",
+    "description": "Prenota il tuo soggiorno perfetto all'Apartment 103. Un appartamento vacanze curato nei minimi dettagli."
+  },
+  "nav": {
+    "gallery": "Galleria",
+    "amenities": "Servizi",
+    "location": "Posizione",
+    "reviews": "Recensioni"
+  },
+  "hero": {
+    "location": "Unterterzen, Svizzera",
+    "rating": "★ 4,9 · 48 recensioni",
+    "titleLine1": "La tua perfetta",
+    "titleLine2": "fuga in vacanza",
+    "description": "Un accogliente appartamento incastonato tra le montagne e il lago di Walenstadt. Panorami alpini mozzafiato, piste da sci e una spiaggia sul lago proprio fuori dalla porta.",
+    "features": {
+      "bedrooms": "2 camere da letto",
+      "bathrooms": "2 bagni",
+      "guests": "Fino a 5 ospiti",
+      "view": "Vista lago e montagne",
+      "wifi": "Wi-Fi gratuito",
+      "parking": "Parcheggio gratuito",
+      "kitchen": "Cucina completa"
+    }
+  },
+  "highlights": {
+    "zurich": {
+      "title": "A 45 min da Zurigo",
+      "desc": "Comodo collegamento ferroviario con il centro di Zurigo — perfetto per una gita di un giorno o un arrivo serale."
+    },
+    "ski": {
+      "title": "A 5 min dagli impianti sci",
+      "desc": "Raggiungi le piste in pochi minuti. Il comprensorio sciistico di Flumserberg si trova proprio sopra il villaggio."
+    },
+    "beach": {
+      "title": "A 2 min dalla spiaggia",
+      "desc": "Le acque cristalline del lago di Walenstadt sono a due minuti a piedi dall'appartamento."
+    }
+  },
+  "footer": {
+    "copyright": "© {year} Apartment 103. Tutti i diritti riservati.",
+    "privacy": "Privacy",
+    "terms": "Termini",
+    "contact": "Contatti"
+  },
+  "languageSwitcher": {
+    "label": "Lingua"
+  },
+  "booking": {
+    "planYourStay": "Pianifica il tuo soggiorno",
+    "perNight": "/ notte",
+    "night": "notte",
+    "nights": "notti",
+    "guest": "ospite",
+    "guests": "ospiti",
+    "selectDates": "Seleziona le date",
+    "checkIn": "Check-in",
+    "checkOut": "Check-out",
+    "openCalendar": "Apri calendario",
+    "guestsSection": "Ospiti",
+    "adults": "Adulti",
+    "adultsAge": "Età 18+",
+    "children": "Bambini",
+    "childrenAge": "Età 0–17",
+    "childrenAges": "Età dei bambini",
+    "child": "Bambino",
+    "selectAge": "Seleziona età",
+    "underOne": "Meno di 1 anno",
+    "yr": "anno",
+    "yrs": "anni",
+    "cleaningFee": "Costo pulizie",
+    "total": "Totale",
+    "bookNow": "Prenota ora",
+    "noCharge": "Nessun addebito per ora — potrai rivedere tutto prima di confermare",
+    "bookingAlert": "Procedura di prenotazione — in arrivo!"
+  },
+  "gallery": {
+    "closeGallery": "Chiudi galleria",
+    "previousPhoto": "Foto precedente",
+    "nextPhoto": "Foto successiva",
+    "photo": "Foto",
+    "apartmentPhoto": "Foto dell'appartamento"
+  }
+}

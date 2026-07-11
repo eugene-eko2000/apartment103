@@ -4,13 +4,50 @@ import { useState, useRef, useEffect } from "react";
 import { DayPicker } from "react-day-picker";
 import type { DateRange } from "react-day-picker";
 import { format, differenceInCalendarDays, parse, isValid, isBefore } from "date-fns";
+import { enUS, de, fr, it } from "date-fns/locale";
+import type { Locale as DateFnsLocale } from "date-fns";
 import "react-day-picker/style.css";
+import type { Locale } from "@/lib/i18n-config";
+import { useCurrency } from "@/lib/currency-context";
+import { formatPrice } from "@/lib/currency-config";
 
 const PRICE_PER_NIGHT = 150;
+const CLEANING_FEE = 50;
 const CHILD_AGES = Array.from({ length: 18 }, (_, i) => i);
 const DISPLAY_FORMAT = "dd/MM/yyyy";
 
+const DATE_FNS_LOCALES: Record<Locale, DateFnsLocale> = { en: enUS, de, fr, it };
+
 type Child = { age: number | null };
+
+export interface BookingDict {
+  planYourStay: string;
+  perNight: string;
+  night: string;
+  nights: string;
+  guest: string;
+  guests: string;
+  selectDates: string;
+  checkIn: string;
+  checkOut: string;
+  openCalendar: string;
+  guestsSection: string;
+  adults: string;
+  adultsAge: string;
+  children: string;
+  childrenAge: string;
+  childrenAges: string;
+  child: string;
+  selectAge: string;
+  underOne: string;
+  yr: string;
+  yrs: string;
+  cleaningFee: string;
+  total: string;
+  bookNow: string;
+  noCharge: string;
+  bookingAlert: string;
+}
 
 function tryParseDate(str: string): Date | null {
   const fmts = ["dd/MM/yyyy", "d/M/yyyy", "dd-MM-yyyy", "d-M-yyyy", "dd MMM yyyy", "d MMM yyyy"];
@@ -21,8 +58,10 @@ function tryParseDate(str: string): Date | null {
   return null;
 }
 
-export default function BookingWidget() {
+export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang: Locale }) {
   const today = new Date();
+  const dateFnsLocale = DATE_FNS_LOCALES[lang];
+  const { currency } = useCurrency();
   const [range, setRange] = useState<DateRange | undefined>();
   const [checkInText, setCheckInText] = useState("");
   const [checkOutText, setCheckOutText] = useState("");
@@ -91,16 +130,16 @@ export default function BookingWidget() {
         style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
       >
         <div className="flex items-baseline justify-between">
-          <h2 className="text-xl font-bold text-white">Plan Your Stay</h2>
+          <h2 className="text-xl font-bold text-white">{dict.planYourStay}</h2>
           <div className="text-right">
-            <span className="text-2xl font-bold text-white">€{PRICE_PER_NIGHT}</span>
-            <span className="text-teal-200 text-sm ml-1">/ night</span>
+            <span className="text-2xl font-bold text-white">{formatPrice(PRICE_PER_NIGHT, currency)}</span>
+            <span className="text-teal-200 text-sm ml-1">{dict.perNight}</span>
           </div>
         </div>
         {nights > 0 && (
           <p className="text-teal-100 text-sm mt-1">
-            {nights} night{nights !== 1 ? "s" : ""} · {totalGuests} guest
-            {totalGuests !== 1 ? "s" : ""}
+            {nights} {nights !== 1 ? dict.nights : dict.night} · {totalGuests}{" "}
+            {totalGuests !== 1 ? dict.guests : dict.guest}
           </p>
         )}
       </div>
@@ -109,26 +148,28 @@ export default function BookingWidget() {
         {/* ── Date inputs + dropdown calendar ───────────────── */}
         <section ref={dateRef} className="relative mb-5">
           <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
-            Select dates
+            {dict.selectDates}
           </h3>
 
           <div className="flex items-end gap-2">
             <DateField
-              label="Check-in"
+              label={dict.checkIn}
               value={checkInText}
               onChange={handleCheckInChange}
               onCalendarClick={() => setCalendarOpen((v) => !v)}
               active={calendarOpen}
               filled={!!range?.from}
+              openCalendarLabel={dict.openCalendar}
             />
             <span className="pb-[11px] text-gray-300 text-lg select-none">→</span>
             <DateField
-              label="Check-out"
+              label={dict.checkOut}
               value={checkOutText}
               onChange={handleCheckOutChange}
               onCalendarClick={() => setCalendarOpen((v) => !v)}
               active={calendarOpen}
               filled={!!range?.to}
+              openCalendarLabel={dict.openCalendar}
             />
           </div>
 
@@ -142,6 +183,7 @@ export default function BookingWidget() {
                 numberOfMonths={2}
                 disabled={{ before: today }}
                 showOutsideDays={false}
+                locale={dateFnsLocale}
               />
             </div>
           )}
@@ -152,13 +194,13 @@ export default function BookingWidget() {
         {/* ── Guests ────────────────────────────────────────── */}
         <section className="mb-5">
           <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
-            Guests
+            {dict.guestsSection}
           </h3>
 
           <div className="flex items-center justify-between py-3 border-b border-gray-100">
             <div>
-              <p className="font-medium text-gray-800 text-sm">Adults</p>
-              <p className="text-xs text-gray-400">Age 18+</p>
+              <p className="font-medium text-gray-800 text-sm">{dict.adults}</p>
+              <p className="text-xs text-gray-400">{dict.adultsAge}</p>
             </div>
             <Counter
               value={adults}
@@ -171,8 +213,8 @@ export default function BookingWidget() {
 
           <div className="flex items-center justify-between py-3">
             <div>
-              <p className="font-medium text-gray-800 text-sm">Children</p>
-              <p className="text-xs text-gray-400">Ages 0–17</p>
+              <p className="font-medium text-gray-800 text-sm">{dict.children}</p>
+              <p className="text-xs text-gray-400">{dict.childrenAge}</p>
             </div>
             <Counter
               value={children.length}
@@ -186,13 +228,13 @@ export default function BookingWidget() {
           {children.length > 0 && (
             <div className="mt-3 p-3 bg-amber-50 rounded-xl border border-amber-100">
               <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-3">
-                Children&rsquo;s ages
+                {dict.childrenAges}
               </p>
               <div className="flex flex-wrap gap-3">
                 {children.map((child, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <span className="text-xs text-gray-500 whitespace-nowrap">
-                      Child {i + 1}
+                      {dict.child} {i + 1}
                     </span>
                     <select
                       value={child.age ?? ""}
@@ -206,10 +248,10 @@ export default function BookingWidget() {
                           : "border-amber-200 text-gray-700 focus:border-teal-500"
                       }`}
                     >
-                      <option value="" disabled>Select age</option>
+                      <option value="" disabled>{dict.selectAge}</option>
                       {CHILD_AGES.map((age) => (
                         <option key={age} value={age}>
-                          {age === 0 ? "Under 1" : `${age} yr${age !== 1 ? "s" : ""}`}
+                          {age === 0 ? dict.underOne : `${age} ${age !== 1 ? dict.yrs : dict.yr}`}
                         </option>
                       ))}
                     </select>
@@ -224,16 +266,16 @@ export default function BookingWidget() {
         {nights > 0 && (
           <div className="bg-gray-50 rounded-xl p-4 mb-5 border border-gray-200 text-sm">
             <div className="flex justify-between text-gray-600 mb-1">
-              <span>€{PRICE_PER_NIGHT} × {nights} night{nights !== 1 ? "s" : ""}</span>
-              <span>€{total}</span>
+              <span>{formatPrice(PRICE_PER_NIGHT, currency)} × {nights} {nights !== 1 ? dict.nights : dict.night}</span>
+              <span>{formatPrice(total, currency)}</span>
             </div>
             <div className="flex justify-between text-gray-600 mb-1">
-              <span>Cleaning fee</span>
-              <span>€50</span>
+              <span>{dict.cleaningFee}</span>
+              <span>{formatPrice(CLEANING_FEE, currency)}</span>
             </div>
             <div className="border-t border-gray-200 mt-2 pt-2 flex justify-between font-semibold text-gray-900">
-              <span>Total</span>
-              <span>€{total + 50}</span>
+              <span>{dict.total}</span>
+              <span>{formatPrice(total + CLEANING_FEE, currency)}</span>
             </div>
           </div>
         )}
@@ -242,13 +284,13 @@ export default function BookingWidget() {
         <button
           className="w-full text-white font-semibold py-4 rounded-xl text-base transition-all shadow-lg active:scale-[0.98] cursor-pointer"
           style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
-          onClick={() => alert("Booking flow — coming soon!")}
+          onClick={() => alert(dict.bookingAlert)}
         >
-          Book Now
+          {dict.bookNow}
         </button>
 
         <p className="text-center text-xs text-gray-400 mt-3">
-          No charge yet — you&apos;ll review before confirming
+          {dict.noCharge}
         </p>
       </div>
     </div>
@@ -263,6 +305,7 @@ function DateField({
   onCalendarClick,
   active,
   filled,
+  openCalendarLabel,
 }: {
   label: string;
   value: string;
@@ -270,6 +313,7 @@ function DateField({
   onCalendarClick: () => void;
   active: boolean;
   filled: boolean;
+  openCalendarLabel: string;
 }) {
   return (
     <div className="flex-1 min-w-0">
@@ -294,7 +338,7 @@ function DateField({
           className={`absolute right-2.5 top-1/2 -translate-y-1/2 transition-colors cursor-pointer ${
             active ? "text-teal-600" : "text-gray-400 hover:text-teal-600"
           }`}
-          aria-label="Open calendar"
+          aria-label={openCalendarLabel}
         >
           <CalendarIcon />
         </button>

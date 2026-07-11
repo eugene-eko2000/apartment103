@@ -1,0 +1,86 @@
+{
+  "meta": {
+    "title": "Apartment 103 — Holiday Rental",
+    "description": "Book your perfect stay at Apartment 103. A beautifully designed holiday apartment."
+  },
+  "nav": {
+    "gallery": "Gallery",
+    "amenities": "Amenities",
+    "location": "Location",
+    "reviews": "Reviews"
+  },
+  "hero": {
+    "location": "Unterterzen, Switzerland",
+    "rating": "★ 4.9 · 48 reviews",
+    "titleLine1": "Your perfect",
+    "titleLine2": "holiday escape",
+    "description": "A cosy apartment nestled between the mountains and Lake Walensee. Stunning alpine scenery, ski slopes and a lakeshore beach right on your doorstep.",
+    "features": {
+      "bedrooms": "2 Bedrooms",
+      "bathrooms": "2 Bathrooms",
+      "guests": "Up to 5 guests",
+      "view": "Lake & Mountain view",
+      "wifi": "Free Wi-Fi",
+      "parking": "Free parking",
+      "kitchen": "Full kitchen"
+    }
+  },
+  "highlights": {
+    "zurich": {
+      "title": "45 min from Zurich",
+      "desc": "Easy train connection to Zurich city centre — perfect for a day trip or a late arrival."
+    },
+    "ski": {
+      "title": "5 min to the ski lift",
+      "desc": "Hit the slopes in minutes. Flumserberg ski resort is right above the village."
+    },
+    "beach": {
+      "title": "2 min to the beach",
+      "desc": "Lake Walensee's crystal-clear waters are a 2-minute stroll from the apartment."
+    }
+  },
+  "footer": {
+    "copyright": "© {year} Apartment 103. All rights reserved.",
+    "privacy": "Privacy",
+    "terms": "Terms",
+    "contact": "Contact"
+  },
+  "languageSwitcher": {
+    "label": "Language"
+  },
+  "booking": {
+    "planYourStay": "Plan Your Stay",
+    "perNight": "/ night",
+    "night": "night",
+    "nights": "nights",
+    "guest": "guest",
+    "guests": "guests",
+    "selectDates": "Select dates",
+    "checkIn": "Check-in",
+    "checkOut": "Check-out",
+    "openCalendar": "Open calendar",
+    "guestsSection": "Guests",
+    "adults": "Adults",
+    "adultsAge": "Age 18+",
+    "children": "Children",
+    "childrenAge": "Ages 0–17",
+    "childrenAges": "Children's ages",
+    "child": "Child",
+    "selectAge": "Select age",
+    "underOne": "Under 1",
+    "yr": "yr",
+    "yrs": "yrs",
+    "cleaningFee": "Cleaning fee",
+    "total": "Total",
+    "bookNow": "Book Now",
+    "noCharge": "No charge yet — you'll review before confirming",
+    "bookingAlert": "Booking flow — coming soon!"
+  },
+  "gallery": {
+    "closeGallery": "Close gallery",
+    "previousPhoto": "Previous photo",
+    "nextPhoto": "Next photo",
+    "photo": "Photo",
+    "apartmentPhoto": "Apartment photo"
+  }
+}

@@ -1,18 +1,37 @@
 import Image from "next/image";
+import { notFound } from "next/navigation";
 import BookingWidget from "@/components/BookingWidget";
 import GalleryButton from "@/components/GalleryButton";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
+import CurrencySwitcher from "@/components/CurrencySwitcher";
+import { getDictionary, hasLocale } from "./dictionaries";
 
-const FEATURES = [
-  { icon: "🛏", label: "2 Bedrooms" },
-  { icon: "🚿", label: "2 Bathrooms" },
-  { icon: "👥", label: "Up to 5 guests" },
-  { icon: "🏔", label: "Lake & Mountain view" },
-  { icon: "📶", label: "Free Wi-Fi" },
-  { icon: "🅿️", label: "Free parking" },
-  { icon: "🍳", label: "Full kitchen" },
-];
+export default async function Home({
+  params,
+}: {
+  params: Promise<{ lang: string }>;
+}) {
+  const { lang } = await params;
+  if (!hasLocale(lang)) notFound();
 
-export default function Home() {
+  const dict = await getDictionary(lang);
+
+  const FEATURES = [
+    { icon: "🛏", label: dict.hero.features.bedrooms },
+    { icon: "🚿", label: dict.hero.features.bathrooms },
+    { icon: "👥", label: dict.hero.features.guests },
+    { icon: "🏔", label: dict.hero.features.view },
+    { icon: "📶", label: dict.hero.features.wifi },
+    { icon: "🅿️", label: dict.hero.features.parking },
+    { icon: "🍳", label: dict.hero.features.kitchen },
+  ];
+
+  const HIGHLIGHTS = [
+    { icon: "🚂", ...dict.highlights.zurich },
+    { icon: "⛷️", ...dict.highlights.ski },
+    { icon: "🏖", ...dict.highlights.beach },
+  ];
+
   return (
     <div>
       {/* ── FIXED BACKGROUND ────────────────────────────── */}
@@ -46,10 +65,14 @@ export default function Home() {
             <span className="font-semibold text-gray-800">Apartment 103</span>
           </div>
           <nav className="hidden sm:flex items-center gap-6 text-sm text-gray-500">
-            <GalleryButton />
-            <a href="#" className="hover:text-teal-700 transition-colors">Amenities</a>
-            <a href="#" className="hover:text-teal-700 transition-colors">Location</a>
-            <a href="#" className="hover:text-teal-700 transition-colors">Reviews</a>
+            <GalleryButton label={dict.nav.gallery} dict={dict.gallery} />
+            <a href="#" className="hover:text-teal-700 transition-colors">{dict.nav.amenities}</a>
+            <a href="#" className="hover:text-teal-700 transition-colors">{dict.nav.location}</a>
+            <a href="#" className="hover:text-teal-700 transition-colors">{dict.nav.reviews}</a>
+            <div className="flex items-center gap-4">
+              <LanguageSwitcher currentLang={lang} />
+              <CurrencySwitcher />
+            </div>
           </nav>
         </div>
       </header>
@@ -63,22 +86,20 @@ export default function Home() {
               <div className="flex flex-wrap items-center gap-2 mb-4">
                 <span className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm text-white text-xs font-medium px-3 py-1.5 rounded-full">
                   <span>📍</span>
-                  <span>Unterterzen, Switzerland</span>
+                  <span>{dict.hero.location}</span>
                 </span>
                 <span className="flex items-center gap-1 bg-amber-400/90 text-amber-900 text-xs font-semibold px-3 py-1.5 rounded-full">
-                  ★ 4.9 · 48 reviews
+                  {dict.hero.rating}
                 </span>
               </div>
 
               <h1 className="text-4xl lg:text-5xl font-bold leading-tight mb-3">
-                Your perfect<br />
-                <span className="text-cyan-200">holiday escape</span>
+                {dict.hero.titleLine1}<br />
+                <span className="text-cyan-200">{dict.hero.titleLine2}</span>
               </h1>
 
               <p className="text-lg text-teal-100 mb-6 max-w-md leading-relaxed">
-                A cosy apartment nestled between the mountains and Lake Walensee.
-                Stunning alpine scenery, ski slopes and a lakeshore beach right
-                on your doorstep.
+                {dict.hero.description}
               </p>
 
               {/* Feature tags */}
@@ -98,7 +119,7 @@ export default function Home() {
 
             {/* Right — booking widget */}
             <div className="overflow-y-auto max-h-full">
-              <BookingWidget />
+              <BookingWidget dict={dict.booking} lang={lang} />
             </div>
           </div>
         </div>
@@ -107,23 +128,7 @@ export default function Home() {
       {/* ── ABOUT / HIGHLIGHTS ──────────────────────────── */}
       <section className="shrink-0 max-w-7xl mx-auto w-full px-6 py-4">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {[
-            {
-              icon: "🚂",
-              title: "45 min from Zurich",
-              desc: "Easy train connection to Zurich city centre — perfect for a day trip or a late arrival.",
-            },
-            {
-              icon: "⛷️",
-              title: "5 min to the ski lift",
-              desc: "Hit the slopes in minutes. Flumserberg ski resort is right above the village.",
-            },
-            {
-              icon: "🏖",
-              title: "2 min to the beach",
-              desc: "Lake Walensee's crystal-clear waters are a 2-minute stroll from the apartment.",
-            },
-          ].map((card) => (
+          {HIGHLIGHTS.map((card) => (
             <div
               key={card.title}
               className="bg-white rounded-2xl px-5 py-4 shadow-sm border border-gray-100 flex items-start gap-3"
@@ -141,11 +146,11 @@ export default function Home() {
       {/* ── FOOTER ──────────────────────────────────────── */}
       <footer className="shrink-0 border-t border-gray-200 bg-white">
         <div className="max-w-7xl mx-auto px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-gray-400">
-          <span>© 2026 Apartment 103. All rights reserved.</span>
+          <span>{dict.footer.copyright.replace("{year}", String(new Date().getFullYear()))}</span>
           <div className="flex gap-6">
-            <a href="#" className="hover:text-teal-700 transition-colors">Privacy</a>
-            <a href="#" className="hover:text-teal-700 transition-colors">Terms</a>
-            <a href="#" className="hover:text-teal-700 transition-colors">Contact</a>
+            <a href="#" className="hover:text-teal-700 transition-colors">{dict.footer.privacy}</a>
+            <a href="#" className="hover:text-teal-700 transition-colors">{dict.footer.terms}</a>
+            <a href="#" className="hover:text-teal-700 transition-colors">{dict.footer.contact}</a>
           </div>
         </div>
       </footer>

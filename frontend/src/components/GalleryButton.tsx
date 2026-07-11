@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import PhotoGallery from './PhotoGallery';
+import PhotoGallery, { type GalleryDict } from './PhotoGallery';
 
-export default function GalleryButton() {
+export default function GalleryButton({ label, dict }: { label: string; dict: GalleryDict }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -12,9 +12,9 @@ export default function GalleryButton() {
         onClick={() => setOpen(true)}
         className="hover:text-teal-700 transition-colors cursor-pointer"
       >
-        Gallery
+        {label}
       </button>
-      {open && <PhotoGallery onClose={() => setOpen(false)} />}
+      {open && <PhotoGallery onClose={() => setOpen(false)} dict={dict} />}
     </>
   );
 }

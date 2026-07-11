@@ -1,0 +1,86 @@
+{
+  "meta": {
+    "title": "Apartment 103 — Ferienwohnung",
+    "description": "Buchen Sie Ihren perfekten Aufenthalt im Apartment 103. Eine wunderschön gestaltete Ferienwohnung."
+  },
+  "nav": {
+    "gallery": "Galerie",
+    "amenities": "Ausstattung",
+    "location": "Lage",
+    "reviews": "Bewertungen"
+  },
+  "hero": {
+    "location": "Unterterzen, Schweiz",
+    "rating": "★ 4,9 · 48 Bewertungen",
+    "titleLine1": "Ihre perfekte",
+    "titleLine2": "Urlaubsauszeit",
+    "description": "Eine gemütliche Wohnung zwischen den Bergen und dem Walensee. Atemberaubende Alpenlandschaft, Skipisten und ein Strand am See direkt vor der Haustür.",
+    "features": {
+      "bedrooms": "2 Schlafzimmer",
+      "bathrooms": "2 Badezimmer",
+      "guests": "Bis zu 5 Gäste",
+      "view": "Blick auf See & Berge",
+      "wifi": "Kostenloses WLAN",
+      "parking": "Kostenlose Parkplätze",
+      "kitchen": "Voll ausgestattete Küche"
+    }
+  },
+  "highlights": {
+    "zurich": {
+      "title": "45 Min. von Zürich entfernt",
+      "desc": "Bequeme Zugverbindung in die Zürcher Innenstadt — perfekt für einen Tagesausflug oder eine späte Ankunft."
+    },
+    "ski": {
+      "title": "5 Min. zum Skilift",
+      "desc": "In wenigen Minuten auf der Piste. Das Skigebiet Flumserberg liegt direkt über dem Dorf."
+    },
+    "beach": {
+      "title": "2 Min. zum Strand",
+      "desc": "Das kristallklare Wasser des Walensees ist nur 2 Gehminuten von der Wohnung entfernt."
+    }
+  },
+  "footer": {
+    "copyright": "© {year} Apartment 103. Alle Rechte vorbehalten.",
+    "privacy": "Datenschutz",
+    "terms": "AGB",
+    "contact": "Kontakt"
+  },
+  "languageSwitcher": {
+    "label": "Sprache"
+  },
+  "booking": {
+    "planYourStay": "Planen Sie Ihren Aufenthalt",
+    "perNight": "/ Nacht",
+    "night": "Nacht",
+    "nights": "Nächte",
+    "guest": "Gast",
+    "guests": "Gäste",
+    "selectDates": "Daten auswählen",
+    "checkIn": "Anreise",
+    "checkOut": "Abreise",
+    "openCalendar": "Kalender öffnen",
+    "guestsSection": "Gäste",
+    "adults": "Erwachsene",
+    "adultsAge": "Ab 18 Jahren",
+    "children": "Kinder",
+    "childrenAge": "0–17 Jahre",
+    "childrenAges": "Alter der Kinder",
+    "child": "Kind",
+    "selectAge": "Alter wählen",
+    "underOne": "Unter 1",
+    "yr": "J.",
+    "yrs": "J.",
+    "cleaningFee": "Endreinigung",
+    "total": "Gesamt",
+    "bookNow": "Jetzt buchen",
+    "noCharge": "Noch keine Abbuchung — Sie prüfen alles vor der Bestätigung",
+    "bookingAlert": "Buchungsablauf — demnächst verfügbar!"
+  },
+  "gallery": {
+    "closeGallery": "Galerie schließen",
+    "previousPhoto": "Vorheriges Foto",
+    "nextPhoto": "Nächstes Foto",
+    "photo": "Foto",
+    "apartmentPhoto": "Foto der Wohnung"
+  }
+}
