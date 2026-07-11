@@ -1,0 +1,37 @@
+{"timestamp":"00:00:01.647","source":"Server","level":"LOG","message":""}
+{"timestamp":"00:00:02.253","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:00:06.328","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:03:48.051","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:03:48.838","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:03:49.298","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:03:49.643","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:03:49.902","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:03:50.132","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:03:50.361","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:03:50.591","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:03:50.786","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:03:50.963","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:03:51.172","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:03:51.391","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:03:51.578","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:03:51.815","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:03:52.019","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:03:52.138","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:03:52.320","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:03:52.530","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:14:28.689","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:14:30.012","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:14:30.846","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:14:31.570","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:14:32.171","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:14:32.730","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:16:02.571","source":"Server","level":"ERROR","message":"⨯ \"The requested resource isn't a valid image for\" \"/hero2.jpeg\" \"received\" null"}
+{"timestamp":"00:16:22.372","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:34:12.372","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:37:24.243","source":"Server","level":"LOG","message":"✓ Compiled in 282ms"}
+{"timestamp":"00:37:24.273","source":"Browser","level":"ERROR","message":"./src/app/page.tsx:152:1\nUnexpected token. Did you mean `{'}'}` or `&rbrace;`?\n  150 |     </div>\n  151 |   );\n> 152 | }\n      | ^\n  153 |\n\nParsing ecmascript source code failed"}
+{"timestamp":"00:37:24.345","source":"Server","level":"ERROR","message":"[browser] \"./src/app/page.tsx:152:1\\nUnexpected token. Did you mean `{'}'}` or `&rbrace;`?\\n  150 |     </div>\\n  151 |   );\\n> 152 | }\\n      | ^\\n  153 |\\n\\nParsing ecmascript source code failed\" \"\""}
+{"timestamp":"00:37:24.345","source":"Browser","level":"ERROR","message":"./src/app/page.tsx:152:1\nUnexpected token. Did you mean `{'}'}` or `&rbrace;`?\n  150 |     </div>\n  151 |   );\n> 152 | }\n      | ^\n  153 |\n\nParsing ecmascript source code failed \"\""}
+{"timestamp":"00:37:24.438","source":"Browser","level":"ERROR","message":"./src/app/page.tsx:152:1\nUnexpected token. Did you mean `{'}'}` or `&rbrace;`?\n  150 |     </div>\n  151 |   );\n> 152 | }\n      | ^\n  153 |\n\nParsing ecmascript source code failed"}
+{"timestamp":"00:37:24.439","source":"Server","level":"ERROR","message":"[browser] \"./src/app/page.tsx:152:1\\nUnexpected token. Did you mean `{'}'}` or `&rbrace;`?\\n  150 |     </div>\\n  151 |   );\\n> 152 | }\\n      | ^\\n  153 |\\n\\nParsing ecmascript source code failed\" \"\""}
+{"timestamp":"00:37:24.439","source":"Browser","level":"ERROR","message":"./src/app/page.tsx:152:1\nUnexpected token. Did you mean `{'}'}` or `&rbrace;`?\n  150 |     </div>\n  151 |   );\n> 152 | }\n      | ^\n  153 |\n\nParsing ecmascript source code failed \"\""}
