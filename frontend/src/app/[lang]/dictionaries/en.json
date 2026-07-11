@@ -48,6 +48,11 @@
   "languageSwitcher": {
     "label": "Language"
   },
+  "cookieConsent": {
+    "message": "We use cookies to remember your language and currency preferences. Do you allow us to store these cookies?",
+    "allow": "Allow Cookies",
+    "deny": "Deny"
+  },
   "booking": {
     "planYourStay": "Plan Your Stay",
     "perNight": "/ night",

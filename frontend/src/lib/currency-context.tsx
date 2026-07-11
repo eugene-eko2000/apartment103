@@ -2,8 +2,10 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { currencies, defaultCurrency, type Currency } from "@/lib/currency-config";
+import { getCookie, setCookie } from "./cookies";
+import { useCookieConsent } from "./cookie-consent-context";
 
-const STORAGE_KEY = "PREFERRED_CURRENCY";
+const COOKIE_NAME = "PREFERRED_CURRENCY";
 
 const CurrencyContext = createContext<{
   currency: Currency;
@@ -15,9 +17,10 @@ const CurrencyContext = createContext<{
 
 export function CurrencyProvider({ children }: { children: React.ReactNode }) {
   const [currency, setCurrencyState] = useState<Currency>(defaultCurrency);
+  const { status } = useCookieConsent();
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = getCookie(COOKIE_NAME);
     if (stored && (currencies as readonly string[]).includes(stored)) {
       setCurrencyState(stored as Currency);
     }
@@ -25,7 +28,9 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
 
   const setCurrency = (next: Currency) => {
     setCurrencyState(next);
-    localStorage.setItem(STORAGE_KEY, next);
+    if (status === "allowed") {
+      setCookie(COOKIE_NAME, next, 365);
+    }
   };
 
   return (

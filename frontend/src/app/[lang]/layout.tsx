@@ -4,6 +4,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "../globals.css";
 import { locales } from "@/lib/i18n-config";
 import { CurrencyProvider } from "@/lib/currency-context";
+import { CookieConsentProvider } from "@/lib/cookie-consent-context";
+import CookieConsentBanner from "@/components/CookieConsentBanner";
 import { getDictionary, hasLocale } from "./dictionaries";
 
 const geistSans = Geist({
@@ -45,13 +47,18 @@ export default async function RootLayout({
   const { lang } = await params;
   if (!hasLocale(lang)) notFound();
 
+  const dict = await getDictionary(lang);
+
   return (
     <html
       lang={lang}
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <CurrencyProvider>{children}</CurrencyProvider>
+        <CookieConsentProvider>
+          <CurrencyProvider>{children}</CurrencyProvider>
+          <CookieConsentBanner dict={dict.cookieConsent} />
+        </CookieConsentProvider>
       </body>
     </html>
   );

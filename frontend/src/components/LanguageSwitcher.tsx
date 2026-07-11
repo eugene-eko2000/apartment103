@@ -2,20 +2,21 @@
 
 import { useRouter, usePathname } from "next/navigation";
 import { locales, localeNames, localeFlags, type Locale } from "@/lib/i18n-config";
-
-function persistLocaleCookie(locale: Locale) {
-  document.cookie = `NEXT_LOCALE=${locale};path=/;max-age=31536000`;
-}
+import { setCookie } from "@/lib/cookies";
+import { useCookieConsent } from "@/lib/cookie-consent-context";
 
 export default function LanguageSwitcher({ currentLang }: { currentLang: Locale }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { status } = useCookieConsent();
 
   const switchTo = (locale: Locale) => {
     if (locale === currentLang) return;
     const segments = pathname.split("/");
     segments[1] = locale;
-    persistLocaleCookie(locale);
+    if (status === "allowed") {
+      setCookie("NEXT_LOCALE", locale, 365);
+    }
     router.push(segments.join("/") || `/${locale}`);
     router.refresh();
   };
