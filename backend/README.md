@@ -19,6 +19,7 @@ backend/
 ├── alembic/
 │   ├── env.py              # wires Alembic to app.core.config + app.db.base metadata
 │   └── versions/           # migration scripts
+├── migrations/             # Beanie/Mongo migration scripts (see below)
 └── app/
     ├── main.py            # FastAPI app + router registration + Mongo/Beanie startup
     ├── core/
@@ -26,7 +27,8 @@ backend/
     ├── db/
     │   ├── session.py     # SQLAlchemy engine/session setup, declarative Base
     │   ├── base.py        # imports every SQLAlchemy model so Alembic autogenerate sees them
-    │   └── mongo.py        # Mongo client + init_beanie wiring
+    │   ├── mongo.py        # Mongo client + init_beanie wiring
+    │   └── migrate.py      # `mongo-migrate` CLI, wires Beanie's migration runner to settings
     ├── models/
     │   ├── plan.py               # Plan Beanie document (name, cancellation policy link, default price, date-range rates)
     │   └── cancellation_policy.py # CancellationPolicy Beanie document (name + days-before-checkin/refund rules)
@@ -159,6 +161,44 @@ uv run alembic current          # show the migration currently applied to the DB
 uv run alembic history          # list all migrations
 uv run alembic upgrade head     # apply all pending migrations
 uv run alembic downgrade -1     # roll back the most recent migration
+```
+
+## Database migrations (Beanie / MongoDB)
+
+MongoDB is schemaless, but the shape of documents still evolves over time (new fields, backfills, index changes), so Mongo migrations are managed with [Beanie's built-in migration mechanism](https://beanie-odm.dev/tutorial/migrations/). Migration scripts live in `migrations/` and are run through the `mongo-migrate` CLI (`app/db/migrate.py`), which wires the connection URI and database name from `app.core.config.settings` — same idea as `alembic/env.py`, so `.env` stays the single source of truth for both databases.
+
+Each migration file declares its own snapshot `Document` classes for the "before" and "after" shape of a collection (rather than importing from `app/models`), since `app/models` always reflects the *current* shape and would break older migrations in the chain as models evolve. A migration exposes a `Forward` class and (optionally) a `Backward` class, each with methods decorated with one of:
+
+- `iterative_migration()` — walks every document in a collection, transforming `input_document` into `output_document`. Use for per-document data backfills/reshaping.
+- `free_fall_migration(document_models=[...])` — runs a function once with a DB session. Use for index changes or bulk operations that aren't per-document.
+
+See `migrations/20260712000329_add_cancellation_policy_active_flag.py` for an example combining both.
+
+Every time you need to change the shape of Mongo data:
+
+1. Scaffold a new migration file:
+
+   ```bash
+   uv run mongo-migrate new-migration -n short_description_of_the_change
+   ```
+
+2. Fill in `Forward` (and `Backward`, if the change should be reversible) in the generated file under `migrations/`.
+3. Make sure `MONGO_URI`/`MONGO_DB` in `.env` point at your target database, then apply it:
+
+   ```bash
+   uv run mongo-migrate migrate --forward
+   ```
+
+   Index-creating/dropping migrations will fail inside a transaction (`Cannot create new indexes on existing collection ... in a multi-document transaction`) unless your MongoDB is a replica set that supports it — pass `--no-use-transaction` in that case, or when running against a standalone (non-replica-set) instance, which doesn't support transactions at all.
+
+4. Commit the new file in `migrations/` together with the model change in the same PR.
+
+Other useful commands:
+
+```bash
+uv run mongo-migrate migrate                              # apply all pending migrations forward
+uv run mongo-migrate migrate --backward -d 1               # roll back the most recent migration
+uv run mongo-migrate migrate --allow-index-dropping         # let Beanie drop indexes no longer defined
 ```
 
 ## Adding dependencies

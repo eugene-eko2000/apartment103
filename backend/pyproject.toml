@@ -11,7 +11,11 @@ dependencies = [
     "pydantic-settings>=2.5.0",
     "alembic>=1.18.5",
     "beanie>=2.1.0",
+    "click>=8.1.0",
 ]
+
+[project.scripts]
+mongo-migrate = "app.db.migrate:cli"
 
 [dependency-groups]
 dev = [
