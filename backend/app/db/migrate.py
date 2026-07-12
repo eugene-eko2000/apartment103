@@ -2,9 +2,8 @@
 
 Wraps beanie's migration runner so the connection URI and database name come
 from app.core.config.settings (i.e. .env) instead of being passed on the
-command line or duplicated into BEANIE_*-prefixed env vars — the same way
-alembic/env.py wires the SQL connection for the MySQL side. .env stays the
-single source of truth for both databases.
+command line or duplicated into BEANIE_*-prefixed env vars. .env stays the
+single source of truth for the database connection.
 """
 
 import asyncio
