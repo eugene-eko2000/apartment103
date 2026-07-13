@@ -1,0 +1,13 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: apartment103
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mongo_data:
