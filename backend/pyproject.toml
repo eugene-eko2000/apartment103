@@ -9,6 +9,7 @@ dependencies = [
     "pydantic-settings>=2.5.0",
     "beanie>=2.1.0",
     "click>=8.1.0",
+    "pyjwt>=2.9.0",
 ]
 
 [project.scripts]

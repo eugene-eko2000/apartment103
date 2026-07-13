@@ -1,10 +1,11 @@
 from beanie import PydanticObjectId
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.api.deps import require_admin
 from app.models.admin import Admin
 from app.schemas.admin import AdminCreate
 
-router = APIRouter(prefix="/admins", tags=["admins"])
+router = APIRouter(prefix="/admins", tags=["admins"], dependencies=[Depends(require_admin)])
 
 
 @router.post("", response_model=Admin, status_code=status.HTTP_201_CREATED)

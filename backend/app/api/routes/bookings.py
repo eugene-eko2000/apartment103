@@ -1,6 +1,8 @@
-from beanie import PydanticObjectId
-from fastapi import APIRouter, HTTPException, status
+from beanie import Link, PydanticObjectId
+from beanie.operators import In
+from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.api.deps import Principal, get_current_principal
 from app.models.booking import Booking, BookingCancellationPolicy
 from app.models.cancellation_policy import CancellationPolicy
 from app.models.guest import Guest
@@ -27,8 +29,21 @@ def _snapshot_cancellation_policy(policy: CancellationPolicy) -> BookingCancella
     return BookingCancellationPolicy(name=policy.name, rules=policy.rules)
 
 
+def _booking_guest_id(booking: Booking) -> PydanticObjectId:
+    return booking.guest.ref.id if isinstance(booking.guest, Link) else booking.guest.id
+
+
+def _ensure_can_access_booking(principal: Principal, booking: Booking) -> None:
+    if not principal.is_admin and _booking_guest_id(booking) != principal.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized for this booking")
+
+
 @router.post("", response_model=Booking, status_code=status.HTTP_201_CREATED)
-async def create_booking(payload: BookingCreate) -> Booking:
+async def create_booking(
+    payload: BookingCreate, principal: Principal = Depends(get_current_principal)
+) -> Booking:
+    if not principal.is_admin and payload.guest_id != principal.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Guests may only book for themselves")
     guest = await _get_guest_or_404(payload.guest_id)
     cancellation_policy = await _get_cancellation_policy_or_404(payload.cancellation_policy_id)
     booking = Booking(
@@ -42,23 +57,37 @@ async def create_booking(payload: BookingCreate) -> Booking:
 
 
 @router.get("", response_model=list[Booking])
-async def list_bookings() -> list[Booking]:
-    return await Booking.find_all(fetch_links=True).to_list()
+async def list_bookings(principal: Principal = Depends(get_current_principal)) -> list[Booking]:
+    if principal.is_admin:
+        return await Booking.find_all(fetch_links=True).to_list()
+    # fetch_links=True runs an aggregation pipeline that reshapes the "guest"
+    # field, so a raw "guest.$id" filter can't be applied in the same query.
+    # Resolve matching ids first, then re-fetch those with links populated.
+    own_booking_ids = [b.id for b in await Booking.find({"guest.$id": principal.id}).to_list()]
+    return await Booking.find(In(Booking.id, own_booking_ids), fetch_links=True).to_list()
 
 
 @router.get("/{booking_id}", response_model=Booking)
-async def get_booking(booking_id: PydanticObjectId) -> Booking:
+async def get_booking(
+    booking_id: PydanticObjectId, principal: Principal = Depends(get_current_principal)
+) -> Booking:
     booking = await Booking.get(booking_id, fetch_links=True)
     if booking is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
+    _ensure_can_access_booking(principal, booking)
     return booking
 
 
 @router.put("/{booking_id}", response_model=Booking)
-async def update_booking(booking_id: PydanticObjectId, payload: BookingCreate) -> Booking:
+async def update_booking(
+    booking_id: PydanticObjectId, payload: BookingCreate, principal: Principal = Depends(get_current_principal)
+) -> Booking:
     booking = await Booking.get(booking_id)
     if booking is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
+    _ensure_can_access_booking(principal, booking)
+    if not principal.is_admin and payload.guest_id != principal.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Guests may only book for themselves")
     guest = await _get_guest_or_404(payload.guest_id)
     cancellation_policy = await _get_cancellation_policy_or_404(payload.cancellation_policy_id)
     booking.guest = guest
@@ -70,8 +99,11 @@ async def update_booking(booking_id: PydanticObjectId, payload: BookingCreate) -
 
 
 @router.delete("/{booking_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_booking(booking_id: PydanticObjectId) -> None:
+async def delete_booking(
+    booking_id: PydanticObjectId, principal: Principal = Depends(get_current_principal)
+) -> None:
     booking = await Booking.get(booking_id)
     if booking is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
+    _ensure_can_access_booking(booking=booking, principal=principal)
     await booking.delete()

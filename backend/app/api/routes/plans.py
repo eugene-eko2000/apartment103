@@ -1,11 +1,12 @@
 from beanie import PydanticObjectId
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.api.deps import require_admin
 from app.models.cancellation_policy import CancellationPolicy
 from app.models.plan import Plan
 from app.schemas.plan import PlanCreate
 
-router = APIRouter(prefix="/plans", tags=["plans"])
+router = APIRouter(prefix="/plans", tags=["plans"], dependencies=[Depends(require_admin)])
 
 
 async def _get_cancellation_policy_or_404(policy_id: PydanticObjectId) -> CancellationPolicy:

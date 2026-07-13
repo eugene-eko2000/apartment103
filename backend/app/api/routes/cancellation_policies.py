@@ -1,10 +1,15 @@
 from beanie import PydanticObjectId
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.api.deps import require_admin
 from app.models.cancellation_policy import CancellationPolicy
 from app.schemas.cancellation_policy import CancellationPolicyCreate
 
-router = APIRouter(prefix="/cancellation-policies", tags=["cancellation-policies"])
+router = APIRouter(
+    prefix="/cancellation-policies",
+    tags=["cancellation-policies"],
+    dependencies=[Depends(require_admin)],
+)
 
 
 @router.post("", response_model=CancellationPolicy, status_code=status.HTTP_201_CREATED)

@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from app.api.routes import (
     admins,
+    auth,
     bookings,
     cancellation_policies,
     guests,
@@ -23,6 +24,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
 app.include_router(health.router)
+app.include_router(auth.router)
 app.include_router(plans.router)
 app.include_router(cancellation_policies.router)
 app.include_router(guests.router)
