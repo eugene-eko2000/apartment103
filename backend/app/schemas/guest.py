@@ -8,5 +8,6 @@ class GuestCreate(BaseModel):
     first_name: str
     residence_address: ResidenceAddress
     phone_number: str
+    email: str
     preferred_language: Language | None = None
     preferred_currency: Currency | None = None

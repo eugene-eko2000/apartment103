@@ -1,24 +1,27 @@
 """Create the initial collections (cancellation_policies, guests, bookings).
 
-This is the squashed initial migration: it replaces four separate
+This is the squashed initial migration: it replaces six separate
 early-development steps (adding a cancellation policy flag, creating the
-guests collection, creating the bookings collection, and embedding the
-booking cancellation policy) now that no real data predates them. Rather
-than replaying that history, this single migration creates the current
-collections directly with the indexes needed to support the expected lookup
-patterns:
+guests collection, creating the bookings collection, embedding the booking
+cancellation policy, adding guest email, and adding booking date/currency)
+now that no real data predates them. Rather than replaying that history,
+this single migration creates the current collections directly with the
+indexes needed to support the expected lookup patterns:
 
 - cancellation_policies: unique lookup by name.
-- guests: searching by name and by phone number.
-- bookings: finding a guest's bookings and finding bookings that overlap a
-  date range.
+- guests: searching by name, by phone number, and by email.
+- bookings: finding a guest's bookings, finding bookings that overlap a
+  date range, and finding bookings by booking date.
 """
 
 from datetime import date
+from typing import Literal
 
 from beanie import Document, Link
 from beanie.migrations.controllers.free_fall import free_fall_migration
 from pydantic import BaseModel, Field
+
+Currency = Literal["EUR", "CHF", "USD", "GBP"]
 
 
 class CancellationRule(BaseModel):
@@ -38,6 +41,7 @@ class Guest(Document):
     family_name: str
     first_name: str
     phone_number: str
+    email: str
 
     class Settings:
         name = "guests"
@@ -56,6 +60,8 @@ class BookingCancellationPolicy(BaseModel):
 
 class Booking(Document):
     guest: Link[Guest]
+    booking_date: date = Field(default_factory=date.today)
+    currency: Currency = "CHF"
     date_ranges: list[BookingDateRange] = Field(default_factory=list)
     cancellation_policy: BookingCancellationPolicy
 
@@ -82,6 +88,10 @@ class Forward:
             "phone_number", session=session
         )
 
+    @free_fall_migration(document_models=[Guest])
+    async def create_guest_email_index(self, session) -> None:
+        await Guest.get_pymongo_collection().create_index("email", session=session)
+
     @free_fall_migration(document_models=[Booking])
     async def create_booking_guest_index(self, session) -> None:
         await Booking.get_pymongo_collection().create_index(
@@ -93,6 +103,12 @@ class Forward:
         await Booking.get_pymongo_collection().create_index(
             [("date_ranges.begin_date", 1), ("date_ranges.end_date", 1)],
             session=session,
+        )
+
+    @free_fall_migration(document_models=[Booking])
+    async def create_booking_date_index(self, session) -> None:
+        await Booking.get_pymongo_collection().create_index(
+            "booking_date", session=session
         )
 
 
@@ -115,6 +131,10 @@ class Backward:
             "phone_number_1", session=session
         )
 
+    @free_fall_migration(document_models=[Guest])
+    async def drop_guest_email_index(self, session) -> None:
+        await Guest.get_pymongo_collection().drop_index("email_1", session=session)
+
     @free_fall_migration(document_models=[Booking])
     async def drop_booking_guest_index(self, session) -> None:
         await Booking.get_pymongo_collection().drop_index(
@@ -125,4 +145,10 @@ class Backward:
     async def drop_booking_date_range_index(self, session) -> None:
         await Booking.get_pymongo_collection().drop_index(
             "date_ranges.begin_date_1_date_ranges.end_date_1", session=session
+        )
+
+    @free_fall_migration(document_models=[Booking])
+    async def drop_booking_date_index(self, session) -> None:
+        await Booking.get_pymongo_collection().drop_index(
+            "booking_date_1", session=session
         )

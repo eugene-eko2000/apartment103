@@ -36,6 +36,7 @@ async def update_guest(guest_id: PydanticObjectId, payload: GuestCreate) -> Gues
     guest.first_name = payload.first_name
     guest.residence_address = payload.residence_address
     guest.phone_number = payload.phone_number
+    guest.email = payload.email
     guest.preferred_language = payload.preferred_language
     guest.preferred_currency = payload.preferred_currency
     await guest.save()

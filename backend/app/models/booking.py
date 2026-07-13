@@ -4,7 +4,7 @@ from beanie import Document, Link
 from pydantic import BaseModel, Field
 
 from app.models.cancellation_policy import CancellationRule
-from app.models.guest import Guest
+from app.models.guest import Currency, Guest
 
 
 class BookingDateRange(BaseModel):
@@ -27,6 +27,8 @@ class BookingCancellationPolicy(BaseModel):
 
 class Booking(Document):
     guest: Link[Guest]
+    booking_date: date = Field(default_factory=date.today)
+    currency: Currency = "CHF"
     date_ranges: list[BookingDateRange] = Field(default_factory=list)
     cancellation_policy: BookingCancellationPolicy
 
