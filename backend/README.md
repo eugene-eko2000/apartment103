@@ -122,7 +122,7 @@ Each migration file declares its own snapshot `Document` classes for the "before
 - `iterative_migration()` — walks every document in a collection, transforming `input_document` into `output_document`. Use for per-document data backfills/reshaping.
 - `free_fall_migration(document_models=[...])` — runs a function once with a DB session. Use for index changes or bulk operations that aren't per-document.
 
-See `migrations/20260712000329_add_cancellation_policy_active_flag.py` for an example combining both.
+See `migrations/20260712000329_create_initial_collections.py` for an example.
 
 Every time you need to change the shape of Mongo data:
 
