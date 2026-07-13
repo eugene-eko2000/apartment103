@@ -1,7 +1,7 @@
 from beanie import PydanticObjectId
 from fastapi import APIRouter, HTTPException, status
 
-from app.models.booking import Booking
+from app.models.booking import Booking, BookingCancellationPolicy
 from app.models.cancellation_policy import CancellationPolicy
 from app.models.guest import Guest
 from app.schemas.booking import BookingCreate
@@ -23,6 +23,10 @@ async def _get_cancellation_policy_or_404(policy_id: PydanticObjectId) -> Cancel
     return policy
 
 
+def _snapshot_cancellation_policy(policy: CancellationPolicy) -> BookingCancellationPolicy:
+    return BookingCancellationPolicy(name=policy.name, rules=policy.rules)
+
+
 @router.post("", response_model=Booking, status_code=status.HTTP_201_CREATED)
 async def create_booking(payload: BookingCreate) -> Booking:
     guest = await _get_guest_or_404(payload.guest_id)
@@ -30,7 +34,7 @@ async def create_booking(payload: BookingCreate) -> Booking:
     booking = Booking(
         guest=guest,
         date_ranges=payload.date_ranges,
-        cancellation_policy=cancellation_policy,
+        cancellation_policy=_snapshot_cancellation_policy(cancellation_policy),
     )
     await booking.insert()
     return booking
@@ -58,7 +62,7 @@ async def update_booking(booking_id: PydanticObjectId, payload: BookingCreate) -
     cancellation_policy = await _get_cancellation_policy_or_404(payload.cancellation_policy_id)
     booking.guest = guest
     booking.date_ranges = payload.date_ranges
-    booking.cancellation_policy = cancellation_policy
+    booking.cancellation_policy = _snapshot_cancellation_policy(cancellation_policy)
     await booking.save()
     return booking
 
