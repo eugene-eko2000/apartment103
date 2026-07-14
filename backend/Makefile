@@ -1,6 +1,6 @@
 COMPOSE = docker compose -f ./docker-compose.yml
 
-.PHONY: db db-down migrate dev
+.PHONY: db db-down migrate dev test
 
 db:
 	$(COMPOSE) up -d mongo
@@ -13,3 +13,6 @@ migrate:
 
 dev: db migrate
 	uv run uvicorn app.main:app --reload --port 8000
+
+test:
+	uv run pytest
