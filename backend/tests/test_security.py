@@ -14,6 +14,14 @@ from app.core.security import (
     verify_otp_code,
 )
 
+# 32+ bytes so PyJWT doesn't emit InsecureKeyLengthWarning for HS256 (RFC 7518 3.2).
+TEST_JWT_SECRET_KEY = "test-only-secret-key-please-do-not-use-in-prod"
+
+
+@pytest.fixture(autouse=True)
+def _secure_jwt_secret(monkeypatch):
+    monkeypatch.setattr(security.settings, "jwt_secret_key", TEST_JWT_SECRET_KEY)
+
 
 class TestGenerateOtpCode:
     def test_returns_string_of_configured_length(self):
@@ -131,7 +139,9 @@ class TestDecodeAccessToken:
 
     def test_raises_on_wrong_secret(self, monkeypatch):
         token, _ = create_access_token("user-id-1", "guest")
-        monkeypatch.setattr(security.settings, "jwt_secret_key", "a-different-secret")
+        monkeypatch.setattr(
+            security.settings, "jwt_secret_key", "a-completely-different-32-byte-secret"
+        )
         with pytest.raises(jwt.InvalidTokenError):
             decode_access_token(token)
 

@@ -11,7 +11,10 @@ from app.models.plan import Plan
 
 
 async def init_mongo() -> None:
-    client = AsyncMongoClient(settings.mongo_uri)
+    # tz_aware=True is required so datetimes read back from MongoDB are
+    # timezone-aware (UTC), matching datetime.now(timezone.utc) elsewhere in
+    # the app (e.g. OTP expiry/cooldown comparisons in app/api/routes/auth.py).
+    client = AsyncMongoClient(settings.mongo_uri, tz_aware=True)
     await init_beanie(
         database=client[settings.mongo_db],
         document_models=[CancellationPolicy, Plan, Guest, Admin, Booking, OtpChallenge],
