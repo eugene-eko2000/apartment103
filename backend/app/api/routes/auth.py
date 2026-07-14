@@ -1,5 +1,5 @@
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from beanie import PydanticObjectId
 from fastapi import APIRouter, HTTPException, status
@@ -59,7 +59,7 @@ async def request_otp(payload: OtpRequest) -> dict:
         .sort(-OtpChallenge.created_at)
         .first_or_none()
     )
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     if last_challenge is not None:
         cooldown_until = last_challenge.created_at + timedelta(
             seconds=settings.otp_resend_cooldown_seconds
@@ -107,7 +107,7 @@ async def verify_otp(payload: OtpVerify) -> TokenResponse:
     if challenge is None:
         raise invalid_code_error
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     if now > challenge.expires_at:
         raise invalid_code_error
     if challenge.attempts >= settings.otp_max_attempts:

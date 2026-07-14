@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 
 from beanie import Document
@@ -19,7 +19,7 @@ class OtpChallenge(Document):
     expires_at: datetime
     attempts: int = 0
     consumed_at: datetime | None = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Settings:
         name = "otp_challenges"
