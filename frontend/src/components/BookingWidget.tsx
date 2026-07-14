@@ -195,15 +195,16 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
 
           {/* Dropdown calendar — in normal flow so the form expands and the calendar stays fully visible */}
           {calendarOpen && (
-            <div className="mt-2 bg-white rounded-2xl shadow-2xl border border-gray-200 p-4 overflow-x-auto">
+            <div className="mt-2 flex justify-center bg-white rounded-2xl shadow-2xl border border-gray-200 p-4 overflow-x-auto">
               <DayPicker
                 mode="range"
+                navLayout="around"
                 style={{
-                  "--rdp-day-width": "30px",
-                  "--rdp-day-height": "30px",
-                  "--rdp-day_button-width": "28px",
-                  "--rdp-day_button-height": "28px",
-                  "--rdp-months-gap": "0.75rem",
+                  "--rdp-day-width": "27px",
+                  "--rdp-day-height": "27px",
+                  "--rdp-day_button-width": "25px",
+                  "--rdp-day_button-height": "25px",
+                  "--rdp-months-gap": "0.5rem",
                 } as React.CSSProperties}
                 styles={{ months: { flexWrap: "nowrap" } }}
                 selected={range}
