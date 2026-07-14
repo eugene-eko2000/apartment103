@@ -50,10 +50,8 @@ async def request_otp(payload: OtpRequest) -> dict:
 
     identifier = normalize_identifier(payload.identifier, kind)
 
-    if await _find_principal(identifier, kind) is None:
-        # Do not reveal whether the identifier is registered.
-        return {"message": _OTP_REQUESTED_MESSAGE}
-
+    # OTPs are sent for any syntactically valid identifier, registered or
+    # not: verifying one is also how a first-time guest starts registration.
     last_challenge = (
         await OtpChallenge.find(OtpChallenge.identifier == identifier)
         .sort(-OtpChallenge.created_at)
@@ -123,7 +121,16 @@ async def verify_otp(payload: OtpVerify) -> TokenResponse:
 
     principal = await _find_principal(identifier, kind)
     if principal is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No account found for this identifier")
+        # No Guest/Admin exists for this identifier yet: issue a narrowly
+        # scoped token that only lets the client register a new Guest
+        # (POST /guests/self) using this verified identifier.
+        access_token, expires_in = create_access_token(identifier, "pending_guest")
+        return TokenResponse(
+            access_token=access_token,
+            expires_in=expires_in,
+            subject_type="pending_guest",
+            subject_id=identifier,
+        )
 
     subject_type, subject_id = principal
     access_token, expires_in = create_access_token(str(subject_id), subject_type)

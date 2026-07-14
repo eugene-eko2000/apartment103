@@ -8,12 +8,22 @@ from app.schemas.plan import PlanCreate
 
 router = APIRouter(prefix="/plans", tags=["plans"], dependencies=[Depends(require_admin)])
 
+# Unauthenticated: lets the booking widget look up pricing and the
+# applicable cancellation policy without an admin session. Mounted ahead of
+# `router` in main.py so "/plans/public" is matched before "/plans/{plan_id}".
+public_router = APIRouter(prefix="/plans", tags=["plans"])
+
 
 async def _get_cancellation_policy_or_404(policy_id: PydanticObjectId) -> CancellationPolicy:
     policy = await CancellationPolicy.get(policy_id)
     if policy is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cancellation policy not found")
     return policy
+
+
+@public_router.get("/public", response_model=list[Plan])
+async def list_public_plans() -> list[Plan]:
+    return await Plan.find_all(fetch_links=True).to_list()
 
 
 @router.post("", response_model=Plan, status_code=status.HTTP_201_CREATED)

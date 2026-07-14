@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     mongo_uri: str = "mongodb://localhost:27017"
     mongo_db: str = "apartment103"
 
+    # Origins allowed to call the API from a browser (the Next.js frontend).
+    cors_allow_origins: list[str] = ["http://localhost:3000"]
+
     # JWT access tokens issued after a successful OTP verification.
     jwt_secret_key: str = "insecure-dev-secret-change-me"
     jwt_algorithm: str = "HS256"

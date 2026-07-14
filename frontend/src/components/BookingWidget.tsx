@@ -3,15 +3,17 @@
 import { useState, useRef, useEffect } from "react";
 import { DayPicker } from "react-day-picker";
 import type { DateRange } from "react-day-picker";
-import { format, differenceInCalendarDays, parse, isValid, isBefore } from "date-fns";
+import { format, differenceInCalendarDays, parse, isValid, isBefore, isAfter, isSameDay } from "date-fns";
 import { enUS, de, fr, it } from "date-fns/locale";
 import type { Locale as DateFnsLocale } from "date-fns";
 import "react-day-picker/style.css";
 import type { Locale } from "@/lib/i18n-config";
 import { useCurrency } from "@/lib/currency-context";
 import { formatPrice } from "@/lib/currency-config";
+import { listPublicPlans, type Plan } from "@/lib/api";
+import BookingModal, { type BookingModalDict } from "@/components/BookingModal";
 
-const PRICE_PER_NIGHT = 150;
+const FALLBACK_PRICE_PER_NIGHT = 150;
 const CLEANING_FEE = 50;
 const CHILD_AGES = Array.from({ length: 18 }, (_, i) => i);
 const DISPLAY_FORMAT = "dd/MM/yyyy";
@@ -46,7 +48,7 @@ export interface BookingDict {
   total: string;
   bookNow: string;
   noCharge: string;
-  bookingAlert: string;
+  modal: BookingModalDict;
 }
 
 function tryParseDate(str: string): Date | null {
@@ -63,12 +65,21 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const dateFnsLocale = DATE_FNS_LOCALES[lang];
   const { currency } = useCurrency();
   const [range, setRange] = useState<DateRange | undefined>();
+  const [hoverDate, setHoverDate] = useState<Date | undefined>(undefined);
   const [checkInText, setCheckInText] = useState("");
   const [checkOutText, setCheckOutText] = useState("");
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState<Child[]>([]);
+  const [plan, setPlan] = useState<Plan | null>(null);
+  const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const dateRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    listPublicPlans()
+      .then((plans) => setPlan(plans[0] ?? null))
+      .catch(() => setPlan(null));
+  }, []);
 
   // Close calendar on outside click
   useEffect(() => {
@@ -108,7 +119,16 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const nights =
     range?.from && range?.to ? differenceInCalendarDays(range.to, range.from) : 0;
   const totalGuests = adults + children.length;
-  const total = nights * PRICE_PER_NIGHT;
+  const pricePerNight = plan?.default_price ?? FALLBACK_PRICE_PER_NIGHT;
+  const total = nights * pricePerNight;
+
+  const handleBookNow = () => {
+    if (!range?.from || !range?.to) {
+      alert(dict.modal.selectDatesFirst);
+      return;
+    }
+    setBookingModalOpen(true);
+  };
 
   const addChild = () => {
     if (children.length < 4) setChildren([...children, { age: null }]);
@@ -132,7 +152,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
         <div className="flex items-baseline justify-between">
           <h2 className="text-xl font-bold text-white">{dict.planYourStay}</h2>
           <div className="text-right">
-            <span className="text-2xl font-bold text-white">{formatPrice(PRICE_PER_NIGHT, currency)}</span>
+            <span className="text-2xl font-bold text-white">{formatPrice(pricePerNight, currency)}</span>
             <span className="text-teal-200 text-sm ml-1">{dict.perNight}</span>
           </div>
         </div>
@@ -173,17 +193,55 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
             />
           </div>
 
-          {/* Dropdown calendar */}
+          {/* Dropdown calendar — in normal flow so the form expands and the calendar stays fully visible */}
           {calendarOpen && (
-            <div className="absolute top-full left-0 mt-2 z-50 bg-white rounded-2xl shadow-2xl border border-gray-200 p-4">
+            <div className="mt-2 bg-white rounded-2xl shadow-2xl border border-gray-200 p-4 overflow-x-auto">
               <DayPicker
                 mode="range"
+                style={{
+                  "--rdp-day-width": "30px",
+                  "--rdp-day-height": "30px",
+                  "--rdp-day_button-width": "28px",
+                  "--rdp-day_button-height": "28px",
+                  "--rdp-months-gap": "0.75rem",
+                } as React.CSSProperties}
+                styles={{ months: { flexWrap: "nowrap" } }}
                 selected={range}
+                defaultMonth={range?.from ?? today}
                 onSelect={setRange}
+                onDayClick={(date, modifiers) => {
+                  if (modifiers.disabled) return;
+                  // Both dates were already picked; start a fresh selection instead of adjusting the old range
+                  if (range?.from && range?.to) {
+                    setRange({ from: date, to: undefined });
+                  }
+                }}
                 numberOfMonths={2}
                 disabled={{ before: today }}
                 showOutsideDays={false}
                 locale={dateFnsLocale}
+                min={1}
+                onDayMouseEnter={(date) => setHoverDate(date)}
+                onDayMouseLeave={() => setHoverDate(undefined)}
+                modifiers={{
+                  hoverRange: (date) =>
+                    !!range?.from &&
+                    !range?.to &&
+                    !!hoverDate &&
+                    isAfter(hoverDate, range.from) &&
+                    isAfter(date, range.from) &&
+                    isBefore(date, hoverDate),
+                  hoverRangeEnd: (date) =>
+                    !!range?.from &&
+                    !range?.to &&
+                    !!hoverDate &&
+                    isAfter(hoverDate, range.from) &&
+                    isSameDay(date, hoverDate),
+                }}
+                modifiersClassNames={{
+                  hoverRange: "rdp-range_middle",
+                  hoverRangeEnd: "rdp-range_end",
+                }}
               />
             </div>
           )}
@@ -266,7 +324,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
         {nights > 0 && (
           <div className="bg-gray-50 rounded-xl p-4 mb-5 border border-gray-200 text-sm">
             <div className="flex justify-between text-gray-600 mb-1">
-              <span>{formatPrice(PRICE_PER_NIGHT, currency)} × {nights} {nights !== 1 ? dict.nights : dict.night}</span>
+              <span>{formatPrice(pricePerNight, currency)} × {nights} {nights !== 1 ? dict.nights : dict.night}</span>
               <span>{formatPrice(total, currency)}</span>
             </div>
             <div className="flex justify-between text-gray-600 mb-1">
@@ -284,7 +342,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
         <button
           className="w-full text-white font-semibold py-4 rounded-xl text-base transition-all shadow-lg active:scale-[0.98] cursor-pointer"
           style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
-          onClick={() => alert(dict.bookingAlert)}
+          onClick={handleBookNow}
         >
           {dict.bookNow}
         </button>
@@ -293,6 +351,16 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
           {dict.noCharge}
         </p>
       </div>
+
+      {bookingModalOpen && range?.from && range?.to && (
+        <BookingModal
+          dict={dict.modal}
+          checkIn={range.from}
+          checkOut={range.to}
+          nights={nights}
+          onClose={() => setBookingModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

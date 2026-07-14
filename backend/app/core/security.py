@@ -8,7 +8,7 @@ import jwt
 
 from app.core.config import settings
 
-SubjectType = Literal["guest", "admin"]
+SubjectType = Literal["guest", "admin", "pending_guest"]
 
 
 def generate_otp_code() -> str:

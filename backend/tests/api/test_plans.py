@@ -46,6 +46,21 @@ class TestCreatePlan:
         assert response.status_code == 401
 
 
+class TestListPublicPlans:
+    async def test_lists_plans_without_authentication(
+        self, client, cancellation_policy, admin_headers
+    ):
+        await client.post(
+            "/plans", json=_plan_payload(cancellation_policy.id), headers=admin_headers
+        )
+
+        response = await client.get("/plans/public")
+        assert response.status_code == 200
+        names = {p["name"] for p in response.json()}
+        assert names == {"Summer Plan"}
+        assert response.json()[0]["cancellation_policy"]["name"] == cancellation_policy.name
+
+
 class TestListPlans:
     async def test_lists_all_plans(self, client, cancellation_policy, admin_headers):
         await client.post(

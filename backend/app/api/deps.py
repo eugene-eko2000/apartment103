@@ -15,9 +15,12 @@ _bearer_scheme = HTTPBearer(auto_error=False)
 @dataclass
 class Principal:
     type: SubjectType
-    id: PydanticObjectId
+    id: PydanticObjectId | None = None
     guest: Guest | None = None
     admin: Admin | None = None
+    # Verified email/phone number, set only for a "pending_guest" principal
+    # (i.e. an OTP was verified for an identifier with no Guest record yet).
+    identifier: str | None = None
 
     @property
     def is_admin(self) -> bool:
@@ -26,6 +29,10 @@ class Principal:
     @property
     def is_guest(self) -> bool:
         return self.type == "guest"
+
+    @property
+    def is_pending_guest(self) -> bool:
+        return self.type == "pending_guest"
 
     def owns_guest(self, guest_id: PydanticObjectId) -> bool:
         return self.is_guest and self.id == guest_id
@@ -49,8 +56,11 @@ async def get_current_principal(
 
     subject_type: SubjectType = claims.get("type")
     subject_id = claims.get("sub")
-    if subject_type not in ("guest", "admin") or subject_id is None:
+    if subject_type not in ("guest", "admin", "pending_guest") or subject_id is None:
         raise unauthorized
+
+    if subject_type == "pending_guest":
+        return Principal(type="pending_guest", identifier=subject_id)
 
     try:
         object_id = PydanticObjectId(subject_id)
@@ -72,4 +82,12 @@ async def get_current_principal(
 async def require_admin(principal: Principal = Depends(get_current_principal)) -> Principal:
     if not principal.is_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return principal
+
+
+async def require_pending_guest(principal: Principal = Depends(get_current_principal)) -> Principal:
+    if not principal.is_pending_guest:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="A verified but unregistered identifier is required"
+        )
     return principal

@@ -1,6 +1,14 @@
 import pytest
 
+from app.core.security import create_access_token
+from app.models.guest import Guest
+
 pytestmark = pytest.mark.anyio
+
+
+def _pending_guest_headers(identifier: str) -> dict[str, str]:
+    token, _ = create_access_token(identifier, "pending_guest")
+    return {"Authorization": f"Bearer {token}"}
 
 
 def _guest_payload(**overrides):
@@ -32,6 +40,63 @@ class TestCreateGuest:
 
     async def test_requires_authentication(self, client):
         response = await client.post("/guests", json=_guest_payload())
+        assert response.status_code == 401
+
+
+class TestRegisterGuestSelf:
+    async def test_registers_guest_using_verified_email(self, client):
+        headers = _pending_guest_headers("newperson@example.com")
+        payload = _guest_payload(phone_number="+15559990000")
+        del payload["email"]
+
+        response = await client.post("/guests/self", json=payload, headers=headers)
+        assert response.status_code == 201
+        body = response.json()
+        assert body["guest"]["email"] == "newperson@example.com"
+        assert body["guest"]["phone_number"] == "+15559990000"
+        assert body["token_type"] == "bearer"
+        assert "access_token" in body
+
+        stored = await Guest.find_one(Guest.email == "newperson@example.com")
+        assert stored is not None
+
+    async def test_registers_guest_using_verified_phone(self, client):
+        headers = _pending_guest_headers("+15559990000")
+        payload = _guest_payload(email="newperson@example.com")
+        del payload["phone_number"]
+
+        response = await client.post("/guests/self", json=payload, headers=headers)
+        assert response.status_code == 201
+        assert response.json()["guest"]["phone_number"] == "+15559990000"
+
+    async def test_ignores_client_supplied_email_for_verified_field(self, client):
+        headers = _pending_guest_headers("newperson@example.com")
+        payload = _guest_payload(email="attacker@example.com", phone_number="+15559990000")
+
+        response = await client.post("/guests/self", json=payload, headers=headers)
+        assert response.status_code == 201
+        assert response.json()["guest"]["email"] == "newperson@example.com"
+
+    async def test_rejects_when_guest_already_exists(self, client, guest):
+        headers = _pending_guest_headers(guest.email)
+        payload = _guest_payload(phone_number="+15559990000")
+        del payload["email"]
+
+        response = await client.post("/guests/self", json=payload, headers=headers)
+        assert response.status_code == 409
+
+    async def test_requires_pending_guest_token(self, client, guest_headers):
+        payload = _guest_payload(phone_number="+15559990000")
+        del payload["email"]
+
+        response = await client.post("/guests/self", json=payload, headers=guest_headers)
+        assert response.status_code == 403
+
+    async def test_requires_authentication(self, client):
+        payload = _guest_payload(phone_number="+15559990000")
+        del payload["email"]
+
+        response = await client.post("/guests/self", json=payload)
         assert response.status_code == 401
 
 

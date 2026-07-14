@@ -49,7 +49,9 @@ class TestRequestOtp:
         assert len(challenges) == 1
         assert challenges[0].channel == "sms"
 
-    async def test_does_not_reveal_unknown_identifier(self, client):
+    async def test_sends_otp_for_unknown_identifier(self, client):
+        """Unknown identifiers also get a challenge: verifying it is how a
+        first-time guest registers, so there's no known/unknown to hide."""
         response = await client.post(
             "/auth/otp/request", json={"identifier": "nobody@example.com"}
         )
@@ -58,7 +60,7 @@ class TestRequestOtp:
         challenges = await OtpChallenge.find(
             OtpChallenge.identifier == "nobody@example.com"
         ).to_list()
-        assert challenges == []
+        assert len(challenges) == 1
 
     async def test_rejects_malformed_identifier(self, client):
         response = await client.post("/auth/otp/request", json={"identifier": "not-an-identifier"})
@@ -198,3 +200,15 @@ class TestVerifyOtp:
         )
         assert response.status_code == 200
         assert response.json()["subject_id"] == str(guest.id)
+
+    async def test_issues_pending_guest_token_for_unregistered_identifier(self, client):
+        await _create_challenge("newperson@example.com", "123456")
+
+        response = await client.post(
+            "/auth/otp/verify", json={"identifier": "newperson@example.com", "code": "123456"}
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["subject_type"] == "pending_guest"
+        assert body["subject_id"] == "newperson@example.com"
+        assert "access_token" in body
