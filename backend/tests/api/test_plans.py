@@ -7,11 +7,7 @@ def _plan_payload(cancellation_policy_id, **overrides):
     payload = {
         "name": "Summer Plan",
         "cancellation_policy_id": str(cancellation_policy_id),
-        "currency": "CHF",
-        "default_price": 100.0,
-        "date_ranges": [
-            {"begin_date": "2026-07-01", "end_date": "2026-08-01", "daily_rate": 120.0}
-        ],
+        "price_ratio": 1.2,
     }
     payload.update(overrides)
     return payload
@@ -25,7 +21,7 @@ class TestCreatePlan:
         assert response.status_code == 201
         body = response.json()
         assert body["name"] == "Summer Plan"
-        assert body["default_price"] == 100.0
+        assert body["price_ratio"] == 1.2
 
     async def test_returns_404_for_unknown_cancellation_policy(self, client, admin_headers):
         response = await client.post(

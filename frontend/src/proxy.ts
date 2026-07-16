@@ -27,6 +27,12 @@ function getLocale(request: NextRequest): Locale {
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // The admin site is not part of the localized marketing site: it lives at
+  // a fixed /admin path and must not be redirected to /{locale}/admin.
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    return NextResponse.next();
+  }
+
   const pathnameHasLocale = locales.some(
     (locale) => pathname === `/${locale}` || pathname.startsWith(`/${locale}/`)
   );

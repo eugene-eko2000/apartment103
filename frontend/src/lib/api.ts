@@ -42,9 +42,61 @@ export interface Plan {
   _id: string;
   name: string;
   cancellation_policy: { id: string; name: string; rules: CancellationRule[] };
+  price_ratio: number;
+}
+
+export interface PlanInput {
+  name: string;
+  cancellation_policy_id: string;
+  price_ratio: number;
+}
+
+export interface DateRangeRate {
+  begin_date: string;
+  end_date: string;
+  daily_rate: number;
+}
+
+export interface Period {
+  begin_date: string;
+  end_date: string;
   currency: Currency;
-  default_price: number;
-  date_ranges: { begin_date: string; end_date: string; daily_rate: number }[];
+  date_ranges: DateRangeRate[];
+}
+
+export interface Price {
+  _id: string;
+  period: Period;
+}
+
+export interface PriceInput {
+  period: Period;
+}
+
+export interface CancellationPolicy {
+  _id: string;
+  name: string;
+  rules: CancellationRule[];
+}
+
+export interface CancellationPolicyInput {
+  name: string;
+  rules: CancellationRule[];
+}
+
+export interface Admin {
+  _id: string;
+  family_name: string;
+  first_name: string;
+  phone_number: string;
+  email: string;
+}
+
+export interface AdminInput {
+  family_name: string;
+  first_name: string;
+  phone_number: string;
+  email: string;
 }
 
 export interface TokenResponse {
@@ -68,8 +120,28 @@ export interface BookingDateRange {
   price: number;
 }
 
+// Nested inside a Booking's "guest" Link field, which Beanie serializes with
+// an "id" key rather than the "_id" alias used on top-level Guest responses.
+export interface BookingGuestRef {
+  id: string;
+  family_name: string;
+  first_name: string;
+  email: string;
+  phone_number: string;
+}
+
 export interface Booking {
   _id: string;
+  guest: BookingGuestRef;
+  booking_date: string;
+  currency: Currency;
+  date_ranges: BookingDateRange[];
+  cancellation_policy: { name: string; rules: CancellationRule[] };
+}
+
+export interface BookingInput {
+  guest_id: string;
+  cancellation_policy_id: string;
   currency: Currency;
   date_ranges: BookingDateRange[];
 }
@@ -138,20 +210,155 @@ export function listPublicPlans(): Promise<Plan[]> {
   return request("/plans/public");
 }
 
-export function createBooking(
-  token: string,
-  data: {
-    guest_id: string;
-    cancellation_policy_id: string;
-    currency: Currency;
-    date_ranges: BookingDateRange[];
-  }
-): Promise<Booking> {
+export function listPublicPrices(): Promise<Price[]> {
+  return request("/prices/public");
+}
+
+export function createBooking(token: string, data: BookingInput): Promise<Booking> {
   return request("/bookings", {
     method: "POST",
     headers: authHeaders(token),
     body: JSON.stringify(data),
   });
+}
+
+export function listBookings(token: string): Promise<Booking[]> {
+  return request("/bookings", { headers: authHeaders(token) });
+}
+
+export function getBooking(bookingId: string, token: string): Promise<Booking> {
+  return request(`/bookings/${bookingId}`, { headers: authHeaders(token) });
+}
+
+export function updateBooking(bookingId: string, token: string, data: BookingInput): Promise<Booking> {
+  return request(`/bookings/${bookingId}`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteBooking(bookingId: string, token: string): Promise<void> {
+  return request(`/bookings/${bookingId}`, { method: "DELETE", headers: authHeaders(token) });
+}
+
+export function listGuests(token: string): Promise<Guest[]> {
+  return request("/guests", { headers: authHeaders(token) });
+}
+
+export function createGuest(token: string, data: GuestInput): Promise<Guest> {
+  return request("/guests", { method: "POST", headers: authHeaders(token), body: JSON.stringify(data) });
+}
+
+export function deleteGuest(guestId: string, token: string): Promise<void> {
+  return request(`/guests/${guestId}`, { method: "DELETE", headers: authHeaders(token) });
+}
+
+export function listPlans(token: string): Promise<Plan[]> {
+  return request("/plans", { headers: authHeaders(token) });
+}
+
+export function getPlan(planId: string, token: string): Promise<Plan> {
+  return request(`/plans/${planId}`, { headers: authHeaders(token) });
+}
+
+export function createPlan(token: string, data: PlanInput): Promise<Plan> {
+  return request("/plans", { method: "POST", headers: authHeaders(token), body: JSON.stringify(data) });
+}
+
+export function updatePlan(planId: string, token: string, data: PlanInput): Promise<Plan> {
+  return request(`/plans/${planId}`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+}
+
+export function deletePlan(planId: string, token: string): Promise<void> {
+  return request(`/plans/${planId}`, { method: "DELETE", headers: authHeaders(token) });
+}
+
+export function listPrices(token: string): Promise<Price[]> {
+  return request("/prices", { headers: authHeaders(token) });
+}
+
+export function getPrice(priceId: string, token: string): Promise<Price> {
+  return request(`/prices/${priceId}`, { headers: authHeaders(token) });
+}
+
+export function createPrice(token: string, data: PriceInput): Promise<Price> {
+  return request("/prices", { method: "POST", headers: authHeaders(token), body: JSON.stringify(data) });
+}
+
+export function updatePrice(priceId: string, token: string, data: PriceInput): Promise<Price> {
+  return request(`/prices/${priceId}`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+}
+
+export function deletePrice(priceId: string, token: string): Promise<void> {
+  return request(`/prices/${priceId}`, { method: "DELETE", headers: authHeaders(token) });
+}
+
+export function listCancellationPolicies(token: string): Promise<CancellationPolicy[]> {
+  return request("/cancellation-policies", { headers: authHeaders(token) });
+}
+
+export function getCancellationPolicy(policyId: string, token: string): Promise<CancellationPolicy> {
+  return request(`/cancellation-policies/${policyId}`, { headers: authHeaders(token) });
+}
+
+export function createCancellationPolicy(
+  token: string,
+  data: CancellationPolicyInput
+): Promise<CancellationPolicy> {
+  return request("/cancellation-policies", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateCancellationPolicy(
+  policyId: string,
+  token: string,
+  data: CancellationPolicyInput
+): Promise<CancellationPolicy> {
+  return request(`/cancellation-policies/${policyId}`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteCancellationPolicy(policyId: string, token: string): Promise<void> {
+  return request(`/cancellation-policies/${policyId}`, { method: "DELETE", headers: authHeaders(token) });
+}
+
+export function listAdmins(token: string): Promise<Admin[]> {
+  return request("/admins", { headers: authHeaders(token) });
+}
+
+export function getAdmin(adminId: string, token: string): Promise<Admin> {
+  return request(`/admins/${adminId}`, { headers: authHeaders(token) });
+}
+
+export function createAdmin(token: string, data: AdminInput): Promise<Admin> {
+  return request("/admins", { method: "POST", headers: authHeaders(token), body: JSON.stringify(data) });
+}
+
+export function updateAdmin(adminId: string, token: string, data: AdminInput): Promise<Admin> {
+  return request(`/admins/${adminId}`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteAdmin(adminId: string, token: string): Promise<void> {
+  return request(`/admins/${adminId}`, { method: "DELETE", headers: authHeaders(token) });
 }
 
 export { ApiError };

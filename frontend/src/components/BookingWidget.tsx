@@ -10,10 +10,10 @@ import "react-day-picker/style.css";
 import type { Locale } from "@/lib/i18n-config";
 import { useCurrency } from "@/lib/currency-context";
 import { formatPrice } from "@/lib/currency-config";
-import { listPublicPlans, type Plan } from "@/lib/api";
+import { listPublicPlans, listPublicPrices, type Plan, type Price } from "@/lib/api";
+import { findDailyRate, FALLBACK_DAILY_RATE } from "@/lib/pricing";
 import BookingModal, { type BookingModalDict } from "@/components/BookingModal";
 
-const FALLBACK_PRICE_PER_NIGHT = 150;
 const CLEANING_FEE = 50;
 const CHILD_AGES = Array.from({ length: 18 }, (_, i) => i);
 const DISPLAY_FORMAT = "dd/MM/yyyy";
@@ -72,6 +72,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState<Child[]>([]);
   const [plan, setPlan] = useState<Plan | null>(null);
+  const [prices, setPrices] = useState<Price[]>([]);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [calendarAnchor, setCalendarAnchor] = useState<{ top: number; right: number } | null>(null);
   const dateRef = useRef<HTMLDivElement>(null);
@@ -80,6 +81,9 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     listPublicPlans()
       .then((plans) => setPlan(plans[0] ?? null))
       .catch(() => setPlan(null));
+    listPublicPrices()
+      .then(setPrices)
+      .catch(() => setPrices([]));
   }, []);
 
   // Close calendar on outside click
@@ -135,7 +139,8 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const nights =
     range?.from && range?.to ? differenceInCalendarDays(range.to, range.from) : 0;
   const totalGuests = adults + children.length;
-  const pricePerNight = plan?.default_price ?? FALLBACK_PRICE_PER_NIGHT;
+  const matchedRate = findDailyRate(prices, format(range?.from ?? today, "yyyy-MM-dd"));
+  const pricePerNight = (matchedRate?.dailyRate ?? FALLBACK_DAILY_RATE) * (plan?.price_ratio ?? 1);
   const total = nights * pricePerNight;
   const isFormValid =
     !!range?.from &&

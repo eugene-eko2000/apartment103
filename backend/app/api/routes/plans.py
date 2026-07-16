@@ -32,9 +32,7 @@ async def create_plan(payload: PlanCreate) -> Plan:
     plan = Plan(
         name=payload.name,
         cancellation_policy=cancellation_policy,
-        currency=payload.currency,
-        default_price=payload.default_price,
-        date_ranges=payload.date_ranges,
+        price_ratio=payload.price_ratio,
     )
     await plan.insert()
     return plan
@@ -61,9 +59,7 @@ async def update_plan(plan_id: PydanticObjectId, payload: PlanCreate) -> Plan:
     cancellation_policy = await _get_cancellation_policy_or_404(payload.cancellation_policy_id)
     plan.name = payload.name
     plan.cancellation_policy = cancellation_policy
-    plan.currency = payload.currency
-    plan.default_price = payload.default_price
-    plan.date_ranges = payload.date_ranges
+    plan.price_ratio = payload.price_ratio
     await plan.save()
     return plan
 

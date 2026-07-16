@@ -12,6 +12,7 @@ from app.api.routes import (
     guests,
     health,
     plans,
+    prices,
 )
 from app.core.config import settings
 from app.db.mongo import init_mongo
@@ -39,6 +40,8 @@ app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(plans.public_router)
 app.include_router(plans.router)
+app.include_router(prices.public_router)
+app.include_router(prices.router)
 app.include_router(cancellation_policies.router)
 app.include_router(guests.router)
 app.include_router(admins.router)

@@ -16,6 +16,7 @@ from beanie.executors.migrate import MigrationSettings, run_migrate
 from beanie.migrations import template
 
 from app.core.config import settings
+from app.core.identifiers import classify_identifier, normalize_identifier
 
 MIGRATIONS_PATH = Path(__file__).resolve().parents[2] / "migrations"
 
@@ -85,6 +86,46 @@ def new_migration(name: str) -> None:
     file_name = f"{ts}_{name}.py"
     shutil.copy(template.__file__, MIGRATIONS_PATH / file_name)
     click.echo(f"Created migrations/{file_name}")
+
+
+@cli.command("create-admin")
+@click.option("--first-name", required=True)
+@click.option("--family-name", required=True)
+@click.option("--email", required=True)
+@click.option("--phone-number", required=True)
+def create_admin(first_name: str, family_name: str, email: str, phone_number: str) -> None:
+    """Insert the first Admin document directly, bypassing the API.
+
+    POST /admins requires an existing admin to call it, so a fresh database
+    has no way to create its first admin through the API. Run this once per
+    environment to bootstrap access to /admin.
+    """
+    # Import here (rather than at module scope) so this CLI only pulls in the
+    # app/models/db stack when this command actually runs.
+    from app.db.mongo import init_mongo
+    from app.models.admin import Admin
+
+    email = normalize_identifier(email, classify_identifier(email))
+    phone_number = normalize_identifier(phone_number, classify_identifier(phone_number))
+
+    async def _run() -> None:
+        await init_mongo()
+        existing = await Admin.find_one({"email": email}) or await Admin.find_one(
+            {"phone_number": phone_number}
+        )
+        if existing is not None:
+            click.echo(f"Admin already exists: {existing.id}")
+            return
+        admin = Admin(
+            first_name=first_name,
+            family_name=family_name,
+            email=email,
+            phone_number=phone_number,
+        )
+        await admin.insert()
+        click.echo(f"Created admin {admin.id}")
+
+    asyncio.run(_run())
 
 
 if __name__ == "__main__":

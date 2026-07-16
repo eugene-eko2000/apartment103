@@ -7,6 +7,7 @@ import {
   createBooking,
   getGuest,
   listPublicPlans,
+  listPublicPrices,
   registerGuestSelf,
   requestOtp,
   updateGuest,
@@ -16,8 +17,10 @@ import {
   type GuestInput,
   type Language,
   type Plan,
+  type Price,
   type SubjectType,
 } from "@/lib/api";
+import { findDailyRate, FALLBACK_CURRENCY, FALLBACK_DAILY_RATE } from "@/lib/pricing";
 
 export interface BookingModalDict {
   close: string;
@@ -103,6 +106,7 @@ export default function BookingModal({
   onClose: () => void;
 }) {
   const [plan, setPlan] = useState<Plan | null | undefined>(undefined);
+  const [prices, setPrices] = useState<Price[]>([]);
   const [step, setStep] = useState<Step>("identifier");
   const [identifier, setIdentifier] = useState("");
   const [otpCode, setOtpCode] = useState("");
@@ -118,6 +122,9 @@ export default function BookingModal({
     listPublicPlans()
       .then((plans) => setPlan(plans[0] ?? null))
       .catch(() => setPlan(null));
+    listPublicPrices()
+      .then(setPrices)
+      .catch(() => setPrices([]));
   }, []);
 
   useEffect(() => {
@@ -213,15 +220,18 @@ export default function BookingModal({
     if (!plan) return;
     setStep("submitting");
     try {
+      const matchedRate = findDailyRate(prices, format(checkIn, "yyyy-MM-dd"));
+      const dailyRate = matchedRate?.dailyRate ?? FALLBACK_DAILY_RATE;
+      const currency: Currency = matchedRate?.currency ?? FALLBACK_CURRENCY;
       await createBooking(token, {
         guest_id: finalGuestId,
         cancellation_policy_id: plan.cancellation_policy.id,
-        currency: plan.currency,
+        currency,
         date_ranges: [
           {
             begin_date: format(checkIn, "yyyy-MM-dd"),
             end_date: format(checkOut, "yyyy-MM-dd"),
-            price: nights * plan.default_price,
+            price: nights * dailyRate * plan.price_ratio,
           },
         ],
       });
