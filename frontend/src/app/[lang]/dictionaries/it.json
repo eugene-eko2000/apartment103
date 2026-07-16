@@ -81,7 +81,7 @@
     "noCharge": "Nessun addebito per ora — potrai rivedere tutto prima di confermare",
     "modal": {
       "close": "Chiudi",
-      "identifierTitle": "Troviamo la tua prenotazione",
+      "identifierTitle": "Inserisci i tuoi dati di contatto",
       "identifierHint": "Inserisci la tua email o il numero di telefono: ti invieremo un codice di verifica.",
       "identifierLabel": "Email o numero di telefono",
       "identifierPlaceholder": "tu@esempio.com oppure +41 79 123 45 67",

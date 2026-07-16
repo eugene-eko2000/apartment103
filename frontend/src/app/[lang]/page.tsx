@@ -77,10 +77,14 @@ export default async function Home({
         </div>
       </header>
 
+      {/* ── SCROLLABLE CONTENT ──────────────────────────── */}
+      <div className="flex-1 overflow-y-auto">
+      <div className="min-h-full flex flex-col">
+
       {/* ── HERO ────────────────────────────────────────── */}
-      <div className="flex-1 overflow-hidden">
-        <div className="max-w-7xl mx-auto px-6 py-6 lg:py-8 h-full">
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_480px] gap-12 items-start h-full">
+      <div className="shrink-0">
+        <div className="max-w-7xl mx-auto px-6 py-6 lg:py-8">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_480px] gap-12 items-start">
             {/* Left — apartment info */}
             <div className="text-white">
               <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -118,15 +122,19 @@ export default async function Home({
             </div>
 
             {/* Right — booking widget */}
-            <div className="overflow-y-auto max-h-full">
+            <div>
               <BookingWidget dict={dict.booking} lang={lang} />
             </div>
           </div>
         </div>
       </div>
 
+      {/* Flexible gap: grows to push highlights toward the footer on tall
+          screens, shrinks down to a 1px floor before the page scrolls */}
+      <div className="flex-1 min-h-[1px]" />
+
       {/* ── ABOUT / HIGHLIGHTS ──────────────────────────── */}
-      <section className="shrink-0 max-w-7xl mx-auto w-full px-6 py-4">
+      <section className="shrink-0 max-w-7xl mx-auto w-full px-6 pb-4">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {HIGHLIGHTS.map((card) => (
             <div
@@ -142,6 +150,9 @@ export default async function Home({
           ))}
         </div>
       </section>
+
+      </div>{/* end flex column */}
+      </div>{/* end scrollable content */}
 
       {/* ── FOOTER ──────────────────────────────────────── */}
       <footer className="shrink-0 border-t border-gray-200 bg-white">

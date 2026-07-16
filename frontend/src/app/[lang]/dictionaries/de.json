@@ -81,7 +81,7 @@
     "noCharge": "Noch keine Abbuchung — Sie prüfen alles vor der Bestätigung",
     "modal": {
       "close": "Schließen",
-      "identifierTitle": "Finden wir Ihre Reservierung",
+      "identifierTitle": "Geben Sie Ihre Kontaktdaten ein",
       "identifierHint": "Geben Sie Ihre E-Mail-Adresse oder Telefonnummer ein — wir senden Ihnen einen Bestätigungscode.",
       "identifierLabel": "E-Mail oder Telefonnummer",
       "identifierPlaceholder": "sie@beispiel.com oder +41 79 123 45 67",

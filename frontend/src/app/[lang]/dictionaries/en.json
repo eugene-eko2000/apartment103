@@ -81,7 +81,7 @@
     "noCharge": "No charge yet — you'll review before confirming",
     "modal": {
       "close": "Close",
-      "identifierTitle": "Let's find your reservation",
+      "identifierTitle": "Enter your contact data",
       "identifierHint": "Enter your email or phone number and we'll send you a verification code.",
       "identifierLabel": "Email or phone number",
       "identifierPlaceholder": "you@example.com or +41 79 123 45 67",

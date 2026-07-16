@@ -81,7 +81,7 @@
     "noCharge": "Aucun paiement pour l'instant — vous vérifierez avant de confirmer",
     "modal": {
       "close": "Fermer",
-      "identifierTitle": "Retrouvons votre réservation",
+      "identifierTitle": "Saisissez vos coordonnées",
       "identifierHint": "Saisissez votre e-mail ou votre numéro de téléphone, nous vous enverrons un code de vérification.",
       "identifierLabel": "E-mail ou numéro de téléphone",
       "identifierPlaceholder": "vous@exemple.com ou +41 79 123 45 67",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { DayPicker } from "react-day-picker";
 import type { DateRange } from "react-day-picker";
 import { format, differenceInCalendarDays, parse, isValid, isBefore, isAfter, isSameDay } from "date-fns";
@@ -73,6 +73,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const [children, setChildren] = useState<Child[]>([]);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
+  const [calendarAnchor, setCalendarAnchor] = useState<{ top: number; right: number } | null>(null);
   const dateRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -91,6 +92,21 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  // Pin the dropdown's top-right corner to the date row's on-screen position — it then
+  // grows left/down as it needs, without pushing the rest of the card (and getting
+  // clipped by the page's fixed-viewport, non-scrolling hero) out of view.
+  useLayoutEffect(() => {
+    if (!calendarOpen) return;
+    const updateAnchor = () => {
+      if (!dateRef.current) return;
+      const rect = dateRef.current.getBoundingClientRect();
+      setCalendarAnchor({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+    };
+    updateAnchor();
+    window.addEventListener("resize", updateAnchor);
+    return () => window.removeEventListener("resize", updateAnchor);
+  }, [calendarOpen]);
 
   // Sync text inputs whenever the calendar range changes
   useEffect(() => {
@@ -121,12 +137,14 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const totalGuests = adults + children.length;
   const pricePerNight = plan?.default_price ?? FALLBACK_PRICE_PER_NIGHT;
   const total = nights * pricePerNight;
+  const isFormValid =
+    !!range?.from &&
+    !!range?.to &&
+    nights > 0 &&
+    children.every((child) => child.age !== null);
 
   const handleBookNow = () => {
-    if (!range?.from || !range?.to) {
-      alert(dict.modal.selectDatesFirst);
-      return;
-    }
+    if (!isFormValid) return;
     setBookingModalOpen(true);
   };
 
@@ -193,18 +211,19 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
             />
           </div>
 
-          {/* Dropdown calendar — in normal flow so the form expands and the calendar stays fully visible */}
-          {calendarOpen && (
-            <div className="mt-2 flex justify-center bg-white rounded-2xl shadow-2xl border border-gray-200 p-4 overflow-x-auto">
+          {/* Dropdown calendar — pinned to the date row's top-right corner and fixed to the
+              viewport, so it grows left/down to fit the cozy layout without ever scrolling
+              or being clipped by the page's non-scrolling hero section. */}
+          {calendarOpen && calendarAnchor && (
+            <div
+              className="fixed z-40 flex justify-center bg-white rounded-2xl shadow-2xl border border-gray-200 p-5 w-max max-w-[calc(100vw-1.5rem)] overflow-x-auto"
+              style={{ top: calendarAnchor.top, right: calendarAnchor.right }}
+            >
               <DayPicker
                 mode="range"
                 navLayout="around"
                 style={{
-                  "--rdp-day-width": "27px",
-                  "--rdp-day-height": "27px",
-                  "--rdp-day_button-width": "25px",
-                  "--rdp-day_button-height": "25px",
-                  "--rdp-months-gap": "0.5rem",
+                  "--rdp-months-gap": "1.5rem",
                 } as React.CSSProperties}
                 styles={{ months: { flexWrap: "nowrap" } }}
                 selected={range}
@@ -341,9 +360,14 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
 
         {/* ── Book Now ──────────────────────────────────────── */}
         <button
-          className="w-full text-white font-semibold py-4 rounded-xl text-base transition-all shadow-lg active:scale-[0.98] cursor-pointer"
+          className={`w-full text-white font-semibold py-4 rounded-xl text-base transition-all shadow-lg ${
+            isFormValid
+              ? "active:scale-[0.98] cursor-pointer"
+              : "opacity-50 cursor-not-allowed"
+          }`}
           style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
           onClick={handleBookNow}
+          disabled={!isFormValid}
         >
           {dict.bookNow}
         </button>
