@@ -56,7 +56,7 @@ export interface VerifiedIdentity {
 
 type Step = "identifier" | "otp";
 
-const emptyGuestForm: GuestInput = {
+export const emptyGuestForm: GuestInput = {
   family_name: "",
   first_name: "",
   residence_address: { street_address: "", zip: "", city: "", state: "", country: "" },

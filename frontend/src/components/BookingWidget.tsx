@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useId, useEffect, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import { DayPicker } from "react-day-picker";
 import type { DateRange } from "react-day-picker";
 import { format, differenceInCalendarDays, parse, isValid, isBefore, isAfter, isSameDay } from "date-fns";
@@ -27,7 +28,7 @@ import {
   type Price,
 } from "@/lib/api";
 import { findDailyRate, FALLBACK_CURRENCY, FALLBACK_DAILY_RATE } from "@/lib/pricing";
-import BookingModal, { guestToForm, type BookingModalDict, type VerifiedIdentity } from "@/components/BookingModal";
+import BookingModal, { emptyGuestForm, guestToForm, type BookingModalDict, type VerifiedIdentity } from "@/components/BookingModal";
 import { clearGuestSession, readGuestSession, saveGuestSession } from "@/lib/guest-auth";
 
 const CHILD_AGES = Array.from({ length: 18 }, (_, i) => i);
@@ -95,6 +96,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const [identityModalOpen, setIdentityModalOpen] = useState(false);
   const [calendarAnchor, setCalendarAnchor] = useState<{ top: number; right: number } | null>(null);
   const dateRef = useRef<HTMLDivElement>(null);
+  const calendarRef = useRef<HTMLDivElement>(null);
   const widgetRef = useRef<HTMLDivElement>(null);
   // Rect captured live (via captureRect()) right before extended toggles, so
   // the FLIP effect below knows where to animate from.
@@ -131,9 +133,10 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   // Close calendar on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (dateRef.current && !dateRef.current.contains(e.target as Node)) {
-        setCalendarOpen(false);
-      }
+      const target = e.target as Node;
+      if (dateRef.current?.contains(target)) return;
+      if (calendarRef.current?.contains(target)) return;
+      setCalendarOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -151,7 +154,13 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     };
     updateAnchor();
     window.addEventListener("resize", updateAnchor);
-    return () => window.removeEventListener("resize", updateAnchor);
+    // The extended widget scrolls internally (overflow-y-auto), which moves the
+    // date row without firing a window resize/scroll event — track it directly.
+    document.addEventListener("scroll", updateAnchor, true);
+    return () => {
+      window.removeEventListener("resize", updateAnchor);
+      document.removeEventListener("scroll", updateAnchor, true);
+    };
   }, [calendarOpen]);
 
   // Animate the widget moving/resizing between its compact and extended
@@ -245,22 +254,34 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const handleBookClick = async () => {
     if (!isFormValid) return;
     const session = readGuestSession();
-    console.log("BookingWidget: readGuestSession() returned", session);
     if (session) {
       setCheckingSession(true);
       try {
         // Confirm the stored bearer token is still accepted server-side
         // before resuming straight into the guest-details step with it.
         await verifyToken(session.token);
-        const guest = await getGuest(session.guestId, session.token);
-        handleVerified({
-          authToken: session.token,
-          expiresAt: session.expiresAt,
-          guestId: guest._id,
-          guestMode: "update",
-          isAdminBooking: false,
-          guestForm: guestToForm(guest),
-        });
+        if (session.guestId) {
+          const guest = await getGuest(session.guestId, session.token);
+          handleVerified({
+            authToken: session.token,
+            expiresAt: session.expiresAt,
+            guestId: guest._id,
+            guestMode: "update",
+            isAdminBooking: false,
+            guestForm: guestToForm(guest),
+          });
+        } else {
+          // No guest profile yet (self-registration or admin booking was
+          // verified but never completed) — resume straight into that form.
+          handleVerified({
+            authToken: session.token,
+            expiresAt: session.expiresAt,
+            guestId: null,
+            guestMode: session.guestMode,
+            isAdminBooking: session.isAdminBooking,
+            guestForm: emptyGuestForm,
+          });
+        }
         return;
       } catch {
         // Token rejected or expired server-side — fall back to OTP below.
@@ -291,9 +312,13 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     setGuestStep("form");
     setFormError(null);
     setIdentityModalOpen(false);
-    if (identity.guestMode === "update" && identity.guestId) {
-      saveGuestSession({ token: identity.authToken, guestId: identity.guestId, expiresAt: identity.expiresAt });
-    }
+    saveGuestSession({
+      token: identity.authToken,
+      guestId: identity.guestId,
+      guestMode: identity.guestMode,
+      isAdminBooking: identity.isAdminBooking,
+      expiresAt: identity.expiresAt,
+    });
   };
 
   const resetBookingFlow = () => {
@@ -352,27 +377,28 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     setFormError(null);
     try {
       if (verified.guestMode === "create" && verified.isAdminBooking) {
-        console.log("BookingWidget: creating guest via admin booking flow");
         const { guest, access_token, expires_in } = await createGuest(verified.authToken, guestForm);
         setGuestName(guest.first_name);
         saveGuestSession({
           token: access_token,
           guestId: guest._id,
+          guestMode: "create",
+          isAdminBooking: true,
           expiresAt: Date.now() + expires_in * 1000,
         });
         await submitBooking(guest._id, verified.authToken);
       } else if (verified.guestMode === "create") {
-        console.log("BookingWidget: registering guest via self-service flow");
         const result = await registerGuestSelf(verified.authToken, guestForm);
         setGuestName(result.guest.first_name);
         saveGuestSession({
           token: result.access_token,
           guestId: result.guest._id,
+          guestMode: "create",
+          isAdminBooking: false,
           expiresAt: Date.now() + result.expires_in * 1000,
         });
         await submitBooking(result.guest._id, result.access_token);
       } else if (verified.guestMode === "update" && verified.guestId) {
-        console.log("BookingWidget: updating guest via self-service flow");
         const guest = await updateGuest(verified.guestId, verified.authToken, guestForm);
         setGuestName(guest.first_name);
         await submitBooking(verified.guestId, verified.authToken);
@@ -421,9 +447,10 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     </div>
   );
 
-  const dateAndGuestCalendar = calendarOpen && calendarAnchor && (
+  const dateAndGuestCalendar = calendarOpen && calendarAnchor && createPortal(
     <div
-      className="fixed z-[95] flex justify-center bg-white rounded-2xl shadow-2xl border border-gray-200 p-5 w-max max-w-[calc(100vw-1.5rem)] overflow-x-auto"
+      ref={calendarRef}
+      className="fixed z-[101] flex justify-center bg-white rounded-2xl shadow-2xl border border-gray-200 p-5 w-max max-w-[calc(100vw-1.5rem)] overflow-x-auto"
       style={{ top: calendarAnchor.top, right: calendarAnchor.right }}
     >
       <DayPicker
@@ -470,7 +497,8 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
           hoverRangeEnd: "rdp-range_end",
         }}
       />
-    </div>
+    </div>,
+    document.body
   );
 
   return (
@@ -820,6 +848,9 @@ function DateField({
           value={value}
           placeholder="DD/MM/YYYY"
           onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.preventDefault();
+          }}
           className={`w-full pl-3 pr-9 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-1 ${
             filled
               ? "border-teal-400 bg-teal-50 text-gray-800 focus:border-teal-500 focus:ring-teal-200"
@@ -871,6 +902,7 @@ function Counter({
   return (
     <div className="flex items-center gap-3">
       <button
+        type="button"
         onClick={onDecrement}
         disabled={value <= min}
         className="w-8 h-8 rounded-full border-2 border-gray-300 flex items-center justify-center text-gray-600 font-medium hover:border-teal-500 hover:text-teal-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
@@ -879,6 +911,7 @@ function Counter({
       </button>
       <span className="w-5 text-center font-semibold text-gray-800 text-sm">{value}</span>
       <button
+        type="button"
         onClick={onIncrement}
         disabled={value >= max}
         className="w-8 h-8 rounded-full border-2 border-gray-300 flex items-center justify-center text-gray-600 font-medium hover:border-teal-500 hover:text-teal-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"

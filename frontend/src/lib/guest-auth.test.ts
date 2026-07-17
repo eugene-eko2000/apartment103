@@ -6,6 +6,8 @@ const STORAGE_KEY = "guest_session";
 const validSession: GuestSession = {
   token: "abc123",
   guestId: "guest-1",
+  guestMode: "update",
+  isAdminBooking: false,
   expiresAt: Date.now() + 60_000,
 };
 
@@ -42,6 +44,12 @@ describe("readGuestSession", () => {
     );
     expect(readGuestSession()).toBeNull();
     expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  it("returns a session with a null guestId (verified but no guest profile yet)", () => {
+    const pendingSession: GuestSession = { ...validSession, guestId: null, guestMode: "create" };
+    saveGuestSession(pendingSession);
+    expect(readGuestSession()).toEqual(pendingSession);
   });
 });
 

@@ -2,7 +2,10 @@ const STORAGE_KEY = "guest_session";
 
 export interface GuestSession {
   token: string;
-  guestId: string;
+  // null until the guest profile itself is created (self-registration / admin booking)
+  guestId: string | null;
+  guestMode: "create" | "update";
+  isAdminBooking: boolean;
   expiresAt: number;
 }
 
@@ -12,7 +15,7 @@ export function readGuestSession(): GuestSession | null {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as GuestSession;
-    if (!parsed.token || !parsed.guestId || !parsed.expiresAt || parsed.expiresAt <= Date.now()) {
+    if (!parsed.token || !parsed.guestMode || !parsed.expiresAt || parsed.expiresAt <= Date.now()) {
       window.localStorage.removeItem(STORAGE_KEY);
       return null;
     }
