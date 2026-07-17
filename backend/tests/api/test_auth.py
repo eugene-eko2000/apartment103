@@ -23,6 +23,39 @@ async def _create_challenge(identifier: str, code: str, **overrides) -> OtpChall
     return challenge
 
 
+class TestVerifyToken:
+    async def test_accepts_valid_guest_token(self, client, guest_headers):
+        response = await client.get("/auth/token/verify", headers=guest_headers)
+        assert response.status_code == 200
+        assert response.json() == {"status": "OK"}
+
+    async def test_accepts_valid_admin_token(self, client, admin_headers):
+        response = await client.get("/auth/token/verify", headers=admin_headers)
+        assert response.status_code == 200
+        assert response.json() == {"status": "OK"}
+
+    async def test_rejects_missing_token(self, client):
+        response = await client.get("/auth/token/verify")
+        assert response.status_code == 401
+
+    async def test_rejects_malformed_token(self, client):
+        response = await client.get(
+            "/auth/token/verify", headers={"Authorization": "Bearer not-a-real-token"}
+        )
+        assert response.status_code == 401
+
+    async def test_rejects_token_for_deleted_guest(self, client, guest):
+        from app.core.security import create_access_token
+
+        token, _ = create_access_token(str(guest.id), "guest")
+        await guest.delete()
+
+        response = await client.get(
+            "/auth/token/verify", headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 401
+
+
 class TestRequestOtp:
     async def test_accepts_known_guest_email_and_creates_challenge(self, client, guest):
         response = await client.post("/auth/otp/request", json={"identifier": guest.email})

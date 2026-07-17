@@ -114,6 +114,13 @@ export interface GuestSelfRegistrationResponse {
   expires_in: number;
 }
 
+export interface GuestCreateResponse {
+  guest: Guest;
+  access_token: string;
+  token_type: "bearer";
+  expires_in: number;
+}
+
 export interface BookingDateRange {
   begin_date: string;
   end_date: string;
@@ -183,6 +190,10 @@ export function verifyOtp(identifier: string, code: string): Promise<TokenRespon
   return request("/auth/otp/verify", { method: "POST", body: JSON.stringify({ identifier, code }) });
 }
 
+export function verifyToken(token: string): Promise<{ status: string }> {
+  return request("/auth/token/verify", { headers: authHeaders(token) });
+}
+
 export function getGuest(guestId: string, token: string): Promise<Guest> {
   return request(`/guests/${guestId}`, { headers: authHeaders(token) });
 }
@@ -246,7 +257,7 @@ export function listGuests(token: string): Promise<Guest[]> {
   return request("/guests", { headers: authHeaders(token) });
 }
 
-export function createGuest(token: string, data: GuestInput): Promise<Guest> {
+export function createGuest(token: string, data: GuestInput): Promise<GuestCreateResponse> {
   return request("/guests", { method: "POST", headers: authHeaders(token), body: JSON.stringify(data) });
 }
 

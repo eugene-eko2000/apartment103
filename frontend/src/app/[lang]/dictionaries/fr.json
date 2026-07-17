@@ -55,6 +55,7 @@
   },
   "booking": {
     "planYourStay": "Planifiez votre séjour",
+    "fromPrefix": "à partir de",
     "perNight": "/ nuit",
     "night": "nuit",
     "nights": "nuits",
@@ -78,6 +79,7 @@
     "cleaningFee": "Frais de ménage",
     "total": "Total",
     "bookNow": "Réserver",
+    "cancel": "Annuler",
     "noCharge": "Aucun paiement pour l'instant — vous vérifierez avant de confirmer",
     "modal": {
       "close": "Fermer",
@@ -117,7 +119,6 @@
       "done": "Terminé",
       "errorTitle": "Une erreur est survenue",
       "tryAgain": "Réessayer",
-      "adminUnsupported": "Cet identifiant appartient à un compte administrateur. Merci de réserver avec un e-mail ou un numéro de téléphone personnel.",
       "noPlan": "La réservation n'est pas disponible pour le moment — merci de nous contacter directement.",
       "selectDatesFirst": "Veuillez d'abord sélectionner vos dates d'arrivée et de départ."
     }

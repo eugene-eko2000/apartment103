@@ -85,7 +85,7 @@ export default function PlansPanel() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!form.cancellation_policy_id) {
       setFormError("Create a cancellation policy first.");

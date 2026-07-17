@@ -36,3 +36,10 @@ class GuestSelfRegistrationResponse(BaseModel):
     access_token: str
     token_type: Literal["bearer"] = "bearer"
     expires_in: int
+
+
+class GuestCreateResponse(BaseModel):
+    guest: Guest
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"
+    expires_in: int

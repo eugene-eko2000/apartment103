@@ -94,7 +94,7 @@ export default function BookingsPanel() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!editing) return;
     if (!form.cancellation_policy_id) {

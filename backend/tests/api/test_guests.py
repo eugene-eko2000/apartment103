@@ -32,7 +32,11 @@ class TestCreateGuest:
     async def test_creates_guest(self, client, admin_headers):
         response = await client.post("/guests", json=_guest_payload(), headers=admin_headers)
         assert response.status_code == 201
-        assert response.json()["email"] == "jane@example.com"
+        body = response.json()
+        assert body["guest"]["email"] == "jane@example.com"
+        assert body["access_token"]
+        assert body["token_type"] == "bearer"
+        assert body["expires_in"] > 0
 
     async def test_requires_admin(self, client, guest_headers):
         response = await client.post("/guests", json=_guest_payload(), headers=guest_headers)

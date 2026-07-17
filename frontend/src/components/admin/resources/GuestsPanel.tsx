@@ -96,7 +96,7 @@ export default function GuestsPanel() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     setPending(true);
     setFormError(null);

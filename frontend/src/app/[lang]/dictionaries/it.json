@@ -55,6 +55,7 @@
   },
   "booking": {
     "planYourStay": "Pianifica il tuo soggiorno",
+    "fromPrefix": "da",
     "perNight": "/ notte",
     "night": "notte",
     "nights": "notti",
@@ -77,7 +78,8 @@
     "yrs": "anni",
     "cleaningFee": "Costo pulizie",
     "total": "Totale",
-    "bookNow": "Prenota ora",
+    "bookNow": "Prenota",
+    "cancel": "Annulla",
     "noCharge": "Nessun addebito per ora — potrai rivedere tutto prima di confermare",
     "modal": {
       "close": "Chiudi",
@@ -117,7 +119,6 @@
       "done": "Fatto",
       "errorTitle": "Qualcosa è andato storto",
       "tryAgain": "Riprova",
-      "adminUnsupported": "Questo identificativo appartiene a un account amministratore. Prenota con un'email o un numero di telefono personale.",
       "noPlan": "La prenotazione non è disponibile al momento — contattaci direttamente.",
       "selectDatesFirst": "Seleziona prima le date di check-in e check-out."
     }

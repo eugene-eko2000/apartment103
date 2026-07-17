@@ -55,6 +55,7 @@
   },
   "booking": {
     "planYourStay": "Planen Sie Ihren Aufenthalt",
+    "fromPrefix": "ab",
     "perNight": "/ Nacht",
     "night": "Nacht",
     "nights": "Nächte",
@@ -77,7 +78,8 @@
     "yrs": "J.",
     "cleaningFee": "Endreinigung",
     "total": "Gesamt",
-    "bookNow": "Jetzt buchen",
+    "bookNow": "Buchen",
+    "cancel": "Abbrechen",
     "noCharge": "Noch keine Abbuchung — Sie prüfen alles vor der Bestätigung",
     "modal": {
       "close": "Schließen",
@@ -117,7 +119,6 @@
       "done": "Fertig",
       "errorTitle": "Etwas ist schiefgelaufen",
       "tryAgain": "Erneut versuchen",
-      "adminUnsupported": "Diese Kennung gehört zu einem Admin-Konto. Bitte buchen Sie mit einer persönlichen E-Mail-Adresse oder Telefonnummer.",
       "noPlan": "Buchungen sind derzeit nicht möglich — bitte kontaktieren Sie uns direkt.",
       "selectDatesFirst": "Bitte wählen Sie zuerst Ihr An- und Abreisedatum aus."
     }

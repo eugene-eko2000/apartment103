@@ -2,8 +2,9 @@ import re
 from datetime import datetime, timedelta, timezone
 
 from beanie import PydanticObjectId
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.api.deps import Principal, get_current_principal
 from app.core.config import settings
 from app.core.identifiers import classify_identifier, normalize_identifier
 from app.core.notifications import send_otp_email, send_otp_sms
@@ -22,6 +23,13 @@ from app.schemas.auth import OtpRequest, OtpVerify, TokenResponse
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 _OTP_REQUESTED_MESSAGE = "If an account exists for this identifier, a verification code has been sent."
+
+
+@router.get("/token/verify")
+async def verify_token(principal: Principal = Depends(get_current_principal)) -> dict:
+    # get_current_principal already raises 401 for a missing/invalid/expired
+    # token, so reaching this point means the bearer token is authenticated.
+    return {"status": "OK"}
 
 
 async def _find_principal(identifier: str, kind: str) -> tuple[SubjectType, PydanticObjectId] | None:

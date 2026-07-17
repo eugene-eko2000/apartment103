@@ -21,7 +21,7 @@ export default function AdminLogin() {
     setErrorMessage(null);
   };
 
-  const handleRequestOtp = async (e: React.FormEvent) => {
+  const handleRequestOtp = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!identifier.trim()) return;
     setPending(true);
@@ -49,7 +49,7 @@ export default function AdminLogin() {
     }
   };
 
-  const handleVerifyOtp = async (e: React.FormEvent) => {
+  const handleVerifyOtp = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!otpCode.trim()) return;
     setPending(true);

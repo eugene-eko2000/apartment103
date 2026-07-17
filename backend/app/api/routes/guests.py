@@ -5,7 +5,7 @@ from app.api.deps import Principal, get_current_principal, require_admin, requir
 from app.core.identifiers import classify_identifier, normalize_identifier
 from app.core.security import create_access_token
 from app.models.guest import Guest
-from app.schemas.guest import GuestCreate, GuestSelfRegistration, GuestSelfRegistrationResponse
+from app.schemas.guest import GuestCreate, GuestCreateResponse, GuestSelfRegistration, GuestSelfRegistrationResponse
 
 router = APIRouter(prefix="/guests", tags=["guests"])
 
@@ -15,11 +15,14 @@ def _ensure_can_access_guest(principal: Principal, guest_id: PydanticObjectId) -
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized for this guest")
 
 
-@router.post("", response_model=Guest, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin)])
-async def create_guest(payload: GuestCreate) -> Guest:
+@router.post(
+    "", response_model=GuestCreateResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin)]
+)
+async def create_guest(payload: GuestCreate) -> GuestCreateResponse:
     guest = Guest(**payload.model_dump())
     await guest.insert()
-    return guest
+    access_token, expires_in = create_access_token(str(guest.id), "guest")
+    return GuestCreateResponse(guest=guest, access_token=access_token, expires_in=expires_in)
 
 
 @router.post("/self", response_model=GuestSelfRegistrationResponse, status_code=status.HTTP_201_CREATED)
