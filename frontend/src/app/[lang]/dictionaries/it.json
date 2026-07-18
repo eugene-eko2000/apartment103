@@ -126,7 +126,10 @@
       "errorTitle": "Qualcosa è andato storto",
       "tryAgain": "Riprova",
       "noPlan": "La prenotazione non è disponibile al momento — contattaci direttamente.",
-      "selectDatesFirst": "Seleziona prima le date di check-in e check-out."
+      "selectDatesFirst": "Seleziona prima le date di check-in e check-out.",
+      "choosePlanTitle": "Scegli la tua tariffa",
+      "refundRule": "Rimborso del {percent}% in caso di cancellazione {days}+ giorni prima del check-in",
+      "next": "Avanti"
     }
   },
   "gallery": {

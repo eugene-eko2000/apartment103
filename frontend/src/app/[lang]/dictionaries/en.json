@@ -126,7 +126,10 @@
       "errorTitle": "Something went wrong",
       "tryAgain": "Try again",
       "noPlan": "Booking isn't available right now — please contact us directly.",
-      "selectDatesFirst": "Please select your check-in and check-out dates first."
+      "selectDatesFirst": "Please select your check-in and check-out dates first.",
+      "choosePlanTitle": "Choose your rate",
+      "refundRule": "{percent}% refund if cancelled {days}+ days before check-in",
+      "next": "Next"
     }
   },
   "gallery": {

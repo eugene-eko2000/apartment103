@@ -42,7 +42,7 @@ const DATE_FNS_LOCALES: Record<Locale, DateFnsLocale> = { en: enUS, de, fr, it }
 const TRANSITION_MS = 380;
 
 type Child = { age: number | null };
-type GuestFlowStep = "form" | "submitting" | "success" | "error";
+type GuestFlowStep = "plan" | "form" | "submitting" | "success" | "error";
 
 export interface BookingDict {
   planYourStay: string;
@@ -70,6 +70,7 @@ export interface BookingDict {
   bookNow: string;
   cancel: string;
   noCharge: string;
+  total: string;
   modal: BookingModalDict;
 }
 
@@ -93,7 +94,8 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState<Child[]>([]);
-  const [plan, setPlan] = useState<Plan | null>(null);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [prices, setPrices] = useState<Price[]>([]);
   const [bookedRanges, setBookedRanges] = useState<DateRange[]>([]);
   const [identityModalOpen, setIdentityModalOpen] = useState(false);
@@ -126,8 +128,8 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
 
   useEffect(() => {
     listPublicPlans()
-      .then((plans) => setPlan(plans[0] ?? null))
-      .catch(() => setPlan(null));
+      .then(setPlans)
+      .catch(() => setPlans([]));
     listPublicPrices()
       .then(setPrices)
       .catch(() => setPrices([]));
@@ -259,7 +261,9 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const matchedRate = range?.from
     ? findDailyRate(prices, format(range.from, "yyyy-MM-dd"))
     : findLowestDailyRate(prices, format(today, "yyyy-MM-dd"));
-  const pricePerNight = (matchedRate?.dailyRate ?? FALLBACK_DAILY_RATE) * (plan?.price_ratio ?? 1);
+  const selectedPlan = plans.find((p) => p._id === selectedPlanId) ?? null;
+  const cheapestPlanRatio = plans.length > 0 ? Math.min(...plans.map((p) => p.price_ratio)) : 1;
+  const pricePerNight = (matchedRate?.dailyRate ?? FALLBACK_DAILY_RATE) * (selectedPlan?.price_ratio ?? cheapestPlanRatio);
   const priceCurrency: Currency = matchedRate?.currency ?? FALLBACK_CURRENCY;
   const convertedPricePerNight = convertCurrency(pricePerNight, priceCurrency, currency);
   const isFormValid =
@@ -326,7 +330,8 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     captureRect();
     setVerified(identity);
     setGuestForm(identity.guestForm);
-    setGuestStep("form");
+    setSelectedPlanId(plans[0]?._id ?? null);
+    setGuestStep("plan");
     setFormError(null);
     setIdentityModalOpen(false);
     saveGuestSession({
@@ -342,7 +347,8 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     captureRect();
     setVerified(null);
     setGuestForm(null);
-    setGuestStep("form");
+    setSelectedPlanId(null);
+    setGuestStep("plan");
     setGuestName("");
     setFormError(null);
     setPending(false);
@@ -362,7 +368,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   };
 
   const submitBooking = async (finalGuestId: string, token: string) => {
-    if (!plan || !range?.from || !range?.to) return;
+    if (!selectedPlan || !range?.from || !range?.to) return;
     setGuestStep("submitting");
     try {
       const matchedRate = findDailyRate(prices, format(range.from, "yyyy-MM-dd"));
@@ -370,13 +376,13 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
       const bookingCurrency: Currency = matchedRate?.currency ?? FALLBACK_CURRENCY;
       await createBooking(token, {
         guest_id: finalGuestId,
-        cancellation_policy_id: plan.cancellation_policy.id,
+        cancellation_policy_id: selectedPlan.cancellation_policy.id,
         currency: bookingCurrency,
         date_ranges: [
           {
             begin_date: format(range.from, "yyyy-MM-dd"),
             end_date: format(range.to, "yyyy-MM-dd"),
-            price: nights * dailyRate * plan.price_ratio,
+            price: nights * dailyRate * selectedPlan.price_ratio,
           },
         ],
       });
@@ -675,6 +681,82 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
             </>
           ) : (
             <>
+              {guestStep === "plan" && verified && (
+                <div className="space-y-5">
+                  <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
+                    {dict.modal.choosePlanTitle}
+                  </h3>
+
+                  {plans.length === 0 ? (
+                    <p className="text-sm text-gray-600 dark:text-gray-300">{dict.modal.noPlan}</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {plans.map((p) => {
+                        const planPricePerNight = (matchedRate?.dailyRate ?? FALLBACK_DAILY_RATE) * p.price_ratio;
+                        const convertedPlanPricePerNight = convertCurrency(planPricePerNight, priceCurrency, currency);
+                        const convertedPlanTotal = convertCurrency(planPricePerNight * nights, priceCurrency, currency);
+                        const isSelected = selectedPlanId === p._id;
+                        return (
+                          <button
+                            key={p._id}
+                            type="button"
+                            onClick={() => setSelectedPlanId(p._id)}
+                            className={`w-full text-left p-4 rounded-xl border-2 transition-colors cursor-pointer ${
+                              isSelected
+                                ? "border-teal-400 dark:border-teal-600 bg-teal-50 dark:bg-teal-950/30"
+                                : "border-gray-200 dark:border-gray-600 hover:border-teal-300 dark:hover:border-teal-700"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{p.name}</span>
+                              <span className="text-right shrink-0 whitespace-nowrap">
+                                <span className="font-bold text-gray-800 dark:text-gray-100">
+                                  {formatPrice(convertedPlanPricePerNight, currency)}
+                                </span>
+                                <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">{dict.perNight}</span>
+                              </span>
+                            </div>
+                            {nights > 0 && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                {dict.total}: {formatPrice(convertedPlanTotal, currency)}
+                              </p>
+                            )}
+                            <ul className="text-xs text-gray-500 dark:text-gray-400 mt-2 space-y-0.5">
+                              {p.cancellation_policy.rules.map((rule, i) => (
+                                <li key={i}>
+                                  {dict.modal.refundRule
+                                    .replace("{percent}", String(Math.round(rule.refund_percentage * 100)))
+                                    .replace("{days}", String(rule.days_before_checkin))}
+                                </li>
+                              ))}
+                            </ul>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={resetBookingFlow}
+                      className="flex-1 text-gray-600 dark:text-gray-300 font-semibold py-4 rounded-xl text-base transition-all border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-[0.98] cursor-pointer"
+                    >
+                      {dict.cancel}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!selectedPlan}
+                      onClick={() => setGuestStep("form")}
+                      className="flex-1 text-white font-semibold py-4 rounded-xl text-base transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
+                    >
+                      {dict.modal.next}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {guestStep === "form" && guestForm && verified && (
                 <form onSubmit={handleGuestFormSubmit} className="space-y-5">
                   {/* ── Checkin / checkout / adults / children, one row ── */}

@@ -126,7 +126,10 @@
       "errorTitle": "Etwas ist schiefgelaufen",
       "tryAgain": "Erneut versuchen",
       "noPlan": "Buchungen sind derzeit nicht möglich — bitte kontaktieren Sie uns direkt.",
-      "selectDatesFirst": "Bitte wählen Sie zuerst Ihr An- und Abreisedatum aus."
+      "selectDatesFirst": "Bitte wählen Sie zuerst Ihr An- und Abreisedatum aus.",
+      "choosePlanTitle": "Wählen Sie Ihren Tarif",
+      "refundRule": "{percent}% Rückerstattung bei Stornierung {days}+ Tage vor Anreise",
+      "next": "Weiter"
     }
   },
   "gallery": {

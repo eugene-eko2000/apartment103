@@ -43,6 +43,9 @@ export interface BookingModalDict {
   tryAgain: string;
   noPlan: string;
   selectDatesFirst: string;
+  choosePlanTitle: string;
+  refundRule: string;
+  next: string;
 }
 
 export interface VerifiedIdentity {
