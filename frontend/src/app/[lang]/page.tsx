@@ -4,6 +4,7 @@ import BookingWidget from "@/components/BookingWidget";
 import GalleryButton from "@/components/GalleryButton";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import CurrencySwitcher from "@/components/CurrencySwitcher";
+import UserMenu from "@/components/UserMenu";
 import { getDictionary, hasLocale } from "./dictionaries";
 
 export default async function Home({
@@ -72,6 +73,7 @@ export default async function Home({
             <div className="flex items-center gap-4">
               <LanguageSwitcher currentLang={lang} />
               <CurrencySwitcher />
+              <UserMenu lang={lang} dict={dict.userMenu} />
             </div>
           </nav>
         </div>

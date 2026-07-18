@@ -129,5 +129,37 @@
     "nextPhoto": "Photo suivante",
     "photo": "Photo",
     "apartmentPhoto": "Photo de l'appartement"
+  },
+  "userMenu": {
+    "login": "Connexion",
+    "accountMenu": "Menu du compte",
+    "myBookings": "Mes réservations",
+    "logout": "Déconnexion",
+    "loginModal": {
+      "close": "Fermer",
+      "identifierTitle": "Connexion",
+      "identifierHint": "Saisissez votre e-mail ou votre numéro de téléphone, nous vous enverrons un code de vérification.",
+      "identifierLabel": "E-mail ou numéro de téléphone",
+      "identifierPlaceholder": "vous@exemple.com ou +41 79 123 45 67",
+      "sendCode": "Envoyer le code",
+      "otpTitle": "Saisir le code de vérification",
+      "otpHint": "Nous avons envoyé un code à {identifier}.",
+      "otpLabel": "Code de vérification",
+      "otpPlaceholder": "123456",
+      "verifyCode": "Vérifier",
+      "resendCode": "Renvoyer le code",
+      "changeIdentifier": "Utiliser un autre e-mail ou numéro de téléphone"
+    }
+  },
+  "myBookings": {
+    "title": "Mes réservations",
+    "loading": "Chargement de vos réservations…",
+    "empty": "Vous n'avez pas encore de réservation.",
+    "loggedOut": "Veuillez vous connecter pour voir vos réservations.",
+    "backHome": "Retour à l'accueil",
+    "bookedOn": "Réservé le {date}",
+    "cancellationPolicy": "Conditions d'annulation",
+    "night": "nuit",
+    "nights": "nuits"
   }
 }

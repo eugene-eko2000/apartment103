@@ -129,5 +129,37 @@
     "nextPhoto": "Nächstes Foto",
     "photo": "Foto",
     "apartmentPhoto": "Foto der Wohnung"
+  },
+  "userMenu": {
+    "login": "Anmelden",
+    "accountMenu": "Kontomenü",
+    "myBookings": "Meine Buchungen",
+    "logout": "Abmelden",
+    "loginModal": {
+      "close": "Schließen",
+      "identifierTitle": "Anmelden",
+      "identifierHint": "Geben Sie Ihre E-Mail-Adresse oder Telefonnummer ein — wir senden Ihnen einen Bestätigungscode.",
+      "identifierLabel": "E-Mail oder Telefonnummer",
+      "identifierPlaceholder": "sie@beispiel.com oder +41 79 123 45 67",
+      "sendCode": "Code senden",
+      "otpTitle": "Bestätigungscode eingeben",
+      "otpHint": "Wir haben einen Code an {identifier} gesendet.",
+      "otpLabel": "Bestätigungscode",
+      "otpPlaceholder": "123456",
+      "verifyCode": "Bestätigen",
+      "resendCode": "Code erneut senden",
+      "changeIdentifier": "Andere E-Mail-Adresse oder Telefonnummer verwenden"
+    }
+  },
+  "myBookings": {
+    "title": "Meine Buchungen",
+    "loading": "Ihre Buchungen werden geladen…",
+    "empty": "Sie haben noch keine Buchungen.",
+    "loggedOut": "Bitte melden Sie sich an, um Ihre Buchungen zu sehen.",
+    "backHome": "Zurück zur Startseite",
+    "bookedOn": "Gebucht am {date}",
+    "cancellationPolicy": "Stornierungsbedingungen",
+    "night": "Nacht",
+    "nights": "Nächte"
   }
 }

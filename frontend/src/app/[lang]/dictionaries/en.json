@@ -129,5 +129,37 @@
     "nextPhoto": "Next photo",
     "photo": "Photo",
     "apartmentPhoto": "Apartment photo"
+  },
+  "userMenu": {
+    "login": "Login",
+    "accountMenu": "Account menu",
+    "myBookings": "My bookings",
+    "logout": "Logout",
+    "loginModal": {
+      "close": "Close",
+      "identifierTitle": "Log in",
+      "identifierHint": "Enter your email or phone number and we'll send you a verification code.",
+      "identifierLabel": "Email or phone number",
+      "identifierPlaceholder": "you@example.com or +41 79 123 45 67",
+      "sendCode": "Send code",
+      "otpTitle": "Enter verification code",
+      "otpHint": "We sent a code to {identifier}.",
+      "otpLabel": "Verification code",
+      "otpPlaceholder": "123456",
+      "verifyCode": "Verify",
+      "resendCode": "Resend code",
+      "changeIdentifier": "Use a different email or phone number"
+    }
+  },
+  "myBookings": {
+    "title": "My bookings",
+    "loading": "Loading your bookings…",
+    "empty": "You don't have any bookings yet.",
+    "loggedOut": "Please log in to view your bookings.",
+    "backHome": "Back to home",
+    "bookedOn": "Booked on {date}",
+    "cancellationPolicy": "Cancellation policy",
+    "night": "night",
+    "nights": "nights"
   }
 }
