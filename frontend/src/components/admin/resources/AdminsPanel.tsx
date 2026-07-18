@@ -76,6 +76,17 @@ export default function AdminsPanel() {
     }
   };
 
+  const handleBulkDelete = async (selectedAdmins: Admin[]) => {
+    if (!window.confirm(`Delete ${selectedAdmins.length} admin${selectedAdmins.length === 1 ? "" : "s"}?`)) return;
+    try {
+      await Promise.all(selectedAdmins.map((a) => deleteAdmin(a._id, token)));
+      load();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) return logout();
+      window.alert(err instanceof ApiError ? err.message : String(err));
+    }
+  };
+
   const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     setPending(true);
@@ -110,6 +121,7 @@ export default function AdminsPanel() {
         rowKey={(a) => a._id}
         onEdit={openEdit}
         onDelete={handleDelete}
+        onBulkDelete={handleBulkDelete}
         onCreate={openCreate}
         createLabel="New admin"
         loading={loading}

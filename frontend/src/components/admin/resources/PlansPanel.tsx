@@ -85,6 +85,17 @@ export default function PlansPanel() {
     }
   };
 
+  const handleBulkDelete = async (selectedPlans: Plan[]) => {
+    if (!window.confirm(`Delete ${selectedPlans.length} plan${selectedPlans.length === 1 ? "" : "s"}?`)) return;
+    try {
+      await Promise.all(selectedPlans.map((p) => deletePlan(p._id, token)));
+      load();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) return logout();
+      window.alert(err instanceof ApiError ? err.message : String(err));
+    }
+  };
+
   const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!form.cancellation_policy_id) {
@@ -123,6 +134,7 @@ export default function PlansPanel() {
         rowKey={(p) => p._id}
         onEdit={openEdit}
         onDelete={handleDelete}
+        onBulkDelete={handleBulkDelete}
         onCreate={openCreate}
         createLabel="New plan"
         loading={loading}

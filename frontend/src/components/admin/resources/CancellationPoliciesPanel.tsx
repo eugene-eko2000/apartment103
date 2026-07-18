@@ -74,6 +74,18 @@ export default function CancellationPoliciesPanel() {
     }
   };
 
+  const handleBulkDelete = async (selectedPolicies: CancellationPolicy[]) => {
+    if (!window.confirm(`Delete ${selectedPolicies.length} cancellation polic${selectedPolicies.length === 1 ? "y" : "ies"}?`))
+      return;
+    try {
+      await Promise.all(selectedPolicies.map((p) => deleteCancellationPolicy(p._id, token)));
+      load();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) return logout();
+      window.alert(err instanceof ApiError ? err.message : String(err));
+    }
+  };
+
   const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     setPending(true);
@@ -107,6 +119,7 @@ export default function CancellationPoliciesPanel() {
         rowKey={(p) => p._id}
         onEdit={openEdit}
         onDelete={handleDelete}
+        onBulkDelete={handleBulkDelete}
         onCreate={openCreate}
         createLabel="New policy"
         loading={loading}

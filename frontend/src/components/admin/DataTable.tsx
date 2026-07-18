@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useMemo, useRef, useState } from "react";
+
 export interface Column<T> {
   key: string;
   label: string;
@@ -12,6 +14,7 @@ export function DataTable<T>({
   rowKey,
   onEdit,
   onDelete,
+  onBulkDelete,
   onCreate,
   createLabel = "New",
   loading = false,
@@ -23,15 +26,82 @@ export function DataTable<T>({
   rowKey: (row: T) => string;
   onEdit: (row: T) => void;
   onDelete: (row: T) => void;
+  onBulkDelete?: (rows: T[]) => void | Promise<void>;
   onCreate: () => void;
   createLabel?: string;
   loading?: boolean;
   error?: string | null;
   emptyLabel?: string;
 }) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const selectAllRef = useRef<HTMLInputElement>(null);
+
+  // Ids can linger in `selected` after their row disappears (e.g. a reload);
+  // filter against the current rows here instead of pruning state in an effect.
+  const effectiveSelected = useMemo(() => {
+    const validIds = new Set(rows.map(rowKey));
+    const next = new Set<string>();
+    selected.forEach((id) => {
+      if (validIds.has(id)) next.add(id);
+    });
+    return next;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, rows]);
+
+  const allSelected = rows.length > 0 && effectiveSelected.size === rows.length;
+  const someSelected = effectiveSelected.size > 0 && !allSelected;
+
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someSelected;
+  }, [someSelected]);
+
+  const toggleRow = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    setSelected(allSelected ? new Set() : new Set(rows.map(rowKey)));
+  };
+
+  const handleBulkDelete = async () => {
+    if (!onBulkDelete) return;
+    const selectedRows = rows.filter((row) => effectiveSelected.has(rowKey(row)));
+    if (selectedRows.length === 0) return;
+    setBulkDeleting(true);
+    try {
+      await onBulkDelete(selectedRows);
+      setSelected(new Set());
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  const extraCols = (onBulkDelete ? 1 : 0) + 1;
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          {onBulkDelete && effectiveSelected.size > 0 && (
+            <>
+              <span className="text-sm text-slate-500">{effectiveSelected.size} selected</span>
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg cursor-pointer transition-colors"
+              >
+                {bulkDeleting ? "Deleting…" : "Delete selected"}
+              </button>
+            </>
+          )}
+        </div>
         <button
           type="button"
           onClick={onCreate}
@@ -45,6 +115,19 @@ export function DataTable<T>({
         <table className="w-full text-sm">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
+              {onBulkDelete && (
+                <th className="px-4 py-2.5 w-10">
+                  <input
+                    ref={selectAllRef}
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    disabled={rows.length === 0}
+                    aria-label="Select all rows"
+                    className="cursor-pointer"
+                  />
+                </th>
+              )}
               {columns.map((c) => (
                 <th key={c.key} className="text-left font-medium text-slate-500 px-4 py-2.5 whitespace-nowrap">
                   {c.label}
@@ -56,44 +139,58 @@ export function DataTable<T>({
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={columns.length + 1} className="px-4 py-6 text-center text-slate-400">
+                <td colSpan={columns.length + extraCols} className="px-4 py-6 text-center text-slate-400">
                   Loading…
                 </td>
               </tr>
             )}
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={columns.length + 1} className="px-4 py-6 text-center text-slate-400">
+                <td colSpan={columns.length + extraCols} className="px-4 py-6 text-center text-slate-400">
                   {emptyLabel}
                 </td>
               </tr>
             )}
             {!loading &&
-              rows.map((row) => (
-                <tr key={rowKey(row)} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                  {columns.map((c) => (
-                    <td key={c.key} className="px-4 py-2.5 text-slate-700 whitespace-nowrap">
-                      {c.render(row)}
+              rows.map((row) => {
+                const id = rowKey(row);
+                return (
+                  <tr key={id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                    {onBulkDelete && (
+                      <td className="px-4 py-2.5">
+                        <input
+                          type="checkbox"
+                          checked={effectiveSelected.has(id)}
+                          onChange={() => toggleRow(id)}
+                          aria-label="Select row"
+                          className="cursor-pointer"
+                        />
+                      </td>
+                    )}
+                    {columns.map((c) => (
+                      <td key={c.key} className="px-4 py-2.5 text-slate-700 whitespace-nowrap">
+                        {c.render(row)}
+                      </td>
+                    ))}
+                    <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => onEdit(row)}
+                        className="text-indigo-600 hover:text-indigo-800 text-xs font-medium mr-3 cursor-pointer"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDelete(row)}
+                        className="text-red-500 hover:text-red-700 text-xs font-medium cursor-pointer"
+                      >
+                        Delete
+                      </button>
                     </td>
-                  ))}
-                  <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                    <button
-                      type="button"
-                      onClick={() => onEdit(row)}
-                      className="text-indigo-600 hover:text-indigo-800 text-xs font-medium mr-3 cursor-pointer"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onDelete(row)}
-                      className="text-red-500 hover:text-red-700 text-xs font-medium cursor-pointer"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                  </tr>
+                );
+              })}
           </tbody>
         </table>
       </div>

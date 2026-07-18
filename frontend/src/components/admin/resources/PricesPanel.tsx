@@ -17,6 +17,7 @@ import { DataTable, type Column } from "../DataTable";
 import { Modal } from "../Modal";
 import { NumberField, SelectField, SubmitButton, TextField } from "../FormFields";
 import { RepeatingRows } from "../RepeatingRows";
+import { DateRangeCalendarField, defaultMonthAfter } from "../DateRangeCalendarField";
 
 const CURRENCIES: Currency[] = ["EUR", "CHF", "USD", "GBP"];
 
@@ -85,6 +86,17 @@ export default function PricesPanel() {
     }
   };
 
+  const handleBulkDelete = async (selectedPrices: Price[]) => {
+    if (!window.confirm(`Delete ${selectedPrices.length} price period${selectedPrices.length === 1 ? "" : "s"}?`)) return;
+    try {
+      await Promise.all(selectedPrices.map((p) => deletePrice(p._id, token)));
+      load();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) return logout();
+      window.alert(err instanceof ApiError ? err.message : String(err));
+    }
+  };
+
   const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     setPending(true);
@@ -119,6 +131,7 @@ export default function PricesPanel() {
         rowKey={(p) => p._id}
         onEdit={openEdit}
         onDelete={handleDelete}
+        onBulkDelete={handleBulkDelete}
         onCreate={openCreate}
         createLabel="New price period"
         loading={loading}
@@ -154,29 +167,31 @@ export default function PricesPanel() {
               onChange={(date_ranges) => setForm((p) => ({ ...p, period: { ...p.period, date_ranges } }))}
               emptyRow={emptyDateRange}
               addLabel="Add date range"
-              renderRow={(range, update) => (
-                <>
-                  <TextField
-                    label="Begin date"
-                    type="date"
-                    value={range.begin_date}
-                    onChange={(v) => update({ begin_date: v })}
-                  />
-                  <TextField
-                    label="End date"
-                    type="date"
-                    value={range.end_date}
-                    onChange={(v) => update({ end_date: v })}
-                  />
-                  <NumberField
-                    label="Daily rate"
-                    value={range.daily_rate}
-                    min={0}
-                    step={0.01}
-                    onChange={(v) => update({ daily_rate: v })}
-                  />
-                </>
-              )}
+              maxHeight="16rem"
+              renderRow={(range, update, index) => {
+                const ranges = form.period.date_ranges;
+                const previousRange = index > 0 ? ranges[index - 1] : undefined;
+                const blockedRanges = ranges.filter((_, i) => i !== index);
+                return (
+                  <>
+                    <DateRangeCalendarField
+                      label="Dates"
+                      beginDate={range.begin_date}
+                      endDate={range.end_date}
+                      onChange={(begin_date, end_date) => update({ begin_date, end_date })}
+                      blockedRanges={blockedRanges}
+                      defaultMonth={defaultMonthAfter(previousRange?.end_date)}
+                    />
+                    <NumberField
+                      label="Daily rate"
+                      value={range.daily_rate}
+                      min={0}
+                      step={0.01}
+                      onChange={(v) => update({ daily_rate: v })}
+                    />
+                  </>
+                );
+              }}
             />
             {formError && <p className="text-sm text-red-600">{formError}</p>}
             <SubmitButton pending={pending} label={editing ? "Save changes" : "Create price period"} />

@@ -7,13 +7,16 @@ export function RepeatingRows<T>({
   renderRow,
   emptyRow,
   addLabel = "Add row",
+  maxHeight,
 }: {
   label: string;
   items: T[];
   onChange: (items: T[]) => void;
-  renderRow: (item: T, update: (patch: Partial<T>) => void) => React.ReactNode;
+  renderRow: (item: T, update: (patch: Partial<T>) => void, index: number) => React.ReactNode;
   emptyRow: () => T;
   addLabel?: string;
+  /** Caps the row list's height (e.g. "16rem"), scrolling internally past that instead of growing the form. */
+  maxHeight?: string;
 }) {
   const updateAt = (index: number, patch: Partial<T>) => {
     onChange(items.map((it, i) => (i === index ? { ...it, ...patch } : it)));
@@ -35,11 +38,11 @@ export function RepeatingRows<T>({
         </button>
       </div>
       {items.length === 0 && <p className="text-xs text-slate-400 italic mb-2">None yet.</p>}
-      <div className="space-y-2">
+      <div className={`space-y-2 ${maxHeight ? "overflow-y-auto pr-1" : ""}`} style={maxHeight ? { maxHeight } : undefined}>
         {items.map((item, index) => (
           <div key={index} className="flex items-end gap-2 bg-slate-50 border border-slate-200 rounded-lg p-2">
             <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {renderRow(item, (patch) => updateAt(index, patch))}
+              {renderRow(item, (patch) => updateAt(index, patch), index)}
             </div>
             <button
               type="button"

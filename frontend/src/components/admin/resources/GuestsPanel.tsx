@@ -96,6 +96,17 @@ export default function GuestsPanel() {
     }
   };
 
+  const handleBulkDelete = async (selectedGuests: Guest[]) => {
+    if (!window.confirm(`Delete ${selectedGuests.length} guest${selectedGuests.length === 1 ? "" : "s"}?`)) return;
+    try {
+      await Promise.all(selectedGuests.map((g) => deleteGuest(g._id, token)));
+      load();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) return logout();
+      window.alert(err instanceof ApiError ? err.message : String(err));
+    }
+  };
+
   const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     setPending(true);
@@ -139,6 +150,7 @@ export default function GuestsPanel() {
         rowKey={(g) => g._id}
         onEdit={openEdit}
         onDelete={handleDelete}
+        onBulkDelete={handleBulkDelete}
         onCreate={openCreate}
         createLabel="New guest"
         loading={loading}

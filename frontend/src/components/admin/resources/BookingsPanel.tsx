@@ -94,6 +94,17 @@ export default function BookingsPanel() {
     }
   };
 
+  const handleBulkDelete = async (selectedBookings: Booking[]) => {
+    if (!window.confirm(`Delete ${selectedBookings.length} booking${selectedBookings.length === 1 ? "" : "s"}?`)) return;
+    try {
+      await Promise.all(selectedBookings.map((b) => deleteBooking(b._id, token)));
+      load();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) return logout();
+      window.alert(err instanceof ApiError ? err.message : String(err));
+    }
+  };
+
   const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!editing) return;
@@ -135,6 +146,7 @@ export default function BookingsPanel() {
         rowKey={(b) => b._id}
         onEdit={openEdit}
         onDelete={handleDelete}
+        onBulkDelete={handleBulkDelete}
         onCreate={() => window.alert("New bookings are created through the public booking widget.")}
         createLabel="New booking"
         loading={loading}
