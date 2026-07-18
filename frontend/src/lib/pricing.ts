@@ -23,6 +23,20 @@ export function findDailyRate(prices: Price[], dateStr: string): MatchedRate | n
   return null;
 }
 
+// Minimum stay (in nights) for a booking starting on dateStr, taken from the
+// matched date range's min_stay_days. Defaults to 1 (no constraint) when the
+// date falls outside any priced range.
+export function findMinStay(prices: Price[], dateStr: string): number {
+  for (const price of prices) {
+    for (const range of price.period.date_ranges) {
+      if (dateStr >= range.begin_date && dateStr <= range.end_date) {
+        return range.min_stay_days;
+      }
+    }
+  }
+  return 1;
+}
+
 // Used as the "from" rate shown before any dates are picked. Ranges that
 // have already fully elapsed (end_date < fromDateStr) are excluded so past
 // pricing never surfaces as the lowest rate.

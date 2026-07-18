@@ -4,7 +4,7 @@ import { useState, useRef, useId, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { DayPicker } from "react-day-picker";
 import type { DateRange } from "react-day-picker";
-import { format, differenceInCalendarDays, parse, isValid, isBefore, isAfter, isSameDay, subDays } from "date-fns";
+import { format, differenceInCalendarDays, parse, isValid, isBefore, isAfter, isSameDay, subDays, addDays } from "date-fns";
 import { enUS, de, fr, it } from "date-fns/locale";
 import type { Locale as DateFnsLocale } from "date-fns";
 import "react-day-picker/style.css";
@@ -28,7 +28,7 @@ import {
   type Plan,
   type Price,
 } from "@/lib/api";
-import { findDailyRate, findLowestDailyRate, FALLBACK_CURRENCY, FALLBACK_DAILY_RATE } from "@/lib/pricing";
+import { findDailyRate, findLowestDailyRate, findMinStay, FALLBACK_CURRENCY, FALLBACK_DAILY_RATE } from "@/lib/pricing";
 import BookingModal, { emptyGuestForm, guestToForm, type BookingModalDict, type VerifiedIdentity } from "@/components/BookingModal";
 import { PhoneInput } from "@/components/PhoneInput";
 import { clearGuestSession, readGuestSession, saveGuestSession } from "@/lib/guest-auth";
@@ -247,10 +247,12 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     }
   };
 
+  const checkInMinStay = range?.from ? findMinStay(prices, format(range.from, "yyyy-MM-dd")) : 1;
+
   const handleCheckOutChange = (value: string) => {
     setCheckOutText(value);
     const parsed = tryParseDate(value);
-    if (parsed && range?.from && !isBefore(parsed, range.from)) {
+    if (parsed && range?.from && isValidCheckout(parsed)) {
       setRange({ from: range.from, to: parsed });
     }
   };
@@ -269,7 +271,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const isFormValid =
     !!range?.from &&
     !!range?.to &&
-    nights > 0 &&
+    nights >= checkInMinStay &&
     children.every((child) => child.age !== null);
 
   const handleBookClick = async () => {
@@ -477,13 +479,46 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
 
   const hasNoPrice = (date: Date) => findDailyRate(prices, format(date, "yyyy-MM-dd")) === null;
 
+  const isOccupiedDate = (date: Date) => isBookedDate(date) || hasNoPrice(date);
+
+  // A stay can't be booked through an occupied (booked or unpriced) night —
+  // scans the nights strictly between from/to (both exclusive: from is the
+  // check-in night itself, to is the checkout day, neither is "occupied" by
+  // this stay).
+  const hasOccupiedBetween = (from: Date, to: Date) => {
+    let d = addDays(from, 1);
+    while (isBefore(d, to)) {
+      if (isOccupiedDate(d)) return true;
+      d = addDays(d, 1);
+    }
+    return false;
+  };
+
+  // A valid checkout: after check-in, clears its minimum stay, and doesn't
+  // cross an occupied date along the way.
+  const isValidCheckout = (date: Date) =>
+    !!range?.from &&
+    isAfter(date, range.from) &&
+    differenceInCalendarDays(date, range.from) >= checkInMinStay &&
+    !hasOccupiedBetween(range.from, date);
+
+  // While picking a checkout date, dates that aren't valid checkout
+  // candidates (too short a stay, or crossing an occupied date) get the
+  // "unavailable" tint instead of "available".
+  const isInvalidCheckoutCandidate = (date: Date) =>
+    !!range?.from && !range?.to && isAfter(date, range.from) && !isValidCheckout(date);
+
+  // A hovered checkout candidate only previews as a valid range when it's
+  // itself a valid checkout.
+  const hoverIsValidCheckout = !!hoverDate && isValidCheckout(hoverDate);
+
   // Days already covered by the range-selection or hover-preview modifiers
   // keep their own (teal) styling instead of the green/red availability tint.
   const isRangeOrHoverDate = (date: Date) =>
     (!!range?.from && isSameDay(date, range.from)) ||
     (!!range?.to && isSameDay(date, range.to)) ||
     (!!range?.from && !!range?.to && isAfter(date, range.from) && isBefore(date, range.to)) ||
-    (!!range?.from && !range?.to && !!hoverDate && isAfter(hoverDate, range.from) &&
+    (!!range?.from && !range?.to && !!hoverDate && hoverIsValidCheckout &&
       ((isAfter(date, range.from) && isBefore(date, hoverDate)) || isSameDay(date, hoverDate)));
 
   const dateAndGuestCalendar = calendarOpen && calendarAnchor && createPortal(
@@ -501,7 +536,18 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
         styles={{ months: { flexWrap: "nowrap" } }}
         selected={range}
         defaultMonth={range?.from ?? today}
-        onSelect={setRange}
+        onSelect={(newRange, triggerDate) => {
+          // While picking a checkout date, validate the clicked day directly
+          // against the original check-in rather than trusting react-day-picker's
+          // computed range: its own range logic silently swaps check-in to
+          // the clicked date whenever the naive selection would cross an
+          // occupied date, which would otherwise look like check-in moved.
+          if (range?.from && !range?.to && isAfter(triggerDate, range.from)) {
+            if (isValidCheckout(triggerDate)) setRange({ from: range.from, to: triggerDate });
+            return;
+          }
+          setRange(newRange);
+        }}
         onDayClick={(date, modifiers) => {
           if (modifiers.disabled) return;
           // Both dates were already picked; start a fresh selection instead of adjusting the old range
@@ -522,17 +568,17 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
             !!range?.from &&
             !range?.to &&
             !!hoverDate &&
-            isAfter(hoverDate, range.from) &&
+            hoverIsValidCheckout &&
             isAfter(date, range.from) &&
             isBefore(date, hoverDate),
           hoverRangeEnd: (date) =>
             !!range?.from &&
             !range?.to &&
             !!hoverDate &&
-            isAfter(hoverDate, range.from) &&
+            hoverIsValidCheckout &&
             isSameDay(date, hoverDate),
-          available: (date) => !isRangeOrHoverDate(date) && !isPastDate(date) && !isBookedDate(date) && !hasNoPrice(date),
-          unavailable: (date) => !isRangeOrHoverDate(date) && (isPastDate(date) || isBookedDate(date) || hasNoPrice(date)),
+          available: (date) => !isRangeOrHoverDate(date) && !isPastDate(date) && !isBookedDate(date) && !hasNoPrice(date) && !isInvalidCheckoutCandidate(date),
+          unavailable: (date) => !isRangeOrHoverDate(date) && (isPastDate(date) || isBookedDate(date) || hasNoPrice(date) || isInvalidCheckoutCandidate(date)),
         }}
         modifiersClassNames={{
           hoverRange: "rdp-range_middle",
