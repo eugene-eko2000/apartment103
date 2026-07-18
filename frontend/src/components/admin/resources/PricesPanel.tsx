@@ -139,7 +139,11 @@ export default function PricesPanel() {
       />
 
       {showModal && (
-        <Modal title={editing ? "Edit price period" : "New price period"} onClose={() => setShowModal(false)}>
+        <Modal
+          title={editing ? "Edit price period" : "New price period"}
+          onClose={() => setShowModal(false)}
+          maxHeight="calc(100vh - 120px)"
+        >
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <TextField
@@ -168,7 +172,7 @@ export default function PricesPanel() {
               emptyRow={emptyDateRange}
               addLabel="Add date range"
               maxHeight="16rem"
-              renderRow={(range, update, index) => {
+              renderRow={(range, update, index, isNew) => {
                 const ranges = form.period.date_ranges;
                 const previousRange = index > 0 ? ranges[index - 1] : undefined;
                 const blockedRanges = ranges.filter((_, i) => i !== index);
@@ -181,6 +185,9 @@ export default function PricesPanel() {
                       onChange={(begin_date, end_date) => update({ begin_date, end_date })}
                       blockedRanges={blockedRanges}
                       defaultMonth={defaultMonthAfter(previousRange?.end_date)}
+                      minDate={form.period.begin_date}
+                      maxDate={form.period.end_date}
+                      autoOpen={isNew}
                     />
                     <NumberField
                       label="Daily rate"

@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DayPicker, type DateRange } from "react-day-picker";
-import { addMonths, format, isLastDayOfMonth, isWithinInterval, parse, startOfMonth } from "date-fns";
+import { addMonths, format, isAfter, isBefore, isLastDayOfMonth, isWithinInterval, parse, startOfMonth } from "date-fns";
 import "react-day-picker/style.css";
 
 const ISO_FORMAT = "yyyy-MM-dd";
@@ -32,6 +32,9 @@ export function DateRangeCalendarField({
   onChange,
   blockedRanges,
   defaultMonth,
+  minDate,
+  maxDate,
+  autoOpen,
 }: {
   label: string;
   beginDate: string;
@@ -39,6 +42,12 @@ export function DateRangeCalendarField({
   onChange: (beginDate: string, endDate: string) => void;
   blockedRanges: { begin_date: string; end_date: string }[];
   defaultMonth?: Date;
+  /** Days before this (ISO yyyy-MM-dd) are disabled, e.g. the enclosing period's begin date. */
+  minDate?: string;
+  /** Days after this (ISO yyyy-MM-dd) are disabled, e.g. the enclosing period's end date. */
+  maxDate?: string;
+  /** Opens the calendar as soon as this field mounts, e.g. for a row just added to a list. */
+  autoOpen?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState<DateRange | undefined>(undefined);
@@ -62,6 +71,13 @@ export function DateRangeCalendarField({
     commitPending(pending);
     setOpen(false);
   };
+
+  useEffect(() => {
+    if (autoOpen) openCalendar();
+    // Mount-only: fires once for a freshly added row, and must not re-fire
+    // (or close) as `autoOpen` later flips back to false on the same instance.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -120,7 +136,18 @@ export function DateRangeCalendarField({
     .map((r) => ({ from: parseISODate(r.begin_date), to: parseISODate(r.end_date) }))
     .filter((r): r is { from: Date; to: Date } => !!r.from && !!r.to);
 
-  const isBlocked = (date: Date) => blockedMatchers.some((r) => isWithinInterval(date, { start: r.from, end: r.to }));
+  const minDateParsed = parseISODate(minDate ?? "");
+  const maxDateParsed = parseISODate(maxDate ?? "");
+  const outsidePeriodMatchers = [
+    ...(minDateParsed ? [{ before: minDateParsed }] : []),
+    ...(maxDateParsed ? [{ after: maxDateParsed }] : []),
+  ];
+  const disabledMatchers = [...blockedMatchers, ...outsidePeriodMatchers];
+
+  const isBlocked = (date: Date) =>
+    blockedMatchers.some((r) => isWithinInterval(date, { start: r.from, end: r.to })) ||
+    (!!minDateParsed && isBefore(date, minDateParsed)) ||
+    (!!maxDateParsed && isAfter(date, maxDateParsed));
 
   const handleSelect = (selected: DateRange | undefined) => {
     // Belt-and-suspenders: DayPicker already refuses to select disabled days,
@@ -166,7 +193,7 @@ export function DateRangeCalendarField({
                 if (modifiers.disabled) return;
                 if (pending?.from && pending?.to) setPending({ from: date, to: undefined });
               }}
-              disabled={blockedMatchers}
+              disabled={disabledMatchers}
               numberOfMonths={1}
               min={1}
             />

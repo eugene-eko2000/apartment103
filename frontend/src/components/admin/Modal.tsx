@@ -6,10 +6,13 @@ export function Modal({
   title,
   onClose,
   children,
+  maxHeight = "90vh",
 }: {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
+  /** CSS max-height for the dialog box, e.g. "calc(100vh - 120px)". */
+  maxHeight?: string;
 }) {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -26,7 +29,7 @@ export function Modal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-y-auto" style={{ maxHeight }}>
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white rounded-t-xl">
           <h2 className="text-base font-semibold text-slate-800">{title}</h2>
           <button
