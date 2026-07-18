@@ -1,0 +1,69 @@
+.adminLabel {
+  display: block;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  color: #64748b;
+  margin-bottom: 0.25rem;
+}
+
+.bookingLabel {
+  display: block;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  color: #6b7280;
+  margin-bottom: 0.25rem;
+}
+
+.field {
+  width: 100%;
+}
+
+.field :global(.PhoneInputCountryIcon) {
+  width: 1.6em;
+  height: 1.1em;
+  flex-shrink: 0;
+}
+
+.field :global(.PhoneInputInput) {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 0.875rem;
+  color: inherit;
+}
+
+.admin :global(.PhoneInput) {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid #cbd5e1;
+}
+
+.admin :global(.PhoneInput--focus) {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 1px #818cf8;
+}
+
+.admin :global(.PhoneInput--disabled) {
+  background: #f8fafc;
+  color: #94a3b8;
+}
+
+.booking :global(.PhoneInput) {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e5e7eb;
+}
+
+.booking :global(.PhoneInput--focus) {
+  border-color: #2dd4bf;
+  box-shadow: 0 0 0 1px #5eead4;
+}
+
+.booking :global(.PhoneInput--disabled) {
+  background: #f9fafb;
+  color: #9ca3af;
+}

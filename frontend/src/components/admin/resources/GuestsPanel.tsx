@@ -16,6 +16,7 @@ import { useAdminAuth } from "@/lib/admin-auth";
 import { DataTable, type Column } from "../DataTable";
 import { Modal } from "../Modal";
 import { SelectField, SubmitButton, TextField } from "../FormFields";
+import { PhoneInput } from "@/components/PhoneInput";
 
 const LANGUAGES: Language[] = ["en", "de", "fr", "it"];
 const CURRENCIES: Currency[] = ["EUR", "CHF", "USD", "GBP"];
@@ -178,7 +179,7 @@ export default function GuestsPanel() {
               value={form.email}
               onChange={(v) => setForm((p) => ({ ...p, email: v }))}
             />
-            <TextField
+            <PhoneInput
               label="Phone number"
               value={form.phone_number}
               onChange={(v) => setForm((p) => ({ ...p, phone_number: v }))}

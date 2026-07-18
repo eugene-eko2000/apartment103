@@ -14,6 +14,7 @@ import { useAdminAuth } from "@/lib/admin-auth";
 import { DataTable, type Column } from "../DataTable";
 import { Modal } from "../Modal";
 import { SubmitButton, TextField } from "../FormFields";
+import { PhoneInput } from "@/components/PhoneInput";
 
 const emptyForm: AdminInput = { family_name: "", first_name: "", phone_number: "", email: "" };
 
@@ -149,7 +150,7 @@ export default function AdminsPanel() {
               value={form.email}
               onChange={(v) => setForm((p) => ({ ...p, email: v }))}
             />
-            <TextField
+            <PhoneInput
               label="Phone number"
               value={form.phone_number}
               onChange={(v) => setForm((p) => ({ ...p, phone_number: v }))}

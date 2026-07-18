@@ -30,6 +30,7 @@ import {
 } from "@/lib/api";
 import { findDailyRate, findLowestDailyRate, FALLBACK_CURRENCY, FALLBACK_DAILY_RATE } from "@/lib/pricing";
 import BookingModal, { emptyGuestForm, guestToForm, type BookingModalDict, type VerifiedIdentity } from "@/components/BookingModal";
+import { PhoneInput } from "@/components/PhoneInput";
 import { clearGuestSession, readGuestSession, saveGuestSession } from "@/lib/guest-auth";
 
 const CHILD_AGES = Array.from({ length: 18 }, (_, i) => i);
@@ -749,7 +750,8 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                       value={guestForm.email}
                       onChange={(v) => setGuestForm((p) => (p ? { ...p, email: v } : p))}
                     />
-                    <TextField
+                    <PhoneInput
+                      tone="booking"
                       label={dict.modal.phoneNumber}
                       value={guestForm.phone_number}
                       onChange={(v) => setGuestForm((p) => (p ? { ...p, phone_number: v } : p))}
