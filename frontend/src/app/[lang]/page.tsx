@@ -4,6 +4,7 @@ import BookingWidget from "@/components/BookingWidget";
 import GalleryButton from "@/components/GalleryButton";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import CurrencySwitcher from "@/components/CurrencySwitcher";
+import ThemeSwitcher from "@/components/ThemeSwitcher";
 import UserMenu from "@/components/UserMenu";
 import { getDictionary, hasLocale } from "./dictionaries";
 
@@ -54,7 +55,7 @@ export default async function Home({
       <div className="relative z-10 h-screen flex flex-col overflow-hidden">
 
       {/* ── NAV ─────────────────────────────────────────── */}
-      <header className="shrink-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 shadow-sm">
+      <header className="shrink-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span
@@ -63,16 +64,20 @@ export default async function Home({
             >
               103
             </span>
-            <span className="font-semibold text-gray-800">Apartment 103</span>
+            <span className="font-semibold text-gray-800 dark:text-gray-100">Apartment 103</span>
           </div>
-          <nav className="hidden sm:flex items-center gap-6 text-sm text-gray-500">
+          <nav className="hidden sm:flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400">
             <GalleryButton label={dict.nav.gallery} dict={dict.gallery} />
-            <a href="#" className="hover:text-teal-700 transition-colors">{dict.nav.amenities}</a>
-            <a href="#" className="hover:text-teal-700 transition-colors">{dict.nav.location}</a>
-            <a href="#" className="hover:text-teal-700 transition-colors">{dict.nav.reviews}</a>
+            <a href="#" className="hover:text-teal-700 dark:hover:text-teal-400 transition-colors">{dict.nav.amenities}</a>
+            <a href="#" className="hover:text-teal-700 dark:hover:text-teal-400 transition-colors">{dict.nav.location}</a>
+            <a href="#" className="hover:text-teal-700 dark:hover:text-teal-400 transition-colors">{dict.nav.reviews}</a>
             <div className="flex items-center gap-4">
               <LanguageSwitcher currentLang={lang} />
               <CurrencySwitcher />
+              <ThemeSwitcher
+                labels={{ light: dict.themeSwitcher.light, dark: dict.themeSwitcher.dark, system: dict.themeSwitcher.system }}
+                ariaLabel={dict.themeSwitcher.label}
+              />
               <UserMenu lang={lang} dict={dict.userMenu} />
             </div>
           </nav>
@@ -141,12 +146,12 @@ export default async function Home({
           {HIGHLIGHTS.map((card) => (
             <div
               key={card.title}
-              className="bg-white rounded-2xl px-5 py-4 shadow-sm border border-gray-100 flex items-start gap-3"
+              className="bg-white dark:bg-gray-800 rounded-2xl px-5 py-4 shadow-sm border border-gray-100 dark:border-gray-700 flex items-start gap-3"
             >
               <span className="text-2xl mt-0.5 shrink-0">{card.icon}</span>
               <div>
-                <h3 className="font-semibold text-gray-900 text-sm mb-0.5">{card.title}</h3>
-                <p className="text-gray-500 text-xs leading-relaxed">{card.desc}</p>
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm mb-0.5">{card.title}</h3>
+                <p className="text-gray-500 dark:text-gray-400 text-xs leading-relaxed">{card.desc}</p>
               </div>
             </div>
           ))}
@@ -157,13 +162,13 @@ export default async function Home({
       </div>{/* end scrollable content */}
 
       {/* ── FOOTER ──────────────────────────────────────── */}
-      <footer className="shrink-0 border-t border-gray-200 bg-white">
-        <div className="max-w-7xl mx-auto px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-gray-400">
+      <footer className="shrink-0 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+        <div className="max-w-7xl mx-auto px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-gray-400 dark:text-gray-500">
           <span>{dict.footer.copyright.replace("{year}", String(new Date().getFullYear()))}</span>
           <div className="flex gap-6">
-            <a href="#" className="hover:text-teal-700 transition-colors">{dict.footer.privacy}</a>
-            <a href="#" className="hover:text-teal-700 transition-colors">{dict.footer.terms}</a>
-            <a href="#" className="hover:text-teal-700 transition-colors">{dict.footer.contact}</a>
+            <a href="#" className="hover:text-teal-700 dark:hover:text-teal-400 transition-colors">{dict.footer.privacy}</a>
+            <a href="#" className="hover:text-teal-700 dark:hover:text-teal-400 transition-colors">{dict.footer.terms}</a>
+            <a href="#" className="hover:text-teal-700 dark:hover:text-teal-400 transition-colors">{dict.footer.contact}</a>
           </div>
         </div>
       </footer>

@@ -48,6 +48,12 @@
   "languageSwitcher": {
     "label": "Sprache"
   },
+  "themeSwitcher": {
+    "label": "Design",
+    "light": "Hell",
+    "dark": "Dunkel",
+    "system": "System"
+  },
   "cookieConsent": {
     "message": "Wir verwenden Cookies, um Ihre Sprach- und Währungseinstellungen zu speichern. Erlauben Sie uns, diese Cookies zu speichern?",
     "allow": "Cookies erlauben",

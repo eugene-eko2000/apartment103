@@ -222,7 +222,7 @@ export default function GuestsPanel() {
                 onChange={(v) => setForm((p) => ({ ...p, preferred_currency: (v || null) as Currency | null }))}
               />
             </div>
-            {formError && <p className="text-sm text-red-600">{formError}</p>}
+            {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
             <SubmitButton pending={pending} label={editing ? "Save changes" : "Create guest"} />
           </form>
         </Modal>

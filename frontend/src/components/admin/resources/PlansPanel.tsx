@@ -158,7 +158,7 @@ export default function PlansPanel() {
               step={0.01}
               onChange={(v) => setForm((p) => ({ ...p, price_ratio: v }))}
             />
-            {formError && <p className="text-sm text-red-600">{formError}</p>}
+            {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
             <SubmitButton pending={pending} label={editing ? "Save changes" : "Create plan"} />
           </form>
         </Modal>

@@ -48,6 +48,12 @@
   "languageSwitcher": {
     "label": "Lingua"
   },
+  "themeSwitcher": {
+    "label": "Tema",
+    "light": "Chiaro",
+    "dark": "Scuro",
+    "system": "Sistema"
+  },
   "cookieConsent": {
     "message": "Utilizziamo i cookie per ricordare le tue preferenze di lingua e valuta. Ci autorizzi a salvare questi cookie?",
     "allow": "Accetta i cookie",

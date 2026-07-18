@@ -48,6 +48,12 @@
   "languageSwitcher": {
     "label": "Language"
   },
+  "themeSwitcher": {
+    "label": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
   "cookieConsent": {
     "message": "We use cookies to remember your language and currency preferences. Do you allow us to store these cookies?",
     "allow": "Allow Cookies",

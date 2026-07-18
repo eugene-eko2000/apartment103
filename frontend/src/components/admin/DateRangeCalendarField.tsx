@@ -165,13 +165,13 @@ export function DateRangeCalendarField({
 
   return (
     <div ref={fieldRef} className="relative">
-      <label className="block text-xs font-medium text-slate-500 mb-1">{label}</label>
+      <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{label}</label>
       <button
         type="button"
         onClick={() => (open ? closeCalendar() : openCalendar())}
         className={`w-full text-left px-3 py-2 rounded-lg border text-sm transition-colors focus:outline-none focus:ring-1 focus:ring-indigo-400 cursor-pointer ${
-          open ? "border-indigo-500 bg-indigo-50" : "border-slate-300 bg-white hover:border-slate-400"
-        } ${beginDate ? "text-slate-800" : "text-slate-400"}`}
+          open ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40" : "border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 hover:border-slate-400"
+        } ${beginDate ? "text-slate-800 dark:text-slate-100" : "text-slate-400 dark:text-slate-500"}`}
       >
         {displayText}
       </button>
@@ -181,7 +181,7 @@ export function DateRangeCalendarField({
         createPortal(
           <div
             ref={calendarRef}
-            className="absolute z-[120] bg-white rounded-xl shadow-2xl border border-slate-200 p-3"
+            className="absolute z-[120] bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 p-3"
             style={{ top: anchor.top, left: anchor.left }}
           >
             <DayPicker

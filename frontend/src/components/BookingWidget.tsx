@@ -429,14 +429,14 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   };
 
   const childAgesBlock = children.length > 0 && (
-    <div className="p-3 bg-amber-50 rounded-xl border border-amber-100">
-      <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-3">
+    <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-xl border border-amber-100 dark:border-amber-900">
+      <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-3">
         {dict.childrenAges}
       </p>
       <div className="flex flex-wrap gap-3">
         {children.map((child, i) => (
           <div key={i} className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 whitespace-nowrap">
+            <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
               {dict.child} {i + 1}
             </span>
             <select
@@ -445,10 +445,10 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
               onChange={(e) =>
                 updateChildAge(i, e.target.value === "" ? null : Number(e.target.value))
               }
-              className={`text-sm border rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-teal-300 cursor-pointer ${
+              className={`text-sm border rounded-lg px-2 py-1.5 bg-white dark:bg-gray-800 focus:outline-none focus:ring-1 focus:ring-teal-300 cursor-pointer ${
                 child.age === null
-                  ? "border-red-300 text-gray-400 focus:border-red-400"
-                  : "border-amber-200 text-gray-700 focus:border-teal-500"
+                  ? "border-red-300 dark:border-red-700 text-gray-400 focus:border-red-400"
+                  : "border-amber-200 dark:border-amber-800 text-gray-700 dark:text-gray-300 focus:border-teal-500"
               }`}
             >
               <option value="" disabled>{dict.selectAge}</option>
@@ -483,7 +483,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const dateAndGuestCalendar = calendarOpen && calendarAnchor && createPortal(
     <div
       ref={calendarRef}
-      className="fixed z-[101] flex justify-center bg-white rounded-2xl shadow-2xl border border-gray-200 p-5 w-max max-w-[calc(100vw-1.5rem)] overflow-x-auto"
+      className="fixed z-[101] flex justify-center bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 p-5 w-max max-w-[calc(100vw-1.5rem)] overflow-x-auto"
       style={{ top: calendarAnchor.top, right: calendarAnchor.right }}
     >
       <DayPicker
@@ -531,8 +531,8 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
         modifiersClassNames={{
           hoverRange: "rdp-range_middle",
           hoverRangeEnd: "rdp-range_end",
-          available: "!bg-green-50 !text-green-800 hover:!bg-green-100",
-          unavailable: "!bg-red-50 !text-red-700",
+          available: "!bg-green-50 dark:!bg-green-950/40 !text-green-800 dark:!text-green-300 hover:!bg-green-100 dark:hover:!bg-green-900/40",
+          unavailable: "!bg-red-50 dark:!bg-red-950/40 !text-red-700 dark:!text-red-400",
         }}
       />
     </div>,
@@ -549,7 +549,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
       />
       <div
         ref={widgetRef}
-        className={`bg-white rounded-2xl shadow-2xl w-full ${
+        className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full ${
           extended ? "fixed z-[91] left-1/2 -translate-x-1/2 max-w-3xl max-h-[90vh] overflow-y-auto" : ""
         }`}
         style={{ top: pinnedTop ?? undefined }}
@@ -587,7 +587,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
             <>
               {/* ── Date inputs + dropdown calendar ───────────────── */}
               <section ref={dateRef} className="relative mb-5">
-                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
+                <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3">
                   {dict.selectDates}
                 </h3>
 
@@ -601,7 +601,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                     filled={!!range?.from}
                     openCalendarLabel={dict.openCalendar}
                   />
-                  <span className="pb-[11px] text-gray-300 text-lg select-none">→</span>
+                  <span className="pb-[11px] text-gray-300 dark:text-gray-600 text-lg select-none">→</span>
                   <DateField
                     label={dict.checkOut}
                     value={checkOutText}
@@ -616,18 +616,18 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                 {dateAndGuestCalendar}
               </section>
 
-              <div className="border-t border-gray-100 my-4" />
+              <div className="border-t border-gray-100 dark:border-gray-700 my-4" />
 
               {/* ── Guests ────────────────────────────────────────── */}
               <section className="mb-5">
-                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
+                <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3">
                   {dict.guestsSection}
                 </h3>
 
-                <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                <div className="flex items-center justify-between py-3 border-b border-gray-100 dark:border-gray-700">
                   <div>
-                    <p className="font-medium text-gray-800 text-sm">{dict.adults}</p>
-                    <p className="text-xs text-gray-400">{dict.adultsAge}</p>
+                    <p className="font-medium text-gray-800 dark:text-gray-200 text-sm">{dict.adults}</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500">{dict.adultsAge}</p>
                   </div>
                   <Counter
                     value={adults}
@@ -640,8 +640,8 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
 
                 <div className="flex items-center justify-between py-3">
                   <div>
-                    <p className="font-medium text-gray-800 text-sm">{dict.children}</p>
-                    <p className="text-xs text-gray-400">{dict.childrenAge}</p>
+                    <p className="font-medium text-gray-800 dark:text-gray-200 text-sm">{dict.children}</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500">{dict.childrenAge}</p>
                   </div>
                   <Counter
                     value={children.length}
@@ -669,7 +669,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                 {dict.bookNow}
               </button>
 
-              <p className="text-center text-xs text-gray-400 mt-3">
+              <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-3">
                 {dict.noCharge}
               </p>
             </>
@@ -689,7 +689,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                         filled={!!range?.from}
                         openCalendarLabel={dict.openCalendar}
                       />
-                      <span className="pb-[11px] text-gray-300 text-lg select-none">→</span>
+                      <span className="pb-[11px] text-gray-300 dark:text-gray-600 text-lg select-none">→</span>
                       <DateField
                         label={dict.checkOut}
                         value={checkOutText}
@@ -703,7 +703,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                     </section>
 
                     <div className="min-w-[92px]">
-                      <label className="block text-xs font-medium text-gray-400 mb-1">{dict.adults}</label>
+                      <label className="block text-xs font-medium text-gray-400 dark:text-gray-500 mb-1">{dict.adults}</label>
                       <Counter
                         value={adults}
                         min={1}
@@ -714,7 +714,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                     </div>
 
                     <div className="min-w-[92px]">
-                      <label className="block text-xs font-medium text-gray-400 mb-1">{dict.children}</label>
+                      <label className="block text-xs font-medium text-gray-400 dark:text-gray-500 mb-1">{dict.children}</label>
                       <Counter
                         value={children.length}
                         min={0}
@@ -727,10 +727,10 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
 
                   {childAgesBlock}
 
-                  <div className="border-t border-gray-100" />
+                  <div className="border-t border-gray-100 dark:border-gray-700" />
 
                   {/* ── Guest details ─────────────────────────────── */}
-                  <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
+                  <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
                     {verified.guestMode === "create" ? dict.modal.guestTitleCreate : dict.modal.guestTitleUpdate}
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -798,13 +798,13 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                     />
                   </div>
 
-                  {formError && <p className="text-sm text-red-600">{formError}</p>}
+                  {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
 
                   <div className="flex gap-3">
                     <button
                       type="button"
                       onClick={resetBookingFlow}
-                      className="flex-1 text-gray-600 font-semibold py-4 rounded-xl text-base transition-all border border-gray-200 hover:bg-gray-50 active:scale-[0.98] cursor-pointer"
+                      className="flex-1 text-gray-600 dark:text-gray-300 font-semibold py-4 rounded-xl text-base transition-all border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-[0.98] cursor-pointer"
                     >
                       {dict.cancel}
                     </button>
@@ -821,12 +821,12 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
               )}
 
               {guestStep === "submitting" && (
-                <p className="text-sm text-gray-600 text-center py-8">{dict.modal.submitting}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-300 text-center py-8">{dict.modal.submitting}</p>
               )}
 
               {guestStep === "success" && (
                 <div className="text-center py-4 space-y-4">
-                  <p className="text-sm text-gray-700">{dict.modal.successMessage.replace("{name}", guestName)}</p>
+                  <p className="text-sm text-gray-700 dark:text-gray-300">{dict.modal.successMessage.replace("{name}", guestName)}</p>
                   <button
                     type="button"
                     onClick={handleDone}
@@ -840,7 +840,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
 
               {guestStep === "error" && (
                 <div className="text-center py-4 space-y-4">
-                  <p className="text-sm text-red-600">{formError}</p>
+                  <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>
                   <button
                     type="button"
                     onClick={() => setGuestStep("form")}
@@ -887,7 +887,7 @@ function DateField({
 }) {
   return (
     <div className="flex-1 min-w-0">
-      <label className="block text-xs font-medium text-gray-400 mb-1">{label}</label>
+      <label className="block text-xs font-medium text-gray-400 dark:text-gray-500 mb-1">{label}</label>
       <div className="relative">
         <input
           type="text"
@@ -899,17 +899,17 @@ function DateField({
           }}
           className={`w-full pl-3 pr-9 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-1 ${
             filled
-              ? "border-teal-400 bg-teal-50 text-gray-800 focus:border-teal-500 focus:ring-teal-200"
+              ? "border-teal-400 dark:border-teal-600 bg-teal-50 dark:bg-teal-950/30 text-gray-800 dark:text-gray-100 focus:border-teal-500 focus:ring-teal-200"
               : active
-              ? "border-teal-400 bg-white text-gray-800 focus:border-teal-500 focus:ring-teal-200"
-              : "border-gray-200 bg-gray-50 text-gray-800 focus:border-teal-400 focus:ring-teal-100"
-          } placeholder-gray-300`}
+              ? "border-teal-400 dark:border-teal-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:border-teal-500 focus:ring-teal-200"
+              : "border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:border-teal-400 focus:ring-teal-100"
+          } placeholder-gray-300 dark:placeholder-gray-500`}
         />
         <button
           type="button"
           onClick={onCalendarClick}
           className={`absolute right-2.5 top-1/2 -translate-y-1/2 transition-colors cursor-pointer ${
-            active ? "text-teal-600" : "text-gray-400 hover:text-teal-600"
+            active ? "text-teal-600 dark:text-teal-400" : "text-gray-400 dark:text-gray-500 hover:text-teal-600 dark:hover:text-teal-400"
           }`}
           aria-label={openCalendarLabel}
         >
@@ -951,16 +951,16 @@ function Counter({
         type="button"
         onClick={onDecrement}
         disabled={value <= min}
-        className="w-8 h-8 rounded-full border-2 border-gray-300 flex items-center justify-center text-gray-600 font-medium hover:border-teal-500 hover:text-teal-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+        className="w-8 h-8 rounded-full border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 font-medium hover:border-teal-500 hover:text-teal-600 dark:hover:text-teal-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
       >
         −
       </button>
-      <span className="w-5 text-center font-semibold text-gray-800 text-sm">{value}</span>
+      <span className="w-5 text-center font-semibold text-gray-800 dark:text-gray-100 text-sm">{value}</span>
       <button
         type="button"
         onClick={onIncrement}
         disabled={value >= max}
-        className="w-8 h-8 rounded-full border-2 border-gray-300 flex items-center justify-center text-gray-600 font-medium hover:border-teal-500 hover:text-teal-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+        className="w-8 h-8 rounded-full border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 font-medium hover:border-teal-500 hover:text-teal-600 dark:hover:text-teal-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
       >
         +
       </button>
@@ -987,7 +987,7 @@ function TextField({
   const id = useId();
   return (
     <div>
-      <label htmlFor={id} className="block text-xs font-medium text-gray-500 mb-1">
+      <label htmlFor={id} className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
         {label}
       </label>
       <input
@@ -997,7 +997,7 @@ function TextField({
         disabled={disabled}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-teal-300 focus:border-teal-400 disabled:bg-gray-50 disabled:text-gray-400"
+        className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 text-sm focus:outline-none focus:ring-1 focus:ring-teal-300 focus:border-teal-400 disabled:bg-gray-50 dark:disabled:bg-gray-700 disabled:text-gray-400"
       />
     </div>
   );
@@ -1020,14 +1020,14 @@ function SelectField({
   const id = useId();
   return (
     <div>
-      <label htmlFor={id} className="block text-xs font-medium text-gray-500 mb-1">
+      <label htmlFor={id} className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
         {label}
       </label>
       <select
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-teal-300 focus:border-teal-400 cursor-pointer"
+        className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-teal-300 focus:border-teal-400 cursor-pointer"
       >
         <option value="">{noneLabel}</option>
         {options.map((o) => (

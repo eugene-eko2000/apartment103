@@ -73,13 +73,13 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100 px-4">
-      <div className="w-full max-w-sm bg-white rounded-xl shadow-lg border border-slate-200 p-8">
-        <h1 className="text-lg font-bold text-slate-800 mb-1">apartment103 admin</h1>
+    <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-900 px-4">
+      <div className="w-full max-w-sm bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 p-8">
+        <h1 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-1">apartment103 admin</h1>
 
         {step === "identifier" && (
           <form onSubmit={handleRequestOtp} className="space-y-4 mt-6">
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
               Enter the email or phone number registered as an admin to receive a one-time code.
             </p>
             <TextField
@@ -88,22 +88,22 @@ export default function AdminLogin() {
               onChange={setIdentifier}
               placeholder="you@example.com"
             />
-            {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
+            {errorMessage && <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>}
             <SubmitButton pending={pending} label="Send code" />
           </form>
         )}
 
         {step === "otp" && (
           <form onSubmit={handleVerifyOtp} className="space-y-4 mt-6">
-            <p className="text-sm text-slate-500">Enter the code sent to {identifier}.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Enter the code sent to {identifier}.</p>
             <TextField label="Verification code" value={otpCode} onChange={setOtpCode} placeholder="123456" />
-            {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
+            {errorMessage && <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>}
             <SubmitButton pending={pending} label="Verify" />
-            <div className="flex items-center justify-between text-xs text-slate-500">
-              <button type="button" onClick={handleResendOtp} className="hover:text-indigo-700 cursor-pointer">
+            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+              <button type="button" onClick={handleResendOtp} className="hover:text-indigo-700 dark:hover:text-indigo-400 cursor-pointer">
                 Resend code
               </button>
-              <button type="button" onClick={resetToIdentifier} className="hover:text-indigo-700 cursor-pointer">
+              <button type="button" onClick={resetToIdentifier} className="hover:text-indigo-700 dark:hover:text-indigo-400 cursor-pointer">
                 Use a different identifier
               </button>
             </div>
@@ -112,7 +112,7 @@ export default function AdminLogin() {
 
         {step === "unauthorized" && (
           <div className="mt-6 space-y-4 text-center">
-            <p className="text-sm text-red-600">
+            <p className="text-sm text-red-600 dark:text-red-400">
               This identifier isn&apos;t recognized as an admin. You aren&apos;t authorized for admin access.
             </p>
             <button

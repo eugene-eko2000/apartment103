@@ -156,7 +156,7 @@ export default function CancellationPoliciesPanel() {
                 </>
               )}
             />
-            {formError && <p className="text-sm text-red-600">{formError}</p>}
+            {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
             <SubmitButton pending={pending} label={editing ? "Save changes" : "Create policy"} />
           </form>
         </Modal>

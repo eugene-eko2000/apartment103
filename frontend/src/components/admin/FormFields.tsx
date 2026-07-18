@@ -22,7 +22,7 @@ export function TextField({
   const id = useId();
   return (
     <div>
-      <label htmlFor={id} className="block text-xs font-medium text-slate-500 mb-1">
+      <label htmlFor={id} className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
         {label}
       </label>
       <input
@@ -33,7 +33,7 @@ export function TextField({
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400 focus:border-indigo-500 disabled:bg-slate-50 disabled:text-slate-400"
+        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400 focus:border-indigo-500 disabled:bg-slate-50 dark:disabled:bg-slate-800 disabled:text-slate-400"
       />
     </div>
   );
@@ -59,7 +59,7 @@ export function NumberField({
   const id = useId();
   return (
     <div>
-      <label htmlFor={id} className="block text-xs font-medium text-slate-500 mb-1">
+      <label htmlFor={id} className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
         {label}
       </label>
       <input
@@ -71,7 +71,7 @@ export function NumberField({
         step={step}
         value={Number.isNaN(value) ? "" : value}
         onChange={(e) => onChange(e.target.valueAsNumber)}
-        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400 focus:border-indigo-500"
+        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400 focus:border-indigo-500"
       />
     </div>
   );
@@ -93,14 +93,14 @@ export function SelectField<T extends string>({
   const id = useId();
   return (
     <div>
-      <label htmlFor={id} className="block text-xs font-medium text-slate-500 mb-1">
+      <label htmlFor={id} className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
         {label}
       </label>
       <select
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value as T)}
-        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400 focus:border-indigo-500 cursor-pointer"
+        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-400 focus:border-indigo-500 cursor-pointer"
       >
         {noneLabel !== undefined && <option value="">{noneLabel}</option>}
         {options.map((o) => (

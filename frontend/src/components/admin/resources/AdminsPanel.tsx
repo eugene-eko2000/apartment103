@@ -155,7 +155,7 @@ export default function AdminsPanel() {
               value={form.phone_number}
               onChange={(v) => setForm((p) => ({ ...p, phone_number: v }))}
             />
-            {formError && <p className="text-sm text-red-600">{formError}</p>}
+            {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
             <SubmitButton pending={pending} label={editing ? "Save changes" : "Create admin"} />
           </form>
         </Modal>

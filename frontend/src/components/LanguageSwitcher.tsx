@@ -25,7 +25,7 @@ export default function LanguageSwitcher({ currentLang }: { currentLang: Locale 
     <div className="relative group">
       <button
         type="button"
-        className="flex items-center gap-1 hover:text-teal-700 transition-colors cursor-pointer"
+        className="flex items-center gap-1 hover:text-teal-700 dark:hover:text-teal-400 transition-colors cursor-pointer"
         aria-label="Change language"
       >
         <span aria-hidden="true">{localeFlags[currentLang]}</span>
@@ -36,14 +36,14 @@ export default function LanguageSwitcher({ currentLang }: { currentLang: Locale 
       </button>
 
       <div className="absolute right-0 top-full pt-2 hidden group-hover:block z-50">
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 py-1 min-w-[140px]">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 py-1 min-w-[140px]">
           {locales.map((locale) => (
             <button
               key={locale}
               type="button"
               onClick={() => switchTo(locale)}
-              className={`w-full flex items-center gap-2.5 text-left px-4 py-2 text-sm cursor-pointer hover:bg-gray-50 ${
-                locale === currentLang ? "text-teal-700 font-medium" : "text-gray-600"
+              className={`w-full flex items-center gap-2.5 text-left px-4 py-2 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                locale === currentLang ? "text-teal-700 dark:text-teal-400 font-medium" : "text-gray-600 dark:text-gray-300"
               }`}
             >
               <span className="text-base leading-none" aria-hidden="true">{localeFlags[locale]}</span>

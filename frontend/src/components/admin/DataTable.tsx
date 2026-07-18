@@ -90,7 +90,7 @@ export function DataTable<T>({
         <div className="flex items-center gap-3">
           {onBulkDelete && effectiveSelected.size > 0 && (
             <>
-              <span className="text-sm text-slate-500">{effectiveSelected.size} selected</span>
+              <span className="text-sm text-slate-500 dark:text-slate-400">{effectiveSelected.size} selected</span>
               <button
                 type="button"
                 onClick={handleBulkDelete}
@@ -110,10 +110,10 @@ export function DataTable<T>({
           + {createLabel}
         </button>
       </div>
-      {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
-      <div className="overflow-x-auto border border-slate-200 rounded-lg">
+      {error && <p className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</p>}
+      <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-lg">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 border-b border-slate-200">
+          <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
             <tr>
               {onBulkDelete && (
                 <th className="px-4 py-2.5 w-10">
@@ -129,7 +129,7 @@ export function DataTable<T>({
                 </th>
               )}
               {columns.map((c) => (
-                <th key={c.key} className="text-left font-medium text-slate-500 px-4 py-2.5 whitespace-nowrap">
+                <th key={c.key} className="text-left font-medium text-slate-500 dark:text-slate-400 px-4 py-2.5 whitespace-nowrap">
                   {c.label}
                 </th>
               ))}
@@ -139,14 +139,14 @@ export function DataTable<T>({
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={columns.length + extraCols} className="px-4 py-6 text-center text-slate-400">
+                <td colSpan={columns.length + extraCols} className="px-4 py-6 text-center text-slate-400 dark:text-slate-500">
                   Loading…
                 </td>
               </tr>
             )}
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={columns.length + extraCols} className="px-4 py-6 text-center text-slate-400">
+                <td colSpan={columns.length + extraCols} className="px-4 py-6 text-center text-slate-400 dark:text-slate-500">
                   {emptyLabel}
                 </td>
               </tr>
@@ -155,7 +155,7 @@ export function DataTable<T>({
               rows.map((row) => {
                 const id = rowKey(row);
                 return (
-                  <tr key={id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                  <tr key={id} className="border-b border-slate-100 dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800">
                     {onBulkDelete && (
                       <td className="px-4 py-2.5">
                         <input
@@ -168,7 +168,7 @@ export function DataTable<T>({
                       </td>
                     )}
                     {columns.map((c) => (
-                      <td key={c.key} className="px-4 py-2.5 text-slate-700 whitespace-nowrap">
+                      <td key={c.key} className="px-4 py-2.5 text-slate-700 dark:text-slate-300 whitespace-nowrap">
                         {c.render(row)}
                       </td>
                     ))}
@@ -176,14 +176,14 @@ export function DataTable<T>({
                       <button
                         type="button"
                         onClick={() => onEdit(row)}
-                        className="text-indigo-600 hover:text-indigo-800 text-xs font-medium mr-3 cursor-pointer"
+                        className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-xs font-medium mr-3 cursor-pointer"
                       >
                         Edit
                       </button>
                       <button
                         type="button"
                         onClick={() => onDelete(row)}
-                        className="text-red-500 hover:text-red-700 text-xs font-medium cursor-pointer"
+                        className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-xs font-medium cursor-pointer"
                       >
                         Delete
                       </button>

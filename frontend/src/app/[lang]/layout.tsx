@@ -5,6 +5,7 @@ import "../globals.css";
 import { locales } from "@/lib/i18n-config";
 import { CurrencyProvider } from "@/lib/currency-context";
 import { CookieConsentProvider } from "@/lib/cookie-consent-context";
+import { ThemeProvider, THEME_INIT_SCRIPT } from "@/lib/theme-context";
 import CookieConsentBanner from "@/components/CookieConsentBanner";
 import { getDictionary, hasLocale } from "./dictionaries";
 
@@ -52,13 +53,20 @@ export default async function RootLayout({
   return (
     <html
       lang={lang}
+      data-theme="light"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col">
-        <CookieConsentProvider>
-          <CurrencyProvider>{children}</CurrencyProvider>
-          <CookieConsentBanner dict={dict.cookieConsent} />
-        </CookieConsentProvider>
+        <ThemeProvider>
+          <CookieConsentProvider>
+            <CurrencyProvider>{children}</CurrencyProvider>
+            <CookieConsentBanner dict={dict.cookieConsent} />
+          </CookieConsentProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

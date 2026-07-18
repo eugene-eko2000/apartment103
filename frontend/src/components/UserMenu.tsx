@@ -52,7 +52,7 @@ export default function UserMenu({ lang, dict }: { lang: Locale; dict: UserMenuD
         <button
           type="button"
           onClick={() => setLoginOpen(true)}
-          className="hover:text-teal-700 transition-colors cursor-pointer"
+          className="hover:text-teal-700 dark:hover:text-teal-400 transition-colors cursor-pointer"
         >
           {dict.login}
         </button>
@@ -82,11 +82,11 @@ export default function UserMenu({ lang, dict }: { lang: Locale; dict: UserMenuD
 
       {menuOpen && (
         <div className="absolute right-0 top-full pt-2 z-50">
-          <div className="bg-white rounded-xl shadow-lg border border-gray-100 py-1 min-w-[160px]">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 py-1 min-w-[160px]">
             <Link
               href={`/${lang}/my-bookings`}
               onClick={() => setMenuOpen(false)}
-              className="block px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+              className="block px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               {dict.myBookings}
             </Link>
@@ -96,7 +96,7 @@ export default function UserMenu({ lang, dict }: { lang: Locale; dict: UserMenuD
                 clearGuestSession();
                 setMenuOpen(false);
               }}
-              className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 cursor-pointer"
+              className="w-full text-left px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
             >
               {dict.logout}
             </button>

@@ -114,7 +114,7 @@ export default function LoginModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div
           className="px-6 py-4 rounded-t-2xl flex items-center justify-between sticky top-0"
           style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
@@ -136,10 +136,10 @@ export default function LoginModal({
           {step === "identifier" && (
             <form onSubmit={handleRequestOtp} className="space-y-4">
               <div>
-                <p className="text-sm text-gray-500">{dict.identifierHint}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{dict.identifierHint}</p>
               </div>
               <div>
-                <label htmlFor="login-identifier" className="block text-xs font-medium text-gray-500 mb-1">
+                <label htmlFor="login-identifier" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                   {dict.identifierLabel}
                 </label>
                 <input
@@ -149,10 +149,10 @@ export default function LoginModal({
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   placeholder={dict.identifierPlaceholder}
-                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-teal-300 focus:border-teal-400"
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 text-sm focus:outline-none focus:ring-1 focus:ring-teal-300 focus:border-teal-400"
                 />
               </div>
-              {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
+              {errorMessage && <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>}
               <SubmitButton pending={pending} label={dict.sendCode} />
             </form>
           )}
@@ -160,10 +160,10 @@ export default function LoginModal({
           {step === "otp" && (
             <form onSubmit={handleVerifyOtp} className="space-y-4">
               <div>
-                <p className="text-sm text-gray-500">{dict.otpHint.replace("{identifier}", identifier)}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{dict.otpHint.replace("{identifier}", identifier)}</p>
               </div>
               <div>
-                <label htmlFor="login-otp" className="block text-xs font-medium text-gray-500 mb-1">
+                <label htmlFor="login-otp" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                   {dict.otpLabel}
                 </label>
                 <input
@@ -174,16 +174,16 @@ export default function LoginModal({
                   value={otpCode}
                   onChange={(e) => setOtpCode(e.target.value)}
                   placeholder={dict.otpPlaceholder}
-                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm tracking-widest focus:outline-none focus:ring-1 focus:ring-teal-300 focus:border-teal-400"
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 text-sm tracking-widest focus:outline-none focus:ring-1 focus:ring-teal-300 focus:border-teal-400"
                 />
               </div>
-              {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
+              {errorMessage && <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>}
               <SubmitButton pending={pending} label={dict.verifyCode} />
-              <div className="flex items-center justify-between text-xs text-gray-500">
-                <button type="button" onClick={handleResendOtp} className="hover:text-teal-700 cursor-pointer">
+              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                <button type="button" onClick={handleResendOtp} className="hover:text-teal-700 dark:hover:text-teal-400 cursor-pointer">
                   {dict.resendCode}
                 </button>
-                <button type="button" onClick={resetToIdentifier} className="hover:text-teal-700 cursor-pointer">
+                <button type="button" onClick={resetToIdentifier} className="hover:text-teal-700 dark:hover:text-teal-400 cursor-pointer">
                   {dict.changeIdentifier}
                 </button>
               </div>

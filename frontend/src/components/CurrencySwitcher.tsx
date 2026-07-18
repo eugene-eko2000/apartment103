@@ -16,7 +16,7 @@ export default function CurrencySwitcher() {
     >
       <button
         type="button"
-        className="flex items-center gap-1 hover:text-teal-700 transition-colors cursor-pointer"
+        className="flex items-center gap-1 hover:text-teal-700 dark:hover:text-teal-400 transition-colors cursor-pointer"
         aria-label="Change currency"
         aria-expanded={isOpen}
       >
@@ -28,7 +28,7 @@ export default function CurrencySwitcher() {
 
       {isOpen && (
         <div className="absolute right-0 top-full pt-2 z-50">
-          <div className="bg-white rounded-xl shadow-lg border border-gray-100 py-1 min-w-[100px]">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 py-1 min-w-[100px]">
             {currencies.map((c) => (
               <button
                 key={c}
@@ -37,8 +37,8 @@ export default function CurrencySwitcher() {
                   setCurrency(c);
                   setIsOpen(false);
                 }}
-                className={`w-full text-left px-4 py-2 text-sm cursor-pointer hover:bg-gray-50 ${
-                  c === currency ? "text-teal-700 font-medium" : "text-gray-600"
+                className={`w-full text-left px-4 py-2 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                  c === currency ? "text-teal-700 dark:text-teal-400 font-medium" : "text-gray-600 dark:text-gray-300"
                 }`}
               >
                 {c}
