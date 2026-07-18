@@ -56,6 +56,27 @@ class TestCreateGuest:
         response = await client.post("/guests", json=_guest_payload(phone_number="not-a-phone"), headers=admin_headers)
         assert response.status_code == 400
 
+    async def test_rejects_duplicate_email(self, client, guest, admin_headers):
+        payload = _guest_payload(email=guest.email, phone_number="+15559991111")
+        response = await client.post("/guests", json=payload, headers=admin_headers)
+        assert response.status_code == 409
+
+    async def test_rejects_duplicate_email_case_insensitive(self, client, guest, admin_headers):
+        payload = _guest_payload(email=guest.email.upper(), phone_number="+15559991111")
+        response = await client.post("/guests", json=payload, headers=admin_headers)
+        assert response.status_code == 409
+
+    async def test_rejects_duplicate_phone_number(self, client, guest, admin_headers):
+        payload = _guest_payload(email="brandnew@example.com", phone_number=guest.phone_number)
+        response = await client.post("/guests", json=payload, headers=admin_headers)
+        assert response.status_code == 409
+
+    async def test_normalizes_email_casing_before_storing(self, client, admin_headers):
+        payload = _guest_payload(email="Jane@Example.com")
+        response = await client.post("/guests", json=payload, headers=admin_headers)
+        assert response.status_code == 201
+        assert response.json()["guest"]["email"] == "jane@example.com"
+
 
 class TestRegisterGuestSelf:
     async def test_registers_guest_using_verified_email(self, client):
@@ -112,6 +133,22 @@ class TestRegisterGuestSelf:
 
         response = await client.post("/guests/self", json=payload)
         assert response.status_code == 401
+
+    async def test_rejects_when_secondary_phone_number_already_used(self, client, guest):
+        headers = _pending_guest_headers("newperson@example.com")
+        payload = _guest_payload(phone_number=guest.phone_number)
+        del payload["email"]
+
+        response = await client.post("/guests/self", json=payload, headers=headers)
+        assert response.status_code == 409
+
+    async def test_rejects_when_secondary_email_already_used(self, client, guest):
+        headers = _pending_guest_headers("+15559990000")
+        payload = _guest_payload(email=guest.email)
+        del payload["phone_number"]
+
+        response = await client.post("/guests/self", json=payload, headers=headers)
+        assert response.status_code == 409
 
 
 class TestListGuests:
@@ -193,6 +230,31 @@ class TestUpdateGuest:
         )
         assert response.status_code == 200
         assert response.json()["phone_number"] == "+15557778888"
+
+    async def test_allows_saving_own_unchanged_email_and_phone(self, client, guest, guest_headers):
+        response = await client.put(
+            f"/guests/{guest.id}",
+            json=_guest_payload(email=guest.email, phone_number=guest.phone_number, first_name="Updated"),
+            headers=guest_headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["first_name"] == "Updated"
+
+    async def test_rejects_duplicate_email(self, client, guest, other_guest, admin_headers):
+        response = await client.put(
+            f"/guests/{guest.id}",
+            json=_guest_payload(email=other_guest.email),
+            headers=admin_headers,
+        )
+        assert response.status_code == 409
+
+    async def test_rejects_duplicate_phone_number(self, client, guest, other_guest, admin_headers):
+        response = await client.put(
+            f"/guests/{guest.id}",
+            json=_guest_payload(phone_number=other_guest.phone_number),
+            headers=admin_headers,
+        )
+        assert response.status_code == 409
 
 
 class TestDeleteGuest:
