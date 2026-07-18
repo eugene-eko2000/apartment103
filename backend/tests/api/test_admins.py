@@ -45,6 +45,33 @@ class TestCreateAdmin:
         )
         assert response.status_code == 401
 
+    async def test_normalizes_phone_number_formatting_before_storing(self, client, admin_headers):
+        response = await client.post(
+            "/admins",
+            json={
+                "family_name": "Smith",
+                "first_name": "Sam",
+                "phone_number": "+1 (555) 111-2222",
+                "email": "sam@example.com",
+            },
+            headers=admin_headers,
+        )
+        assert response.status_code == 201
+        assert response.json()["phone_number"] == "+15551112222"
+
+    async def test_rejects_invalid_phone_number(self, client, admin_headers):
+        response = await client.post(
+            "/admins",
+            json={
+                "family_name": "Smith",
+                "first_name": "Sam",
+                "phone_number": "not-a-phone",
+                "email": "sam@example.com",
+            },
+            headers=admin_headers,
+        )
+        assert response.status_code == 400
+
 
 class TestListAdmins:
     async def test_lists_all_admins(self, client, admin, admin_headers):
@@ -102,6 +129,20 @@ class TestUpdateAdmin:
             headers=admin_headers,
         )
         assert response.status_code == 404
+
+    async def test_normalizes_phone_number_formatting_before_storing(self, client, admin, admin_headers):
+        response = await client.put(
+            f"/admins/{admin.id}",
+            json={
+                "family_name": "Updated",
+                "first_name": "Name",
+                "phone_number": "+1 (555) 999-8888",
+                "email": "updated@example.com",
+            },
+            headers=admin_headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["phone_number"] == "+15559998888"
 
 
 class TestDeleteAdmin:

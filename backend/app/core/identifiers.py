@@ -23,3 +23,14 @@ def normalize_identifier(identifier: str, kind: IdentifierKind) -> str:
     if kind == "email":
         return identifier.lower()
     return re.sub(r"[()\-\s]", "", identifier)
+
+
+def normalize_phone_number(raw: str) -> str:
+    """Validate and normalize a phone number, e.g. before storing it.
+
+    Raises ValueError if `raw` isn't a syntactically valid phone number.
+    """
+    kind = classify_identifier(raw)
+    if kind != "phone":
+        raise ValueError("Invalid phone number")
+    return normalize_identifier(raw, kind)

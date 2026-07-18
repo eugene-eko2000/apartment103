@@ -46,6 +46,16 @@ class TestCreateGuest:
         response = await client.post("/guests", json=_guest_payload())
         assert response.status_code == 401
 
+    async def test_normalizes_phone_number_formatting_before_storing(self, client, admin_headers):
+        payload = _guest_payload(phone_number="+1 (555) 777-8888")
+        response = await client.post("/guests", json=payload, headers=admin_headers)
+        assert response.status_code == 201
+        assert response.json()["guest"]["phone_number"] == "+15557778888"
+
+    async def test_rejects_invalid_phone_number(self, client, admin_headers):
+        response = await client.post("/guests", json=_guest_payload(phone_number="not-a-phone"), headers=admin_headers)
+        assert response.status_code == 400
+
 
 class TestRegisterGuestSelf:
     async def test_registers_guest_using_verified_email(self, client):
@@ -174,6 +184,15 @@ class TestUpdateGuest:
             headers=admin_headers,
         )
         assert response.status_code == 404
+
+    async def test_normalizes_phone_number_formatting_before_storing(self, client, guest, guest_headers):
+        response = await client.put(
+            f"/guests/{guest.id}",
+            json=_guest_payload(phone_number="+1 (555) 777-8888"),
+            headers=guest_headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["phone_number"] == "+15557778888"
 
 
 class TestDeleteGuest:

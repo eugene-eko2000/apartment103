@@ -2,7 +2,7 @@ from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import Principal, get_current_principal, require_admin, require_pending_guest
-from app.core.identifiers import classify_identifier, normalize_identifier
+from app.core.identifiers import classify_identifier, normalize_identifier, normalize_phone_number
 from app.core.security import create_access_token
 from app.models.guest import Guest
 from app.schemas.guest import GuestCreate, GuestCreateResponse, GuestSelfRegistration, GuestSelfRegistrationResponse
@@ -15,11 +15,20 @@ def _ensure_can_access_guest(principal: Principal, guest_id: PydanticObjectId) -
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized for this guest")
 
 
+def _normalize_phone(raw: str) -> str:
+    try:
+        return normalize_phone_number(raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
 @router.post(
     "", response_model=GuestCreateResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin)]
 )
 async def create_guest(payload: GuestCreate) -> GuestCreateResponse:
-    guest = Guest(**payload.model_dump())
+    data = payload.model_dump()
+    data["phone_number"] = _normalize_phone(data["phone_number"])
+    guest = Guest(**data)
     await guest.insert()
     access_token, expires_in = create_access_token(str(guest.id), "guest")
     return GuestCreateResponse(guest=guest, access_token=access_token, expires_in=expires_in)
@@ -85,7 +94,7 @@ async def update_guest(
     guest.family_name = payload.family_name
     guest.first_name = payload.first_name
     guest.residence_address = payload.residence_address
-    guest.phone_number = payload.phone_number
+    guest.phone_number = _normalize_phone(payload.phone_number)
     guest.email = payload.email
     guest.preferred_language = payload.preferred_language
     guest.preferred_currency = payload.preferred_currency
