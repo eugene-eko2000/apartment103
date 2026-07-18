@@ -30,10 +30,15 @@ body {
   color-scheme: dark;
 }
 
-/* DayPicker teal theme overrides */
+/* DayPicker theme overrides.
+   !important is required here: react-day-picker's own style.css sets these
+   same variables on the same `.rdp-root` selector, and (being a separate
+   client-component-level import) it gets injected into the page after this
+   stylesheet — so on equal specificity it would otherwise win the cascade
+   and silently keep its default blue accent. */
 .rdp-root {
-  --rdp-accent-color: #0f766e;
-  --rdp-accent-background-color: #ccfbf1;
+  --rdp-accent-color: #059669 !important;
+  --rdp-accent-background-color: #d1fae5 !important;
   --rdp-day-height: 40px;
   --rdp-day-width: 40px;
   --rdp-day_button-height: 38px;
@@ -41,6 +46,6 @@ body {
 }
 
 [data-theme="dark"] .rdp-root {
-  --rdp-accent-color: #2dd4bf;
-  --rdp-accent-background-color: #134e4a;
+  --rdp-accent-color: #2dd4bf !important;
+  --rdp-accent-background-color: #134e4a !important;
 }
