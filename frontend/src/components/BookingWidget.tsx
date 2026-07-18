@@ -4,18 +4,19 @@ import { useState, useRef, useId, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { DayPicker } from "react-day-picker";
 import type { DateRange } from "react-day-picker";
-import { format, differenceInCalendarDays, parse, isValid, isBefore, isAfter, isSameDay } from "date-fns";
+import { format, differenceInCalendarDays, parse, isValid, isBefore, isAfter, isSameDay, subDays } from "date-fns";
 import { enUS, de, fr, it } from "date-fns/locale";
 import type { Locale as DateFnsLocale } from "date-fns";
 import "react-day-picker/style.css";
 import type { Locale } from "@/lib/i18n-config";
 import { useCurrency } from "@/lib/currency-context";
-import { formatPrice } from "@/lib/currency-config";
+import { convertCurrency, formatPrice } from "@/lib/currency-config";
 import {
   ApiError,
   createBooking,
   createGuest,
   getGuest,
+  listPublicBookedDateRanges,
   listPublicPlans,
   listPublicPrices,
   registerGuestSelf,
@@ -27,7 +28,7 @@ import {
   type Plan,
   type Price,
 } from "@/lib/api";
-import { findDailyRate, FALLBACK_CURRENCY, FALLBACK_DAILY_RATE } from "@/lib/pricing";
+import { findDailyRate, findLowestDailyRate, FALLBACK_CURRENCY, FALLBACK_DAILY_RATE } from "@/lib/pricing";
 import BookingModal, { emptyGuestForm, guestToForm, type BookingModalDict, type VerifiedIdentity } from "@/components/BookingModal";
 import { clearGuestSession, readGuestSession, saveGuestSession } from "@/lib/guest-auth";
 
@@ -93,6 +94,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const [children, setChildren] = useState<Child[]>([]);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [prices, setPrices] = useState<Price[]>([]);
+  const [bookedRanges, setBookedRanges] = useState<DateRange[]>([]);
   const [identityModalOpen, setIdentityModalOpen] = useState(false);
   const [calendarAnchor, setCalendarAnchor] = useState<{ top: number; right: number } | null>(null);
   const dateRef = useRef<HTMLDivElement>(null);
@@ -128,6 +130,16 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     listPublicPrices()
       .then(setPrices)
       .catch(() => setPrices([]));
+    listPublicBookedDateRanges()
+      .then((ranges) =>
+        setBookedRanges(
+          // end_date is the checkout day (exclusive, same convention as
+          // findDailyRate), so the last disabled night is the day before it —
+          // this keeps a booking's checkout day available as another's check-in.
+          ranges.map((r) => ({ from: parse(r.begin_date, "yyyy-MM-dd", new Date()), to: subDays(parse(r.end_date, "yyyy-MM-dd", new Date()), 1) }))
+        )
+      )
+      .catch(() => setBookedRanges([]));
   }, []);
 
   // Close calendar on outside click
@@ -243,8 +255,12 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const nights =
     range?.from && range?.to ? differenceInCalendarDays(range.to, range.from) : 0;
   const totalGuests = adults + children.length;
-  const matchedRate = findDailyRate(prices, format(range?.from ?? today, "yyyy-MM-dd"));
+  const matchedRate = range?.from
+    ? findDailyRate(prices, format(range.from, "yyyy-MM-dd"))
+    : findLowestDailyRate(prices, format(today, "yyyy-MM-dd"));
   const pricePerNight = (matchedRate?.dailyRate ?? FALLBACK_DAILY_RATE) * (plan?.price_ratio ?? 1);
+  const priceCurrency: Currency = matchedRate?.currency ?? FALLBACK_CURRENCY;
+  const convertedPricePerNight = convertCurrency(pricePerNight, priceCurrency, currency);
   const isFormValid =
     !!range?.from &&
     !!range?.to &&
@@ -447,6 +463,22 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     </div>
   );
 
+  const isBookedDate = (date: Date) =>
+    bookedRanges.some((r) => r.from && r.to && !isBefore(date, r.from) && !isAfter(date, r.to));
+
+  const isPastDate = (date: Date) => isBefore(date, today) && !isSameDay(date, today);
+
+  const hasNoPrice = (date: Date) => findDailyRate(prices, format(date, "yyyy-MM-dd")) === null;
+
+  // Days already covered by the range-selection or hover-preview modifiers
+  // keep their own (teal) styling instead of the green/red availability tint.
+  const isRangeOrHoverDate = (date: Date) =>
+    (!!range?.from && isSameDay(date, range.from)) ||
+    (!!range?.to && isSameDay(date, range.to)) ||
+    (!!range?.from && !!range?.to && isAfter(date, range.from) && isBefore(date, range.to)) ||
+    (!!range?.from && !range?.to && !!hoverDate && isAfter(hoverDate, range.from) &&
+      ((isAfter(date, range.from) && isBefore(date, hoverDate)) || isSameDay(date, hoverDate)));
+
   const dateAndGuestCalendar = calendarOpen && calendarAnchor && createPortal(
     <div
       ref={calendarRef}
@@ -471,7 +503,8 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
           }
         }}
         numberOfMonths={2}
-        disabled={{ before: today }}
+        disabled={[{ before: today }, ...bookedRanges, hasNoPrice]}
+        excludeDisabled
         showOutsideDays={false}
         locale={dateFnsLocale}
         min={1}
@@ -491,10 +524,14 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
             !!hoverDate &&
             isAfter(hoverDate, range.from) &&
             isSameDay(date, hoverDate),
+          available: (date) => !isRangeOrHoverDate(date) && !isPastDate(date) && !isBookedDate(date) && !hasNoPrice(date),
+          unavailable: (date) => !isRangeOrHoverDate(date) && (isPastDate(date) || isBookedDate(date) || hasNoPrice(date)),
         }}
         modifiersClassNames={{
           hoverRange: "rdp-range_middle",
           hoverRangeEnd: "rdp-range_end",
+          available: "!bg-green-50 !text-green-800 hover:!bg-green-100",
+          unavailable: "!bg-red-50 !text-red-700",
         }}
       />
     </div>,
@@ -523,10 +560,17 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
         >
           <div className="flex items-baseline justify-between">
             <h2 className="text-xl font-bold text-white">{dict.planYourStay}</h2>
-            <div className="text-right">
+            <div className="text-right shrink-0">
               <span className="text-teal-200 text-sm mr-1">{dict.fromPrefix}</span>
-              <span className="text-2xl font-bold text-white">{formatPrice(pricePerNight, currency)}</span>
-              <span className="text-teal-200 text-sm ml-1">{dict.perNight}</span>
+              <span className="whitespace-nowrap">
+                <span className="text-2xl font-bold text-white">{formatPrice(convertedPricePerNight, currency)}</span>
+                <span className="text-teal-200 text-sm ml-1">{dict.perNight}</span>
+              </span>
+              {priceCurrency !== currency && (
+                <div className="text-teal-200 text-xs">
+                  {formatPrice(pricePerNight, priceCurrency)} {dict.perNight}
+                </div>
+              )}
             </div>
           </div>
           {nights > 0 && (

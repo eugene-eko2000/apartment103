@@ -73,6 +73,22 @@ class TestCreateBooking:
         assert response.status_code == 401
 
 
+class TestListPublicBookedDateRanges:
+    async def test_lists_date_ranges_without_authentication(
+        self, client, guest, cancellation_policy, admin_headers
+    ):
+        await client.post(
+            "/bookings",
+            json=_booking_payload(guest.id, cancellation_policy.id),
+            headers=admin_headers,
+        )
+
+        response = await client.get("/bookings/public/date-ranges")
+        assert response.status_code == 200
+        body = response.json()
+        assert body == [{"begin_date": "2026-07-01", "end_date": "2026-07-05"}]
+
+
 class TestListBookings:
     async def test_admin_sees_all_bookings(
         self, client, guest, other_guest, cancellation_policy, admin_headers

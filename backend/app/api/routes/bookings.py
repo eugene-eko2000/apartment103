@@ -6,9 +6,24 @@ from app.api.deps import Principal, get_current_principal
 from app.models.booking import Booking, BookingCancellationPolicy
 from app.models.cancellation_policy import CancellationPolicy
 from app.models.guest import Guest
-from app.schemas.booking import BookingCreate
+from app.schemas.booking import BookedDateRange, BookingCreate
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
+
+# Unauthenticated: lets the booking widget disable already-booked days in the
+# calendar without a guest/admin session. Mounted ahead of `router` in
+# main.py so "/bookings/public/..." is matched before "/bookings/{booking_id}".
+public_router = APIRouter(prefix="/bookings", tags=["bookings"])
+
+
+@public_router.get("/public/date-ranges", response_model=list[BookedDateRange])
+async def list_public_booked_date_ranges() -> list[BookedDateRange]:
+    bookings = await Booking.find_all().to_list()
+    return [
+        BookedDateRange(begin_date=date_range.begin_date, end_date=date_range.end_date)
+        for booking in bookings
+        for date_range in booking.date_ranges
+    ]
 
 
 async def _get_guest_or_404(guest_id: PydanticObjectId) -> Guest:

@@ -147,6 +147,11 @@ export interface Booking {
   cancellation_policy: { name: string; rules: CancellationRule[] };
 }
 
+export interface BookedDateRange {
+  begin_date: string;
+  end_date: string;
+}
+
 export interface BookingInput {
   guest_id: string;
   cancellation_policy_id: string;
@@ -224,6 +229,10 @@ export function listPublicPlans(): Promise<Plan[]> {
 
 export function listPublicPrices(): Promise<Price[]> {
   return request("/prices/public");
+}
+
+export function listPublicBookedDateRanges(): Promise<BookedDateRange[]> {
+  return request("/bookings/public/date-ranges");
 }
 
 export function createBooking(token: string, data: BookingInput): Promise<Booking> {

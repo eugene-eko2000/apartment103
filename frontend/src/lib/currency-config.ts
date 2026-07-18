@@ -19,11 +19,15 @@ export const currencyRates: Record<Currency, number> = {
   GBP: 0.86,
 };
 
-export function convertFromEur(amountEur: number, currency: Currency): number {
-  return amountEur * currencyRates[currency];
+export function convertCurrency(amount: number, from: Currency, to: Currency): number {
+  return (amount / currencyRates[from]) * currencyRates[to];
 }
 
-export function formatPrice(amountEur: number, currency: Currency): string {
-  const rounded = Math.round(convertFromEur(amountEur, currency));
+export function convertFromEur(amountEur: number, currency: Currency): number {
+  return convertCurrency(amountEur, "EUR", currency);
+}
+
+export function formatPrice(amount: number, currency: Currency): string {
+  const rounded = Math.round(amount);
   return currency === "CHF" ? `${rounded} CHF` : `${currencySymbols[currency]}${rounded}`;
 }
