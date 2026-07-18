@@ -55,6 +55,7 @@ export interface DateRangeRate {
   begin_date: string;
   end_date: string;
   daily_rate: number;
+  min_stay_days: number;
 }
 
 export interface Period {

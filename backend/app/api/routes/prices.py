@@ -15,7 +15,7 @@ public_router = APIRouter(prefix="/prices", tags=["prices"])
 
 @public_router.get("/public", response_model=list[Price])
 async def list_public_prices() -> list[Price]:
-    return await Price.find_all().to_list()
+    return await Price.find_all().sort("period.begin_date").to_list()
 
 
 @router.post("", response_model=Price, status_code=status.HTTP_201_CREATED)
@@ -27,7 +27,7 @@ async def create_price(payload: PriceCreate) -> Price:
 
 @router.get("", response_model=list[Price])
 async def list_prices() -> list[Price]:
-    return await Price.find_all().to_list()
+    return await Price.find_all().sort("period.begin_date").to_list()
 
 
 @router.get("/{price_id}", response_model=Price)

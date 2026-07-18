@@ -21,7 +21,7 @@ import { DateRangeCalendarField, defaultMonthAfter } from "../DateRangeCalendarF
 
 const CURRENCIES: Currency[] = ["EUR", "CHF", "USD", "GBP"];
 
-const emptyDateRange = (): DateRangeRate => ({ begin_date: "", end_date: "", daily_rate: 0 });
+const emptyDateRange = (): DateRangeRate => ({ begin_date: "", end_date: "", daily_rate: 0, min_stay_days: 3 });
 
 const emptyForm = (): PriceInput => ({
   period: {
@@ -195,6 +195,13 @@ export default function PricesPanel() {
                       min={0}
                       step={0.01}
                       onChange={(v) => update({ daily_rate: v })}
+                    />
+                    <NumberField
+                      label="Minimum stay (days)"
+                      value={range.min_stay_days}
+                      min={1}
+                      step={1}
+                      onChange={(v) => update({ min_stay_days: v })}
                     />
                   </>
                 );
