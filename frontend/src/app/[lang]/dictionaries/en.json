@@ -129,6 +129,8 @@
       "selectDatesFirst": "Please select your check-in and check-out dates first.",
       "choosePlanTitle": "Choose your rate",
       "refundRule": "{percent}% refund if cancelled {days}+ days before check-in",
+      "cancellationTimelineLabel": "Refund by cancellation date",
+      "daysBeforeCheckIn": "days before check-in",
       "next": "Next"
     }
   },

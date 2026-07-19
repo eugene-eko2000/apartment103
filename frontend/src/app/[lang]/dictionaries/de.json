@@ -129,6 +129,8 @@
       "selectDatesFirst": "Bitte wählen Sie zuerst Ihr An- und Abreisedatum aus.",
       "choosePlanTitle": "Wählen Sie Ihren Tarif",
       "refundRule": "{percent}% Rückerstattung bei Stornierung {days}+ Tage vor Anreise",
+      "cancellationTimelineLabel": "Rückerstattung nach Stornierungsdatum",
+      "daysBeforeCheckIn": "Tage vor Anreise",
       "next": "Weiter"
     }
   },

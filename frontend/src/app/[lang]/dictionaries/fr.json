@@ -129,6 +129,8 @@
       "selectDatesFirst": "Veuillez d'abord sélectionner vos dates d'arrivée et de départ.",
       "choosePlanTitle": "Choisissez votre tarif",
       "refundRule": "Remboursement de {percent}% en cas d'annulation {days}+ jours avant l'arrivée",
+      "cancellationTimelineLabel": "Remboursement selon la date d'annulation",
+      "daysBeforeCheckIn": "jours avant l'arrivée",
       "next": "Suivant"
     }
   },

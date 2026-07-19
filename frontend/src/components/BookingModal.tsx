@@ -45,6 +45,8 @@ export interface BookingModalDict {
   selectDatesFirst: string;
   choosePlanTitle: string;
   refundRule: string;
+  cancellationTimelineLabel: string;
+  daysBeforeCheckIn: string;
   next: string;
 }
 

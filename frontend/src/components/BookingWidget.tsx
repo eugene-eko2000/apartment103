@@ -30,6 +30,7 @@ import {
 } from "@/lib/api";
 import { findDailyRate, findLowestDailyRate, findMinStay, FALLBACK_CURRENCY, FALLBACK_DAILY_RATE } from "@/lib/pricing";
 import BookingModal, { emptyGuestForm, guestToForm, type BookingModalDict, type VerifiedIdentity } from "@/components/BookingModal";
+import { CancellationTimeline, getMaxThresholdDays, getVisualMaxDays } from "@/components/CancellationTimeline";
 import { PhoneInput } from "@/components/PhoneInput";
 import { clearGuestSession, readGuestSession, saveGuestSession } from "@/lib/guest-auth";
 
@@ -265,6 +266,10 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     : findLowestDailyRate(prices, format(today, "yyyy-MM-dd"));
   const selectedPlan = plans.find((p) => p._id === selectedPlanId) ?? null;
   const cheapestPlanRatio = plans.length > 0 ? Math.min(...plans.map((p) => p.price_ratio)) : 1;
+  // Shared across every plan card so their cancellation timelines use the same day scale.
+  const sharedVisualMaxDays = getVisualMaxDays(
+    Math.max(0, ...plans.map((p) => getMaxThresholdDays(p.cancellation_policy.rules)))
+  );
   const pricePerNight = (matchedRate?.dailyRate ?? FALLBACK_DAILY_RATE) * (selectedPlan?.price_ratio ?? cheapestPlanRatio);
   const priceCurrency: Currency = matchedRate?.currency ?? FALLBACK_CURRENCY;
   const convertedPricePerNight = convertCurrency(pricePerNight, priceCurrency, currency);
@@ -754,28 +759,26 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                             }`}
                           >
                             <div className="flex items-center justify-between gap-3">
-                              <span className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{p.name}</span>
-                              <span className="text-right shrink-0 whitespace-nowrap">
-                                <span className="font-bold text-gray-800 dark:text-gray-100">
-                                  {formatPrice(convertedPlanPricePerNight, currency)}
-                                </span>
-                                <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">{dict.perNight}</span>
+                              <span className="font-bold text-gray-800 dark:text-gray-100">
+                                {formatPrice(convertedPlanPricePerNight, currency)}
                               </span>
+                              <span className="text-xs text-gray-400 dark:text-gray-500">{dict.perNight}</span>
                             </div>
                             {nights > 0 && (
                               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                                 {dict.total}: {formatPrice(convertedPlanTotal, currency)}
                               </p>
                             )}
-                            <ul className="text-xs text-gray-500 dark:text-gray-400 mt-2 space-y-0.5">
-                              {p.cancellation_policy.rules.map((rule, i) => (
-                                <li key={i}>
-                                  {dict.modal.refundRule
-                                    .replace("{percent}", String(Math.round(rule.refund_percentage * 100)))
-                                    .replace("{days}", String(rule.days_before_checkin))}
-                                </li>
-                              ))}
-                            </ul>
+                            <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest mt-3">
+                              {dict.modal.cancellationTimelineLabel}
+                            </p>
+                            <CancellationTimeline
+                              rules={p.cancellation_policy.rules}
+                              visualMaxDays={sharedVisualMaxDays}
+                              checkInLabel={dict.checkIn}
+                              refundRuleTemplate={dict.modal.refundRule}
+                              daysBeforeCheckInLabel={dict.modal.daysBeforeCheckIn}
+                            />
                           </button>
                         );
                       })}
