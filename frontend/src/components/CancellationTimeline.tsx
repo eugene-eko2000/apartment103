@@ -171,7 +171,7 @@ export function CancellationTimeline({
           );
         })}
       </div>
-      <div className="relative mt-1 h-6 text-[10px] text-gray-400 dark:text-gray-500">
+      <div className="relative mt-1 h-6 text-[10px] text-gray-500 dark:text-gray-400">
         {ticks.map((tick) => {
           const translate = tick.position <= 0 ? "0%" : tick.position >= 100 ? "-100%" : "-50%";
           return (
@@ -189,7 +189,7 @@ export function CancellationTimeline({
           );
         })}
       </div>
-      <p className="mt-2.5 text-[9px] uppercase tracking-wide text-gray-400 dark:text-gray-500">
+      <p className="mt-2.5 text-[9px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
         {daysBeforeCheckInLabel}
       </p>
     </div>

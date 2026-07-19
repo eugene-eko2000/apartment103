@@ -734,7 +734,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
             <>
               {guestStep === "plan" && verified && range?.from && (
                 <div className="space-y-5">
-                  <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
+                  <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
                     {dict.modal.choosePlanTitle}
                   </h3>
 
@@ -762,14 +762,14 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                               <span className="font-bold text-gray-800 dark:text-gray-100">
                                 {formatPrice(convertedPlanPricePerNight, currency)}
                               </span>
-                              <span className="text-xs text-gray-400 dark:text-gray-500">{dict.perNight}</span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">{dict.perNight}</span>
                             </div>
                             {nights > 0 && (
                               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                                 {dict.total}: {formatPrice(convertedPlanTotal, currency)}
                               </p>
                             )}
-                            <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest mt-3">
+                            <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mt-3">
                               {dict.modal.cancellationTimelineLabel}
                             </p>
                             <CancellationTimeline
