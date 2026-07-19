@@ -130,7 +130,7 @@
       "choosePlanTitle": "Scegli la tua tariffa",
       "refundRule": "Rimborso del {percent}% in caso di cancellazione {days}+ giorni prima del check-in",
       "cancellationTimelineLabel": "Rimborso in base alla data di cancellazione",
-      "daysBeforeCheckIn": "giorni prima del check-in",
+      "daysBeforeCheckIn": "scadenze di cancellazione",
       "next": "Avanti"
     }
   },

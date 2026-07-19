@@ -130,7 +130,7 @@
       "choosePlanTitle": "Choisissez votre tarif",
       "refundRule": "Remboursement de {percent}% en cas d'annulation {days}+ jours avant l'arrivée",
       "cancellationTimelineLabel": "Remboursement selon la date d'annulation",
-      "daysBeforeCheckIn": "jours avant l'arrivée",
+      "daysBeforeCheckIn": "dates limites d'annulation",
       "next": "Suivant"
     }
   },

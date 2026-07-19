@@ -1,5 +1,7 @@
 "use client";
 
+import { format, subDays } from "date-fns";
+import type { Locale as DateFnsLocale } from "date-fns";
 import type { CancellationRule } from "@/lib/api";
 
 interface Segment {
@@ -8,31 +10,49 @@ interface Segment {
   refundPercentage: number;
 }
 
-type StatusTier = "good" | "warning" | "serious" | "critical";
+type RGB = [number, number, number];
 
-const TIER_BY_REFUND = (refund: number): StatusTier => {
-  if (refund >= 0.75) return "good";
-  if (refund >= 0.4) return "warning";
-  if (refund > 0) return "serious";
-  return "critical";
-};
+// Gradient stops, same scale in light/dark (mode-invariant): red at 0% refund,
+// through yellow at 50%, to green at 100%.
+const GRADIENT_STOPS: { stop: number; rgb: RGB }[] = [
+  { stop: 1, rgb: [12, 163, 12] }, // #0ca30c
+  { stop: 0.5, rgb: [250, 178, 25] }, // #fab219
+  { stop: 0, rgb: [208, 59, 59] }, // #d03b3b
+];
 
-// Fixed status scale, same steps in light/dark (mode-invariant).
-const FILL_BY_TIER: Record<StatusTier, string> = {
-  good: "#0ca30c",
-  warning: "#fab219",
-  serious: "#ec835a",
-  critical: "#d03b3b",
-};
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
 
-// Dark ink clears WCAG contrast on good/warning/serious; critical reads better with white.
-// (computed against the fill hexes above, not eyeballed)
-const INK_BY_TIER: Record<StatusTier, string> = {
-  good: "#0b0b0b",
-  warning: "#0b0b0b",
-  serious: "#0b0b0b",
-  critical: "#ffffff",
-};
+function fillForRefund(refund: number): RGB {
+  const r = Math.min(1, Math.max(0, refund));
+  const [hi, mid, lo] = GRADIENT_STOPS;
+  const [from, to] = r >= mid.stop ? [mid, hi] : [lo, mid];
+  const t = (r - from.stop) / (to.stop - from.stop);
+  return [0, 1, 2].map((i) => lerp(from.rgb[i], to.rgb[i], t)) as RGB;
+}
+
+// WCAG relative luminance, used to pick whichever of black/white ink has the
+// stronger contrast against a given gradient fill.
+function relativeLuminance([r, g, b]: RGB): number {
+  const linear = [r, g, b].map((c) => {
+    const cs = c / 255;
+    return cs <= 0.03928 ? cs / 12.92 : Math.pow((cs + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+}
+
+function contrastRatio(l1: number, l2: number): number {
+  const [lighter, darker] = l1 > l2 ? [l1, l2] : [l2, l1];
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function inkForFill(rgb: RGB): string {
+  const fillLum = relativeLuminance(rgb);
+  const blackContrast = contrastRatio(fillLum, 0);
+  const whiteContrast = contrastRatio(fillLum, 1);
+  return blackContrast >= whiteContrast ? "#0b0b0b" : "#ffffff";
+}
 
 function buildSegments(rules: CancellationRule[]): Segment[] {
   if (rules.length === 0) return [];
@@ -76,7 +96,8 @@ export function getVisualMaxDays(maxThresholdDays: number): number {
 interface CancellationTimelineProps {
   rules: CancellationRule[];
   visualMaxDays: number;
-  checkInLabel: string;
+  checkInDate: Date;
+  dateLocale: DateFnsLocale;
   refundRuleTemplate: string;
   daysBeforeCheckInLabel: string;
 }
@@ -84,7 +105,8 @@ interface CancellationTimelineProps {
 export function CancellationTimeline({
   rules,
   visualMaxDays,
-  checkInLabel,
+  checkInDate,
+  dateLocale,
   refundRuleTemplate,
   daysBeforeCheckInLabel,
 }: CancellationTimelineProps) {
@@ -93,25 +115,28 @@ export function CancellationTimeline({
 
   const visualMax = visualMaxDays > 0 ? visualMaxDays : 1;
   const leftPercent = (days: number) => ((visualMax - days) / visualMax) * 100;
+  const dateLabel = (daysBefore: number) =>
+    format(subDays(checkInDate, daysBefore), "MMM d", { locale: dateLocale });
 
-  const allTicks = segments.slice(0, -1).map((seg, i) => ({
+  const allTicks = segments.slice(0, -1).map((seg) => ({
     key: `boundary-${seg.lowerDays}`,
-    label: i === 0 ? `${seg.lowerDays}+` : `${seg.lowerDays}`,
+    label: dateLabel(seg.lowerDays),
     position: leftPercent(seg.lowerDays),
   }));
-  allTicks.push({ key: "check-in", label: checkInLabel, position: 100 });
+  allTicks.push({ key: "check-in", label: dateLabel(0), position: 100 });
 
-  // Drop labels that would crowd their neighbor — walk right to left so the
-  // fixed check-in anchor always wins over an interior tick squeezed against it.
-  const MIN_TICK_GAP_PERCENT = 18;
-  const ticks: typeof allTicks = [];
-  for (let i = allTicks.length - 1; i >= 0; i--) {
-    const tick = allTicks[i];
-    const nextKept = ticks[0];
-    if (!nextKept || nextKept.position - tick.position >= MIN_TICK_GAP_PERCENT) {
-      ticks.unshift(tick);
-    }
-  }
+  // Every cancellation point must stay visible, so instead of dropping labels
+  // that would crowd their neighbor, stagger them across two rows: each tick
+  // takes the top row unless it's too close to the last tick placed there, in
+  // which case it drops to the bottom row.
+  const MIN_TICK_GAP_PERCENT = 16;
+  const laneLastPosition: [number | null, number | null] = [null, null];
+  const ticks = allTicks.map((tick) => {
+    const lane =
+      laneLastPosition[0] === null || tick.position - laneLastPosition[0] >= MIN_TICK_GAP_PERCENT ? 0 : 1;
+    laneLastPosition[lane] = tick.position;
+    return { ...tick, lane };
+  });
 
   return (
     <div className="mt-2.5">
@@ -123,7 +148,7 @@ export function CancellationTimeline({
         {segments.map((seg, i) => {
           const upper = seg.upperDays ?? visualMax;
           const widthPercent = ((upper - seg.lowerDays) / visualMax) * 100;
-          const tier = TIER_BY_REFUND(seg.refundPercentage);
+          const fill = fillForRefund(seg.refundPercentage);
           const percentLabel = `${Math.round(seg.refundPercentage * 100)}%`;
           const title = refundRuleTemplate
             .replace("{percent}", String(Math.round(seg.refundPercentage * 100)))
@@ -137,8 +162,8 @@ export function CancellationTimeline({
               } ${i === segments.length - 1 ? "rounded-r-md" : ""}`}
               style={{
                 width: `${widthPercent}%`,
-                backgroundColor: FILL_BY_TIER[tier],
-                color: INK_BY_TIER[tier],
+                backgroundColor: `rgb(${fill[0]}, ${fill[1]}, ${fill[2]})`,
+                color: inkForFill(fill),
               }}
             >
               {widthPercent >= 12 && <span>{percentLabel}</span>}
@@ -146,14 +171,18 @@ export function CancellationTimeline({
           );
         })}
       </div>
-      <div className="relative mt-1 h-3.5 text-[10px] text-gray-400 dark:text-gray-500">
+      <div className="relative mt-1 h-6 text-[10px] text-gray-400 dark:text-gray-500">
         {ticks.map((tick) => {
           const translate = tick.position <= 0 ? "0%" : tick.position >= 100 ? "-100%" : "-50%";
           return (
             <span
               key={tick.key}
               className="absolute whitespace-nowrap"
-              style={{ left: `${tick.position}%`, transform: `translateX(${translate})` }}
+              style={{
+                left: `${tick.position}%`,
+                top: tick.lane === 0 ? 0 : "12px",
+                transform: `translateX(${translate})`,
+              }}
             >
               {tick.label}
             </span>

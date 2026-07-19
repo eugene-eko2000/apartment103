@@ -270,7 +270,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const sharedVisualMaxDays = getVisualMaxDays(
     Math.max(0, ...plans.map((p) => getMaxThresholdDays(p.cancellation_policy.rules)))
   );
-  const pricePerNight = (matchedRate?.dailyRate ?? FALLBACK_DAILY_RATE) * (selectedPlan?.price_ratio ?? cheapestPlanRatio);
+  const pricePerNight = (matchedRate?.dailyRate ?? FALLBACK_DAILY_RATE) * cheapestPlanRatio;
   const priceCurrency: Currency = matchedRate?.currency ?? FALLBACK_CURRENCY;
   const convertedPricePerNight = convertCurrency(pricePerNight, priceCurrency, currency);
   const isFormValid =
@@ -732,7 +732,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
             </>
           ) : (
             <>
-              {guestStep === "plan" && verified && (
+              {guestStep === "plan" && verified && range?.from && (
                 <div className="space-y-5">
                   <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
                     {dict.modal.choosePlanTitle}
@@ -775,7 +775,8 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                             <CancellationTimeline
                               rules={p.cancellation_policy.rules}
                               visualMaxDays={sharedVisualMaxDays}
-                              checkInLabel={dict.checkIn}
+                              checkInDate={range.from!}
+                              dateLocale={dateFnsLocale}
                               refundRuleTemplate={dict.modal.refundRule}
                               daysBeforeCheckInLabel={dict.modal.daysBeforeCheckIn}
                             />
