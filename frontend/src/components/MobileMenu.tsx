@@ -28,9 +28,9 @@ export default function MobileMenu({
         onClick={() => setOpen((v) => !v)}
         aria-label={ariaLabel}
         aria-expanded={open}
-        className="w-9 h-9 flex items-center justify-center text-gray-600 dark:text-gray-300 cursor-pointer"
+        className="w-12 h-12 flex items-center justify-center text-gray-600 dark:text-gray-300 cursor-pointer"
       >
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <svg width="34" height="34" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
         </svg>
       </button>
