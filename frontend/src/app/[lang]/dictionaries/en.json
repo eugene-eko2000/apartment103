@@ -4,6 +4,7 @@
     "description": "Book your perfect stay at Apartment 103. A beautifully designed holiday apartment."
   },
   "nav": {
+    "menu": "Menu",
     "gallery": "Gallery",
     "amenities": "Amenities",
     "location": "Location",

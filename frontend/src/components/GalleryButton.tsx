@@ -10,7 +10,7 @@ export default function GalleryButton({ label, dict }: { label: string; dict: Ga
     <>
       <button
         onClick={() => setOpen(true)}
-        className="hover:text-teal-700 dark:hover:text-teal-400 transition-colors cursor-pointer"
+        className="text-left hover:text-teal-700 dark:hover:text-teal-400 transition-colors cursor-pointer"
       >
         {label}
       </button>

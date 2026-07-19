@@ -529,7 +529,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const dateAndGuestCalendar = calendarOpen && calendarAnchor && createPortal(
     <div
       ref={calendarRef}
-      className="fixed z-[101] flex justify-center bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 p-5 w-max max-w-[calc(100vw-1.5rem)] overflow-x-auto"
+      className="fixed z-[101] flex justify-center bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 p-5 w-max max-w-[calc(100vw-1.5rem)] max-h-[calc(100vh-1.5rem)] overflow-x-auto overflow-y-auto"
       style={{ top: calendarAnchor.top, right: calendarAnchor.right }}
     >
       <DayPicker

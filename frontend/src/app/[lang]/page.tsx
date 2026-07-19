@@ -6,6 +6,7 @@ import LanguageSwitcher from "@/components/LanguageSwitcher";
 import CurrencySwitcher from "@/components/CurrencySwitcher";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
 import UserMenu from "@/components/UserMenu";
+import MobileMenu from "@/components/MobileMenu";
 import { getDictionary, hasLocale } from "./dictionaries";
 
 export default async function Home({
@@ -81,6 +82,21 @@ export default async function Home({
               <UserMenu lang={lang} dict={dict.userMenu} />
             </div>
           </nav>
+          <MobileMenu ariaLabel={dict.nav.menu}>
+            <GalleryButton label={dict.nav.gallery} dict={dict.gallery} />
+            <a href="#" className="hover:text-teal-700 dark:hover:text-teal-400 transition-colors">{dict.nav.amenities}</a>
+            <a href="#" className="hover:text-teal-700 dark:hover:text-teal-400 transition-colors">{dict.nav.location}</a>
+            <a href="#" className="hover:text-teal-700 dark:hover:text-teal-400 transition-colors">{dict.nav.reviews}</a>
+            <div className="flex items-center gap-4 pt-3 border-t border-gray-100 dark:border-gray-700">
+              <LanguageSwitcher currentLang={lang} />
+              <CurrencySwitcher />
+              <ThemeSwitcher
+                labels={{ light: dict.themeSwitcher.light, dark: dict.themeSwitcher.dark, system: dict.themeSwitcher.system }}
+                ariaLabel={dict.themeSwitcher.label}
+              />
+              <UserMenu lang={lang} dict={dict.userMenu} />
+            </div>
+          </MobileMenu>
         </div>
       </header>
 

@@ -49,3 +49,12 @@ body {
   --rdp-accent-color: #2dd4bf !important;
   --rdp-accent-background-color: #134e4a !important;
 }
+
+/* Stack the two calendar months vertically on narrow screens instead of side
+   by side — the `!important` is required to beat the inline
+   `flexWrap: "nowrap"` style set on .rdp-months in BookingWidget. */
+@media (max-width: 640px) {
+  .rdp-months {
+    flex-direction: column !important;
+  }
+}
