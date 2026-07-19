@@ -3,14 +3,22 @@
 import { useState } from 'react';
 import PhotoGallery, { type GalleryDict } from './PhotoGallery';
 
-export default function GalleryButton({ label, dict }: { label: string; dict: GalleryDict }) {
+export default function GalleryButton({
+  label,
+  dict,
+  className = "",
+}: {
+  label: string;
+  dict: GalleryDict;
+  className?: string;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
     <>
       <button
         onClick={() => setOpen(true)}
-        className="text-left hover:text-teal-700 dark:hover:text-teal-400 transition-colors cursor-pointer"
+        className={`text-left hover:text-teal-700 dark:hover:text-teal-400 transition-colors cursor-pointer ${className}`}
       >
         {label}
       </button>

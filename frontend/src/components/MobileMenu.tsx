@@ -35,13 +35,11 @@ export default function MobileMenu({
         </svg>
       </button>
 
-      {open && (
-        <div className="absolute right-0 top-full pt-2 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 py-2 px-4 min-w-[200px] flex flex-col gap-3 text-sm text-gray-600 dark:text-gray-300">
-            {children}
-          </div>
+      <div className={`absolute right-0 top-full pt-2 z-50 ${open ? '' : 'hidden'}`}>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 py-3 px-4 min-w-[220px] flex flex-col gap-1 text-lg text-gray-600 dark:text-gray-300">
+          {children}
         </div>
-      )}
+      </div>
     </div>
   );
 }

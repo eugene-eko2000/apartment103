@@ -1,21 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { currencies } from "@/lib/currency-config";
 import { useCurrency } from "@/lib/currency-context";
 
-export default function CurrencySwitcher() {
+export default function CurrencySwitcher({ expandOnClick = false }: { expandOnClick?: boolean }) {
   const { currency, setCurrency } = useCurrency();
   const [isOpen, setIsOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!expandOnClick || !isOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setIsOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [expandOnClick, isOpen]);
 
   return (
     <div
       className="relative"
-      onMouseEnter={() => setIsOpen(true)}
-      onMouseLeave={() => setIsOpen(false)}
+      ref={rootRef}
+      onMouseEnter={expandOnClick ? undefined : () => setIsOpen(true)}
+      onMouseLeave={expandOnClick ? undefined : () => setIsOpen(false)}
     >
       <button
         type="button"
+        onClick={expandOnClick ? () => setIsOpen((v) => !v) : undefined}
         className="flex items-center gap-1 hover:text-teal-700 dark:hover:text-teal-400 transition-colors cursor-pointer"
         aria-label="Change currency"
         aria-expanded={isOpen}
