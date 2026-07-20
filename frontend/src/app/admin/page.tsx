@@ -10,6 +10,7 @@ import CancellationPoliciesPanel from "@/components/admin/resources/Cancellation
 import PlansPanel from "@/components/admin/resources/PlansPanel";
 import PricesPanel from "@/components/admin/resources/PricesPanel";
 import BookingsPanel from "@/components/admin/resources/BookingsPanel";
+import CalendarPanel from "@/components/admin/resources/CalendarPanel";
 
 export default function AdminPage() {
   const { session, ready } = useAdminAuth();
@@ -21,6 +22,7 @@ export default function AdminPage() {
   return (
     <AdminShell activeTab={tab} onTabChange={setTab}>
       {tab === "bookings" && <BookingsPanel />}
+      {tab === "calendar" && <CalendarPanel />}
       {tab === "guests" && <GuestsPanel />}
       {tab === "plans" && <PlansPanel />}
       {tab === "prices" && <PricesPanel />}

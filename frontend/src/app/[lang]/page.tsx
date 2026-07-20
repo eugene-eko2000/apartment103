@@ -71,7 +71,6 @@ export default async function Home({
             <GalleryButton label={dict.nav.gallery} dict={dict.gallery} />
             <a href="#" className="hover:text-teal-700 dark:hover:text-teal-400 transition-colors">{dict.nav.amenities}</a>
             <a href="#" className="hover:text-teal-700 dark:hover:text-teal-400 transition-colors">{dict.nav.location}</a>
-            <a href="#" className="hover:text-teal-700 dark:hover:text-teal-400 transition-colors">{dict.nav.reviews}</a>
             <div className="flex items-center gap-4">
               <LanguageSwitcher currentLang={lang} />
               <CurrencySwitcher />
@@ -86,7 +85,6 @@ export default async function Home({
             <GalleryButton label={dict.nav.gallery} dict={dict.gallery} className="py-3" />
             <a href="#" className="py-3 hover:text-teal-700 dark:hover:text-teal-400 transition-colors">{dict.nav.amenities}</a>
             <a href="#" className="py-3 hover:text-teal-700 dark:hover:text-teal-400 transition-colors">{dict.nav.location}</a>
-            <a href="#" className="py-3 hover:text-teal-700 dark:hover:text-teal-400 transition-colors">{dict.nav.reviews}</a>
             <div className="flex items-center gap-5 pt-4 mt-1 border-t border-gray-100 dark:border-gray-700">
               <LanguageSwitcher currentLang={lang} expandOnClick />
               <CurrencySwitcher expandOnClick />
@@ -115,9 +113,6 @@ export default async function Home({
                 <span className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm text-white text-xs font-medium px-3 py-1.5 rounded-full">
                   <span>📍</span>
                   <span>{dict.hero.location}</span>
-                </span>
-                <span className="flex items-center gap-1 bg-amber-400/90 text-amber-900 text-xs font-semibold px-3 py-1.5 rounded-full">
-                  {dict.hero.rating}
                 </span>
               </div>
 

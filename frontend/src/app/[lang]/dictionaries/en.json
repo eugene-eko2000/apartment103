@@ -7,12 +7,10 @@
     "menu": "Menu",
     "gallery": "Gallery",
     "amenities": "Amenities",
-    "location": "Location",
-    "reviews": "Reviews"
+    "location": "Location"
   },
   "hero": {
     "location": "Unterterzen, Switzerland",
-    "rating": "★ 4.9 · 48 reviews",
     "titleLine1": "Your perfect",
     "titleLine2": "holiday escape",
     "description": "A cosy apartment nestled between the mountains and Lake Walensee. Stunning alpine scenery, ski slopes and a lakeshore beach right on your doorstep.",

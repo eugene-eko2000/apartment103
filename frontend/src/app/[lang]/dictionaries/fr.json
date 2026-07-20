@@ -7,12 +7,10 @@
     "menu": "Menu",
     "gallery": "Galerie",
     "amenities": "Équipements",
-    "location": "Emplacement",
-    "reviews": "Avis"
+    "location": "Emplacement"
   },
   "hero": {
     "location": "Unterterzen, Suisse",
-    "rating": "★ 4,9 · 48 avis",
     "titleLine1": "Votre évasion",
     "titleLine2": "de vacances parfaite",
     "description": "Un appartement chaleureux niché entre les montagnes et le lac de Walenstadt. Des paysages alpins à couper le souffle, des pistes de ski et une plage au bord du lac juste devant la porte.",
