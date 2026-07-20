@@ -1,21 +1,28 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { DayPicker } from "react-day-picker";
-import { parse } from "date-fns";
-import "react-day-picker/style.css";
-import { ApiError, listBookings, type Booking } from "@/lib/api";
+import { format, parse } from "date-fns";
+import { ApiError, listBookings, listPrices, type Booking, type Price } from "@/lib/api";
+import { findDailyRate } from "@/lib/pricing";
 import { useAdminAuth } from "@/lib/admin-auth";
 
 const ISO_FORMAT = "yyyy-MM-dd";
+const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function parseISODate(value: string): Date | undefined {
   const parsed = parse(value, ISO_FORMAT, new Date());
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }
 
-// Chosen to stay legible with the white day-number text used on booked days,
-// in both light and dark theme.
+function diffDays(a: Date, b: Date): number {
+  return Math.round((b.getTime() - a.getTime()) / 86_400_000);
+}
+
+function isSameDate(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+// Chosen to stay legible with the white guest-name text on booking bars.
 const PALETTE = ["#4f46e5", "#0891b2", "#16a34a", "#ca8a04", "#db2777", "#7c3aed", "#dc2626", "#0d9488"];
 
 function colorForBooking(bookingId: string): string {
@@ -26,23 +33,44 @@ function colorForBooking(bookingId: string): string {
 
 interface BookingSegment {
   booking: Booking;
+  label: string;
+  color: string;
   from: Date;
   to: Date;
+}
+
+interface DayCell {
+  date: Date;
+  inMonth: boolean;
+}
+
+function ChevronDownIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" className="w-3.5 h-3.5 shrink-0" aria-hidden="true">
+      <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
 export default function CalendarPanel() {
   const { session, logout } = useAdminAuth();
   const token = session!.token;
 
+  const today = useMemo(() => new Date(), []);
+  const [month, setMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [prices, setPrices] = useState<Price[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
   useEffect(() => {
-    listBookings(token)
-      .then((list) => {
-        setBookings(list);
+    Promise.all([listBookings(token), listPrices(token)])
+      .then(([bookingList, priceList]) => {
+        setBookings(bookingList);
+        setPrices(priceList);
         setError(null);
       })
       .catch((err) => {
@@ -60,105 +88,148 @@ export default function CalendarPanel() {
           .map((range) => {
             const from = parseISODate(range.begin_date);
             const to = parseISODate(range.end_date);
-            return from && to ? { booking, from, to } : null;
+            return from && to
+              ? {
+                  booking,
+                  label: `${booking.guest.first_name} ${booking.guest.family_name}`,
+                  color: colorForBooking(booking._id),
+                  from,
+                  to,
+                }
+              : null;
           })
           .filter((s): s is BookingSegment => s !== null)
       ),
     [bookings]
   );
 
-  const modifiers = useMemo(() => {
-    const result: Record<string, { from: Date; to: Date }[]> = {};
-    for (const segment of segments) {
-      const key = `booking-${segment.booking._id}`;
-      (result[key] ??= []).push({ from: segment.from, to: segment.to });
-    }
-    return result;
-  }, [segments]);
+  const weeks = useMemo<DayCell[][]>(() => {
+    const year = month.getFullYear();
+    const monthIdx = month.getMonth();
+    const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
+    const firstWeekDay = (new Date(year, monthIdx, 1).getDay() + 6) % 7; // Monday = 0
+    const totalWeeks = Math.ceil((firstWeekDay + daysInMonth) / 7);
 
-  const modifiersStyles = useMemo(() => {
-    const result: Record<string, React.CSSProperties> = {};
-    for (const booking of bookings) {
-      result[`booking-${booking._id}`] = { backgroundColor: colorForBooking(booking._id), color: "white" };
-    }
-    return result;
-  }, [bookings]);
-
-  const selectedSegments = selectedDate ? segments.filter((s) => selectedDate >= s.from && selectedDate <= s.to) : [];
+    return Array.from({ length: totalWeeks }, (_, w) =>
+      Array.from({ length: 7 }, (_, c) => {
+        const dayNum = w * 7 + c - firstWeekDay + 1;
+        return { date: new Date(year, monthIdx, dayNum), inMonth: dayNum >= 1 && dayNum <= daysInMonth };
+      })
+    );
+  }, [month]);
 
   if (loading) return <p className="text-sm text-slate-500 dark:text-slate-400">Loading…</p>;
   if (error) return <p className="text-sm text-red-600 dark:text-red-400">{error}</p>;
 
   return (
-    <div className="flex flex-col lg:flex-row gap-8 items-start">
-      <div
-        className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 overflow-x-auto"
-        style={
-          {
-            "--rdp-day-width": "56px",
-            "--rdp-day-height": "56px",
-            "--rdp-day_button-width": "52px",
-            "--rdp-day_button-height": "52px",
-            "--rdp-day_button-border-radius": "0.5rem",
-            "--rdp-accent-color": "#4f46e5",
-          } as React.CSSProperties
-        }
-      >
-        <DayPicker
-          modifiers={modifiers}
-          modifiersStyles={modifiersStyles}
-          onDayClick={(date) => setSelectedDate(date)}
-          showOutsideDays
-        />
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">{format(month, "MMMM yyyy")}</h2>
+        <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={() => setMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
+            className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
+            aria-label="Previous month"
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            onClick={() => setMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
+            className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
+            aria-label="Next month"
+          >
+            ›
+          </button>
+        </div>
       </div>
 
-      <div className="w-full lg:w-72 space-y-6">
-        <div>
-          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
-            {selectedDate ? selectedDate.toLocaleDateString() : "Select a day"}
-          </h3>
-          {selectedDate && selectedSegments.length === 0 && (
-            <p className="text-sm text-slate-500 dark:text-slate-400">No bookings on this day.</p>
-          )}
-          <ul className="space-y-2">
-            {selectedSegments.map((s) => (
-              <li key={s.booking._id} className="flex items-center gap-2 text-sm">
-                <span
-                  className="w-3 h-3 rounded-full shrink-0"
-                  style={{ backgroundColor: colorForBooking(s.booking._id) }}
-                />
-                <span className="text-slate-700 dark:text-slate-200">
-                  {s.booking.guest.first_name} {s.booking.guest.family_name}
-                </span>
-              </li>
-            ))}
-          </ul>
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="grid grid-cols-7 border-b border-slate-200 dark:border-slate-700">
+          {WEEKDAY_LABELS.map((label) => (
+            <div
+              key={label}
+              className="py-2 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 border-l border-slate-200 dark:border-slate-700 first:border-l-0"
+            >
+              {label}
+            </div>
+          ))}
         </div>
 
-        <div>
-          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Bookings</h3>
-          {bookings.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400">No bookings yet.</p>}
-          <ul className="space-y-3 max-h-96 overflow-y-auto">
-            {bookings.map((b) => (
-              <li key={b._id} className="flex items-start gap-2 text-sm">
-                <span
-                  className="w-3 h-3 rounded-full shrink-0 mt-1"
-                  style={{ backgroundColor: colorForBooking(b._id) }}
-                />
-                <div>
-                  <p className="text-slate-700 dark:text-slate-200">
-                    {b.guest.first_name} {b.guest.family_name}
-                  </p>
-                  {b.date_ranges.map((r, i) => (
-                    <p key={i} className="text-xs text-slate-500 dark:text-slate-400">
-                      {r.begin_date} – {r.end_date}
-                    </p>
-                  ))}
+        {weeks.map((week, weekIdx) => {
+          const weekStart = week[0].date;
+          const weekEnd = week[6].date;
+          const weekSegments = segments
+            .filter((s) => s.to >= weekStart && s.from <= weekEnd)
+            .map((s) => ({
+              ...s,
+              startCol: Math.max(0, diffDays(weekStart, s.from)),
+              endCol: Math.min(6, diffDays(weekStart, s.to)),
+            }));
+
+          return (
+            <div
+              key={weekIdx}
+              className="relative grid grid-cols-7 border-t border-slate-200 dark:border-slate-700 first:border-t-0"
+            >
+              {week.map((cell, colIdx) => {
+                const dateStr = format(cell.date, ISO_FORMAT);
+                const covered = weekSegments.some((s) => colIdx >= s.startCol && colIdx <= s.endCol);
+                const rate = cell.inMonth && !covered ? findDailyRate(prices, dateStr) : null;
+                const isToday = cell.inMonth && isSameDate(cell.date, today);
+                const isUnavailable = cell.inMonth && !covered && !rate;
+
+                return (
+                  <div
+                    key={colIdx}
+                    className={`min-h-[112px] p-2 border-l border-slate-200 dark:border-slate-700 first:border-l-0 ${
+                      isToday
+                        ? "ring-2 ring-inset ring-indigo-500 shadow-[inset_0_0_14px_2px_rgba(99,102,241,0.45)]"
+                        : ""
+                    } ${
+                      isUnavailable
+                        ? "bg-[repeating-linear-gradient(45deg,rgba(148,163,184,0.3)_0,rgba(148,163,184,0.3)_1px,transparent_1px,transparent_8px)] dark:bg-[repeating-linear-gradient(45deg,rgba(100,116,139,0.35)_0,rgba(100,116,139,0.35)_1px,transparent_1px,transparent_8px)]"
+                        : ""
+                    }`}
+                  >
+                    {cell.inMonth && (
+                      <>
+                        <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                          {cell.date.getDate()}
+                        </span>
+                        {!covered && rate && (
+                          <div className="mt-5 flex flex-col items-center gap-1 text-center">
+                            <span className="text-sm text-slate-400 dark:text-slate-500">Available</span>
+                            <span className="flex items-center gap-0.5 text-sm font-medium text-slate-700 dark:text-slate-200">
+                              {rate.currency} {Math.round(rate.dailyRate)}
+                              <ChevronDownIcon />
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+
+              {weekSegments.map((s) => (
+                <div
+                  key={`${s.booking._id}-${weekIdx}`}
+                  title={`${s.label} (${format(s.from, ISO_FORMAT)} – ${format(s.to, ISO_FORMAT)})`}
+                  className="absolute top-8 h-7 rounded-full flex items-center px-3 text-xs font-medium text-white truncate"
+                  style={{
+                    left: `calc(${(s.startCol / 7) * 100}% + 4px)`,
+                    width: `calc(${((s.endCol - s.startCol + 1) / 7) * 100}% - 8px)`,
+                    backgroundColor: s.color,
+                  }}
+                >
+                  {s.label}
                 </div>
-              </li>
-            ))}
-          </ul>
-        </div>
+              ))}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
