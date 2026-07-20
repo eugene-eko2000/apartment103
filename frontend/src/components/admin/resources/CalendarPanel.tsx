@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { format, parse } from "date-fns";
-import { ApiError, listBookings, listPrices, type Booking, type Price } from "@/lib/api";
-import { findDailyRate } from "@/lib/pricing";
+import { ApiError, listBookings, listPlans, listPrices, type Booking, type Plan, type Price } from "@/lib/api";
+import { findDailyRate, findMinStay, type MatchedRate } from "@/lib/pricing";
 import { useAdminAuth } from "@/lib/admin-auth";
 
 const ISO_FORMAT = "yyyy-MM-dd";
@@ -52,6 +53,80 @@ function ChevronDownIcon() {
   );
 }
 
+function PriceDropdown({ rate, plans }: { rate: MatchedRate; plans: Plan[] }) {
+  const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState<{ top: number; left: number } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const openDropdown = () => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setAnchor({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX });
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (triggerRef.current?.contains(target) || dropdownRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <>
+      <button
+        type="button"
+        ref={triggerRef}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (open) setOpen(false);
+          else openDropdown();
+        }}
+        className="flex items-center gap-0.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer"
+      >
+        {rate.currency} {Math.round(rate.dailyRate)}
+        <ChevronDownIcon />
+      </button>
+
+      {open &&
+        anchor &&
+        createPortal(
+          <div
+            ref={dropdownRef}
+            className="absolute z-[120] min-w-[200px] bg-white dark:bg-slate-800 rounded-lg shadow-2xl border border-slate-200 dark:border-slate-700 py-1"
+            style={{ top: anchor.top, left: anchor.left }}
+          >
+            {plans.length === 0 ? (
+              <p className="px-3 py-2 text-xs text-slate-400 dark:text-slate-500">No plans configured.</p>
+            ) : (
+              plans.map((plan) => (
+                <div key={plan._id} className="flex items-center justify-between gap-4 px-3 py-1.5 text-sm">
+                  <span className="text-slate-600 dark:text-slate-300">{plan.name}</span>
+                  <span className="font-medium text-slate-800 dark:text-slate-100">
+                    {rate.currency} {Math.round(rate.dailyRate * plan.price_ratio)}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>,
+          document.body
+        )}
+    </>
+  );
+}
+
 export default function CalendarPanel() {
   const { session, logout } = useAdminAuth();
   const token = session!.token;
@@ -63,14 +138,16 @@ export default function CalendarPanel() {
   });
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [prices, setPrices] = useState<Price[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([listBookings(token), listPrices(token)])
-      .then(([bookingList, priceList]) => {
+    Promise.all([listBookings(token), listPrices(token), listPlans(token)])
+      .then(([bookingList, priceList, planList]) => {
         setBookings(bookingList);
         setPrices(priceList);
+        setPlans(planList);
         setError(null);
       })
       .catch((err) => {
@@ -177,6 +254,7 @@ export default function CalendarPanel() {
                 const dateStr = format(cell.date, ISO_FORMAT);
                 const covered = weekSegments.some((s) => colIdx >= s.startCol && colIdx <= s.endCol);
                 const rate = cell.inMonth && !covered ? findDailyRate(prices, dateStr) : null;
+                const minStay = rate ? findMinStay(prices, dateStr) : null;
                 const isToday = cell.inMonth && isSameDate(cell.date, today);
                 const isUnavailable = cell.inMonth && !covered && !rate;
 
@@ -201,10 +279,12 @@ export default function CalendarPanel() {
                         {!covered && rate && (
                           <div className="mt-5 flex flex-col items-center gap-1 text-center">
                             <span className="text-sm text-slate-400 dark:text-slate-500">Available</span>
-                            <span className="flex items-center gap-0.5 text-sm font-medium text-slate-700 dark:text-slate-200">
-                              {rate.currency} {Math.round(rate.dailyRate)}
-                              <ChevronDownIcon />
-                            </span>
+                            <PriceDropdown rate={rate} plans={plans} />
+                            {minStay !== null && (
+                              <span className="text-xs text-slate-400 dark:text-slate-500">
+                                Min {minStay} {minStay === 1 ? "night" : "nights"}
+                              </span>
+                            )}
                           </div>
                         )}
                       </>
