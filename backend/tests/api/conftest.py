@@ -1,3 +1,5 @@
+from datetime import date
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from pymongo import AsyncMongoClient
@@ -18,6 +20,7 @@ from app.db.mongo import init_mongo  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models.admin import Admin  # noqa: E402
 from app.models.cancellation_policy import CancellationPolicy, CancellationRule  # noqa: E402
+from app.models.closure import Closure  # noqa: E402
 from app.models.guest import Guest, ResidenceAddress  # noqa: E402
 
 
@@ -110,6 +113,13 @@ async def cancellation_policy(client) -> CancellationPolicy:
     )
     await policy.insert()
     return policy
+
+
+@pytest.fixture
+async def closure(client) -> Closure:
+    closure = Closure(platform="airbnb", begin_date=date(2026, 8, 1), end_date=date(2026, 8, 5))
+    await closure.insert()
+    return closure
 
 
 def _auth_headers(subject_id: str, subject_type: str) -> dict[str, str]:

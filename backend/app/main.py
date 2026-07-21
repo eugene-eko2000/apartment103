@@ -9,6 +9,7 @@ from app.api.routes import (
     auth,
     bookings,
     cancellation_policies,
+    closures,
     guests,
     health,
     plans,
@@ -47,3 +48,5 @@ app.include_router(guests.router)
 app.include_router(admins.router)
 app.include_router(bookings.public_router)
 app.include_router(bookings.router)
+app.include_router(closures.public_router)
+app.include_router(closures.router)

@@ -3,7 +3,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { format, parse } from "date-fns";
-import { ApiError, listBookings, listPlans, listPrices, type Booking, type Plan, type Price } from "@/lib/api";
+import {
+  ApiError,
+  listBookings,
+  listClosures,
+  listPlans,
+  listPrices,
+  type Booking,
+  type Closure,
+  type Plan,
+  type Price,
+} from "@/lib/api";
 import { findDailyRate, findMinStay, type MatchedRate } from "@/lib/pricing";
 import { useAdminAuth } from "@/lib/admin-auth";
 
@@ -25,6 +35,8 @@ function isSameDate(a: Date, b: Date): boolean {
 
 // Chosen to stay legible with the white guest-name text on booking bars.
 const BOOKING_COLOR = "#4f46e5";
+// Neutral gray so a platform closure reads as distinct from an actual booking.
+const CLOSURE_COLOR = "#6b7280";
 
 interface BookingSegment {
   booking: Booking;
@@ -34,6 +46,47 @@ interface BookingSegment {
   from: Date;
   to: Date;
   checkout: Date;
+}
+
+interface ClosureSegment {
+  closure: Closure;
+  label: string;
+  from: Date;
+  to: Date;
+  checkout: Date;
+}
+
+interface WeekGeometry {
+  coveredStartCol: number;
+  coveredEndCol: number;
+  barStartCol: number;
+  barEndCol: number;
+  startsThisWeek: boolean;
+  endsThisWeek: boolean;
+}
+
+// Shared bar/coverage geometry for a single week row: which day columns the
+// segment occupies (coveredStartCol/coveredEndCol), and where its bar should
+// be drawn (barStartCol/barEndCol), rounding the bar's ends only where the
+// check-in/checkout day actually falls in this row rather than a
+// continuation from/to another week.
+function computeWeekGeometry<T extends { from: Date; to: Date; checkout: Date }>(
+  segment: T,
+  weekStart: Date,
+  weekEnd: Date
+): T & WeekGeometry {
+  const nightsInWeek = segment.to >= weekStart && segment.from <= weekEnd;
+  const coveredStartCol = nightsInWeek ? Math.max(0, diffDays(weekStart, segment.from)) : 7;
+  const coveredEndCol = nightsInWeek ? Math.min(6, diffDays(weekStart, segment.to)) : -1;
+
+  const rawFrom = diffDays(weekStart, segment.from);
+  const rawCheckout = diffDays(weekStart, segment.checkout);
+  const startsThisWeek = rawFrom >= 0;
+  const endsThisWeek = rawCheckout <= 6;
+  const barStartCol = Math.max(0, rawFrom) + (startsThisWeek ? 0.25 : 0);
+  const barEndCol = Math.min(6, rawCheckout) + (endsThisWeek ? 0.23 : 1);
+
+  return { ...segment, coveredStartCol, coveredEndCol, barStartCol, barEndCol, startsThisWeek, endsThisWeek };
 }
 
 interface DayCell {
@@ -133,15 +186,17 @@ export default function CalendarPanel() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [closures, setClosures] = useState<Closure[]>([]);
   const [prices, setPrices] = useState<Price[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([listBookings(token), listPrices(token), listPlans(token)])
-      .then(([bookingList, priceList, planList]) => {
+    Promise.all([listBookings(token), listClosures(token), listPrices(token), listPlans(token)])
+      .then(([bookingList, closureList, priceList, planList]) => {
         setBookings(bookingList);
+        setClosures(closureList);
         setPrices(priceList);
         setPlans(planList);
         setError(null);
@@ -183,6 +238,23 @@ export default function CalendarPanel() {
             .filter((s): s is BookingSegment => s !== null)
         ),
     [bookings]
+  );
+
+  const closureSegments = useMemo<ClosureSegment[]>(
+    () =>
+      closures
+        .map((closure) => {
+          const from = parseISODate(closure.begin_date);
+          const checkout = parseISODate(closure.end_date);
+          if (!from || !checkout) return null;
+          // Same end-exclusive convention as booking date ranges: end_date
+          // is the day the closure lifts, so the bar stops the day before.
+          const to = new Date(checkout);
+          to.setDate(to.getDate() - 1);
+          return { closure, label: closure.platform, from, to, checkout };
+        })
+        .filter((s): s is ClosureSegment => s !== null),
+    [closures]
   );
 
   const weeks = useMemo<DayCell[][]>(() => {
@@ -244,25 +316,11 @@ export default function CalendarPanel() {
           const weekEnd = week[6].date;
           const weekSegments = segments
             .filter((s) => s.checkout >= weekStart && s.from <= weekEnd)
-            .map((s) => {
-              // Nights actually occupied (used to hide availability on booked days);
-              // absent when this week only shows the trailing checkout sliver.
-              const nightsInWeek = s.to >= weekStart && s.from <= weekEnd;
-              const coveredStartCol = nightsInWeek ? Math.max(0, diffDays(weekStart, s.from)) : 7;
-              const coveredEndCol = nightsInWeek ? Math.min(6, diffDays(weekStart, s.to)) : -1;
+            .map((s) => computeWeekGeometry(s, weekStart, weekEnd));
 
-              // Bar geometry: only offset into the check-in/check-out day when that
-              // actual day falls in this week — a continuation from/to another week
-              // should run flush to the row's edge instead.
-              const rawFrom = diffDays(weekStart, s.from);
-              const rawCheckout = diffDays(weekStart, s.checkout);
-              const startsThisWeek = rawFrom >= 0;
-              const endsThisWeek = rawCheckout <= 6;
-              const barStartCol = Math.max(0, rawFrom) + (startsThisWeek ? 0.25 : 0);
-              const barEndCol = Math.min(6, rawCheckout) + (endsThisWeek ? 0.23 : 1);
-
-              return { ...s, coveredStartCol, coveredEndCol, barStartCol, barEndCol, startsThisWeek, endsThisWeek };
-            });
+          const weekClosureSegments = closureSegments
+            .filter((s) => s.checkout >= weekStart && s.from <= weekEnd)
+            .map((s) => computeWeekGeometry(s, weekStart, weekEnd));
 
           return (
             <div
@@ -271,7 +329,9 @@ export default function CalendarPanel() {
             >
               {week.map((cell, colIdx) => {
                 const dateStr = format(cell.date, ISO_FORMAT);
-                const covered = weekSegments.some((s) => colIdx >= s.coveredStartCol && colIdx <= s.coveredEndCol);
+                const covered =
+                  weekSegments.some((s) => colIdx >= s.coveredStartCol && colIdx <= s.coveredEndCol) ||
+                  weekClosureSegments.some((s) => colIdx >= s.coveredStartCol && colIdx <= s.coveredEndCol);
                 const rate = cell.inMonth && !covered ? findDailyRate(prices, dateStr) : null;
                 const minStay = rate ? findMinStay(prices, dateStr) : null;
                 const isToday = cell.inMonth && isSameDate(cell.date, today);
@@ -327,6 +387,23 @@ export default function CalendarPanel() {
                 >
                   <span className="truncate">{s.guestName}</span>
                   <span className="opacity-80 shrink-0">{s.priceLabel}</span>
+                </div>
+              ))}
+
+              {weekClosureSegments.map((s) => (
+                <div
+                  key={`${s.closure._id}-${weekIdx}`}
+                  title={`${s.label} (${format(s.from, ISO_FORMAT)} – ${format(s.checkout, ISO_FORMAT)})`}
+                  className={`absolute top-8 h-7 flex items-center px-3 text-xs font-medium text-white truncate ${
+                    s.startsThisWeek ? "rounded-l-full" : ""
+                  } ${s.endsThisWeek ? "rounded-r-full" : ""}`}
+                  style={{
+                    left: `calc(${(s.barStartCol / 7) * 100}% + 4px)`,
+                    width: `calc(${((s.barEndCol - s.barStartCol) / 7) * 100}% - 8px)`,
+                    backgroundColor: CLOSURE_COLOR,
+                  }}
+                >
+                  <span className="truncate">{s.label}</span>
                 </div>
               ))}
             </div>

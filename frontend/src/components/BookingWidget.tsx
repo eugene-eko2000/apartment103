@@ -17,6 +17,7 @@ import {
   createGuest,
   getGuest,
   listPublicBookedDateRanges,
+  listPublicClosedDateRanges,
   listPublicPlans,
   listPublicPrices,
   registerGuestSelf,
@@ -134,16 +135,21 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     listPublicPrices()
       .then(setPrices)
       .catch(() => setPrices([]));
-    listPublicBookedDateRanges()
-      .then((ranges) =>
-        setBookedRanges(
-          // end_date is the checkout day (exclusive, same convention as
-          // findDailyRate), so the last disabled night is the day before it —
-          // this keeps a booking's checkout day available as another's check-in.
-          ranges.map((r) => ({ from: parse(r.begin_date, "yyyy-MM-dd", new Date()), to: subDays(parse(r.end_date, "yyyy-MM-dd", new Date()), 1) }))
-        )
-      )
-      .catch(() => setBookedRanges([]));
+    // end_date is the checkout day (exclusive, same convention as
+    // findDailyRate), so the last disabled night is the day before it — this
+    // keeps a booking's checkout day available as another's check-in. Dates
+    // closed off on other platforms use the same convention and are merged
+    // into the same disabled-ranges list as actual bookings.
+    const toDateRange = (r: { begin_date: string; end_date: string }) => ({
+      from: parse(r.begin_date, "yyyy-MM-dd", new Date()),
+      to: subDays(parse(r.end_date, "yyyy-MM-dd", new Date()), 1),
+    });
+    Promise.all([
+      listPublicBookedDateRanges().catch(() => []),
+      listPublicClosedDateRanges().catch(() => []),
+    ]).then(([bookedRanges, closedRanges]) => {
+      setBookedRanges([...bookedRanges, ...closedRanges].map(toDateRange));
+    });
   }, []);
 
   // Close calendar on outside click

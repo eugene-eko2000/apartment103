@@ -155,6 +155,24 @@ export interface BookedDateRange {
   end_date: string;
 }
 
+export interface Closure {
+  _id: string;
+  platform: string;
+  begin_date: string;
+  end_date: string;
+}
+
+export interface ClosureInput {
+  platform: string;
+  begin_date: string;
+  end_date: string;
+}
+
+export interface ClosedDateRange {
+  begin_date: string;
+  end_date: string;
+}
+
 export interface BookingInput {
   guest_id: string;
   cancellation_policy_id: string;
@@ -363,6 +381,34 @@ export function updateCancellationPolicy(
 
 export function deleteCancellationPolicy(policyId: string, token: string): Promise<void> {
   return request(`/cancellation-policies/${policyId}`, { method: "DELETE", headers: authHeaders(token) });
+}
+
+export function listPublicClosedDateRanges(): Promise<ClosedDateRange[]> {
+  return request("/closures/public/date-ranges");
+}
+
+export function listClosures(token: string): Promise<Closure[]> {
+  return request("/closures", { headers: authHeaders(token) });
+}
+
+export function getClosure(closureId: string, token: string): Promise<Closure> {
+  return request(`/closures/${closureId}`, { headers: authHeaders(token) });
+}
+
+export function createClosure(token: string, data: ClosureInput): Promise<Closure> {
+  return request("/closures", { method: "POST", headers: authHeaders(token), body: JSON.stringify(data) });
+}
+
+export function updateClosure(closureId: string, token: string, data: ClosureInput): Promise<Closure> {
+  return request(`/closures/${closureId}`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteClosure(closureId: string, token: string): Promise<void> {
+  return request(`/closures/${closureId}`, { method: "DELETE", headers: authHeaders(token) });
 }
 
 export function listAdmins(token: string): Promise<Admin[]> {

@@ -3,11 +3,20 @@
 import { useAdminAuth } from "@/lib/admin-auth";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
 
-export type AdminTab = "bookings" | "calendar" | "guests" | "plans" | "prices" | "cancellation-policies" | "admins";
+export type AdminTab =
+  | "bookings"
+  | "calendar"
+  | "closures"
+  | "guests"
+  | "plans"
+  | "prices"
+  | "cancellation-policies"
+  | "admins";
 
 const TABS: { id: AdminTab; label: string }[] = [
   { id: "bookings", label: "Bookings" },
   { id: "calendar", label: "Calendar" },
+  { id: "closures", label: "Closures" },
   { id: "guests", label: "Guests" },
   { id: "plans", label: "Plans" },
   { id: "prices", label: "Prices" },
