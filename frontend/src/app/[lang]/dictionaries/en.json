@@ -159,17 +159,23 @@
       "verifyCode": "Verify",
       "resendCode": "Resend code",
       "changeIdentifier": "Use a different email or phone number"
+    },
+    "myBookingsModal": {
+      "close": "Close",
+      "title": "My bookings",
+      "loading": "Loading your bookings…",
+      "empty": "You don't have any bookings yet.",
+      "loggedOut": "Please log in to view your bookings.",
+      "bookedOn": "Booked on {date}",
+      "cancellationPolicy": "Cancellation policy",
+      "night": "night",
+      "nights": "nights",
+      "cancelledStatus": "Cancelled",
+      "cancelButton": "Cancel",
+      "cancelQuestion": "Are you sure you want to cancel this booking?",
+      "refundNotice": "You'll be refunded {amount} ({percent}% of the total price).",
+      "confirmCancel": "Cancel booking",
+      "keepBooking": "Don't cancel"
     }
-  },
-  "myBookings": {
-    "title": "My bookings",
-    "loading": "Loading your bookings…",
-    "empty": "You don't have any bookings yet.",
-    "loggedOut": "Please log in to view your bookings.",
-    "backHome": "Back to home",
-    "bookedOn": "Booked on {date}",
-    "cancellationPolicy": "Cancellation policy",
-    "night": "night",
-    "nights": "nights"
   }
 }

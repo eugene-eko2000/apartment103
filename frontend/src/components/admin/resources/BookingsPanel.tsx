@@ -136,6 +136,21 @@ export default function BookingsPanel() {
       render: (b) => b.date_ranges.reduce((sum, r) => sum + r.price, 0).toFixed(2),
     },
     { key: "policy", label: "Cancellation policy", render: (b) => b.cancellation_policy.name },
+    {
+      key: "status",
+      label: "Status",
+      render: (b) => (
+        <span
+          className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
+            b.status === "Cancelled"
+              ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+              : "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+          }`}
+        >
+          {b.status}
+        </span>
+      ),
+    },
   ];
 
   return (

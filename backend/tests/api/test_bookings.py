@@ -88,6 +88,21 @@ class TestListPublicBookedDateRanges:
         body = response.json()
         assert body == [{"begin_date": "2026-07-01", "end_date": "2026-07-05"}]
 
+    async def test_excludes_cancelled_bookings(
+        self, client, guest, cancellation_policy, admin_headers
+    ):
+        create_response = await client.post(
+            "/bookings",
+            json=_booking_payload(guest.id, cancellation_policy.id),
+            headers=admin_headers,
+        )
+        booking_id = create_response.json()["_id"]
+        await client.post(f"/bookings/{booking_id}/cancel", headers=admin_headers)
+
+        response = await client.get("/bookings/public/date-ranges")
+        assert response.status_code == 200
+        assert response.json() == []
+
 
 class TestListBookings:
     async def test_admin_sees_all_bookings(
@@ -240,6 +255,78 @@ class TestUpdateBooking:
             headers=admin_headers,
         )
         assert response.status_code == 404
+
+
+class TestCancelBooking:
+    async def test_guest_can_cancel_own_booking(
+        self, client, guest, cancellation_policy, guest_headers
+    ):
+        create_response = await client.post(
+            "/bookings",
+            json=_booking_payload(guest.id, cancellation_policy.id),
+            headers=guest_headers,
+        )
+        booking_id = create_response.json()["_id"]
+
+        response = await client.post(f"/bookings/{booking_id}/cancel", headers=guest_headers)
+        assert response.status_code == 200
+        assert response.json()["status"] == "Cancelled"
+
+    async def test_admin_can_cancel_any_booking(
+        self, client, guest, cancellation_policy, guest_headers, admin_headers
+    ):
+        create_response = await client.post(
+            "/bookings",
+            json=_booking_payload(guest.id, cancellation_policy.id),
+            headers=guest_headers,
+        )
+        booking_id = create_response.json()["_id"]
+
+        response = await client.post(f"/bookings/{booking_id}/cancel", headers=admin_headers)
+        assert response.status_code == 200
+        assert response.json()["status"] == "Cancelled"
+
+    async def test_guest_cannot_cancel_other_guest_booking(
+        self, client, guest, other_guest, cancellation_policy, admin_headers, other_guest_headers
+    ):
+        create_response = await client.post(
+            "/bookings",
+            json=_booking_payload(guest.id, cancellation_policy.id),
+            headers=admin_headers,
+        )
+        booking_id = create_response.json()["_id"]
+
+        response = await client.post(f"/bookings/{booking_id}/cancel", headers=other_guest_headers)
+        assert response.status_code == 403
+
+    async def test_cannot_cancel_already_cancelled_booking(
+        self, client, guest, cancellation_policy, guest_headers
+    ):
+        create_response = await client.post(
+            "/bookings",
+            json=_booking_payload(guest.id, cancellation_policy.id),
+            headers=guest_headers,
+        )
+        booking_id = create_response.json()["_id"]
+        await client.post(f"/bookings/{booking_id}/cancel", headers=guest_headers)
+
+        response = await client.post(f"/bookings/{booking_id}/cancel", headers=guest_headers)
+        assert response.status_code == 400
+
+    async def test_returns_404_for_unknown_id(self, client, admin_headers):
+        response = await client.post("/bookings/000000000000000000000000/cancel", headers=admin_headers)
+        assert response.status_code == 404
+
+    async def test_requires_authentication(self, client, guest, cancellation_policy, admin_headers):
+        create_response = await client.post(
+            "/bookings",
+            json=_booking_payload(guest.id, cancellation_policy.id),
+            headers=admin_headers,
+        )
+        booking_id = create_response.json()["_id"]
+
+        response = await client.post(f"/bookings/{booking_id}/cancel")
+        assert response.status_code == 401
 
 
 class TestDeleteBooking:

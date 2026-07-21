@@ -24,20 +24,16 @@ function isSameDate(a: Date, b: Date): boolean {
 }
 
 // Chosen to stay legible with the white guest-name text on booking bars.
-const PALETTE = ["#4f46e5", "#0891b2", "#16a34a", "#ca8a04", "#db2777", "#7c3aed", "#dc2626", "#0d9488"];
-
-function colorForBooking(bookingId: string): string {
-  let hash = 0;
-  for (let i = 0; i < bookingId.length; i++) hash = (hash * 31 + bookingId.charCodeAt(i)) | 0;
-  return PALETTE[Math.abs(hash) % PALETTE.length];
-}
+const BOOKING_COLOR = "#4f46e5";
 
 interface BookingSegment {
   booking: Booking;
   label: string;
-  color: string;
+  guestName: string;
+  priceLabel: string;
   from: Date;
   to: Date;
+  checkout: Date;
 }
 
 interface DayCell {
@@ -160,23 +156,32 @@ export default function CalendarPanel() {
 
   const segments = useMemo<BookingSegment[]>(
     () =>
-      bookings.flatMap((booking) =>
-        booking.date_ranges
-          .map((range) => {
-            const from = parseISODate(range.begin_date);
-            const to = parseISODate(range.end_date);
-            return from && to
-              ? {
-                  booking,
-                  label: `${booking.guest.first_name} ${booking.guest.family_name}`,
-                  color: colorForBooking(booking._id),
-                  from,
-                  to,
-                }
-              : null;
-          })
-          .filter((s): s is BookingSegment => s !== null)
-      ),
+      bookings
+        .filter((booking) => booking.status !== "Cancelled")
+        .flatMap((booking) =>
+          booking.date_ranges
+            .map((range) => {
+              const from = parseISODate(range.begin_date);
+              const checkout = parseISODate(range.end_date);
+              if (!from || !checkout) return null;
+              // end_date is the checkout day, which is bookable by the next guest,
+              // so the displayed bar should stop at the last occupied night.
+              const to = new Date(checkout);
+              to.setDate(to.getDate() - 1);
+              const guestName = `${booking.guest.first_name} ${booking.guest.family_name}`;
+              const priceLabel = `${booking.currency} ${Math.round(range.price)}`;
+              return {
+                booking,
+                label: `${guestName} · ${priceLabel}`,
+                guestName,
+                priceLabel,
+                from,
+                to,
+                checkout,
+              };
+            })
+            .filter((s): s is BookingSegment => s !== null)
+        ),
     [bookings]
   );
 
@@ -238,12 +243,26 @@ export default function CalendarPanel() {
           const weekStart = week[0].date;
           const weekEnd = week[6].date;
           const weekSegments = segments
-            .filter((s) => s.to >= weekStart && s.from <= weekEnd)
-            .map((s) => ({
-              ...s,
-              startCol: Math.max(0, diffDays(weekStart, s.from)),
-              endCol: Math.min(6, diffDays(weekStart, s.to)),
-            }));
+            .filter((s) => s.checkout >= weekStart && s.from <= weekEnd)
+            .map((s) => {
+              // Nights actually occupied (used to hide availability on booked days);
+              // absent when this week only shows the trailing checkout sliver.
+              const nightsInWeek = s.to >= weekStart && s.from <= weekEnd;
+              const coveredStartCol = nightsInWeek ? Math.max(0, diffDays(weekStart, s.from)) : 7;
+              const coveredEndCol = nightsInWeek ? Math.min(6, diffDays(weekStart, s.to)) : -1;
+
+              // Bar geometry: only offset into the check-in/check-out day when that
+              // actual day falls in this week — a continuation from/to another week
+              // should run flush to the row's edge instead.
+              const rawFrom = diffDays(weekStart, s.from);
+              const rawCheckout = diffDays(weekStart, s.checkout);
+              const startsThisWeek = rawFrom >= 0;
+              const endsThisWeek = rawCheckout <= 6;
+              const barStartCol = Math.max(0, rawFrom) + (startsThisWeek ? 0.25 : 0);
+              const barEndCol = Math.min(6, rawCheckout) + (endsThisWeek ? 0.23 : 1);
+
+              return { ...s, coveredStartCol, coveredEndCol, barStartCol, barEndCol, startsThisWeek, endsThisWeek };
+            });
 
           return (
             <div
@@ -252,7 +271,7 @@ export default function CalendarPanel() {
             >
               {week.map((cell, colIdx) => {
                 const dateStr = format(cell.date, ISO_FORMAT);
-                const covered = weekSegments.some((s) => colIdx >= s.startCol && colIdx <= s.endCol);
+                const covered = weekSegments.some((s) => colIdx >= s.coveredStartCol && colIdx <= s.coveredEndCol);
                 const rate = cell.inMonth && !covered ? findDailyRate(prices, dateStr) : null;
                 const minStay = rate ? findMinStay(prices, dateStr) : null;
                 const isToday = cell.inMonth && isSameDate(cell.date, today);
@@ -296,15 +315,18 @@ export default function CalendarPanel() {
               {weekSegments.map((s) => (
                 <div
                   key={`${s.booking._id}-${weekIdx}`}
-                  title={`${s.label} (${format(s.from, ISO_FORMAT)} – ${format(s.to, ISO_FORMAT)})`}
-                  className="absolute top-8 h-7 rounded-full flex items-center px-3 text-xs font-medium text-white truncate"
+                  title={`${s.label} (${format(s.from, ISO_FORMAT)} – ${format(s.checkout, ISO_FORMAT)})`}
+                  className={`absolute top-8 h-7 flex items-center gap-1.5 px-3 text-xs font-medium text-white truncate ${
+                    s.startsThisWeek ? "rounded-l-full" : ""
+                  } ${s.endsThisWeek ? "rounded-r-full" : ""}`}
                   style={{
-                    left: `calc(${(s.startCol / 7) * 100}% + 4px)`,
-                    width: `calc(${((s.endCol - s.startCol + 1) / 7) * 100}% - 8px)`,
-                    backgroundColor: s.color,
+                    left: `calc(${(s.barStartCol / 7) * 100}% + 4px)`,
+                    width: `calc(${((s.barEndCol - s.barStartCol) / 7) * 100}% - 8px)`,
+                    backgroundColor: BOOKING_COLOR,
                   }}
                 >
-                  {s.label}
+                  <span className="truncate">{s.guestName}</span>
+                  <span className="opacity-80 shrink-0">{s.priceLabel}</span>
                 </div>
               ))}
             </div>

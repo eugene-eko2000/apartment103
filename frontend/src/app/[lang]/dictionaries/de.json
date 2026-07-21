@@ -159,17 +159,23 @@
       "verifyCode": "Bestätigen",
       "resendCode": "Code erneut senden",
       "changeIdentifier": "Andere E-Mail-Adresse oder Telefonnummer verwenden"
+    },
+    "myBookingsModal": {
+      "close": "Schließen",
+      "title": "Meine Buchungen",
+      "loading": "Ihre Buchungen werden geladen…",
+      "empty": "Sie haben noch keine Buchungen.",
+      "loggedOut": "Bitte melden Sie sich an, um Ihre Buchungen zu sehen.",
+      "bookedOn": "Gebucht am {date}",
+      "cancellationPolicy": "Stornierungsbedingungen",
+      "night": "Nacht",
+      "nights": "Nächte",
+      "cancelledStatus": "Storniert",
+      "cancelButton": "Stornieren",
+      "cancelQuestion": "Möchten Sie diese Buchung wirklich stornieren?",
+      "refundNotice": "Ihnen werden {amount} ({percent}% des Gesamtpreises) erstattet.",
+      "confirmCancel": "Buchung stornieren",
+      "keepBooking": "Nicht stornieren"
     }
-  },
-  "myBookings": {
-    "title": "Meine Buchungen",
-    "loading": "Ihre Buchungen werden geladen…",
-    "empty": "Sie haben noch keine Buchungen.",
-    "loggedOut": "Bitte melden Sie sich an, um Ihre Buchungen zu sehen.",
-    "backHome": "Zurück zur Startseite",
-    "bookedOn": "Gebucht am {date}",
-    "cancellationPolicy": "Stornierungsbedingungen",
-    "night": "Nacht",
-    "nights": "Nächte"
   }
 }

@@ -138,6 +138,8 @@ export interface BookingGuestRef {
   phone_number: string;
 }
 
+export type BookingStatus = "Active" | "Cancelled";
+
 export interface Booking {
   _id: string;
   guest: BookingGuestRef;
@@ -145,6 +147,7 @@ export interface Booking {
   currency: Currency;
   date_ranges: BookingDateRange[];
   cancellation_policy: { name: string; rules: CancellationRule[] };
+  status: BookingStatus;
 }
 
 export interface BookedDateRange {
@@ -261,6 +264,10 @@ export function updateBooking(bookingId: string, token: string, data: BookingInp
 
 export function deleteBooking(bookingId: string, token: string): Promise<void> {
   return request(`/bookings/${bookingId}`, { method: "DELETE", headers: authHeaders(token) });
+}
+
+export function cancelBooking(bookingId: string, token: string): Promise<Booking> {
+  return request(`/bookings/${bookingId}/cancel`, { method: "POST", headers: authHeaders(token) });
 }
 
 export function listGuests(token: string): Promise<Guest[]> {

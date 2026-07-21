@@ -159,17 +159,23 @@
       "verifyCode": "Verifica",
       "resendCode": "Invia di nuovo il codice",
       "changeIdentifier": "Usa un'altra email o numero di telefono"
+    },
+    "myBookingsModal": {
+      "close": "Chiudi",
+      "title": "Le mie prenotazioni",
+      "loading": "Caricamento delle tue prenotazioni…",
+      "empty": "Non hai ancora nessuna prenotazione.",
+      "loggedOut": "Accedi per vedere le tue prenotazioni.",
+      "bookedOn": "Prenotato il {date}",
+      "cancellationPolicy": "Politica di cancellazione",
+      "night": "notte",
+      "nights": "notti",
+      "cancelledStatus": "Cancellata",
+      "cancelButton": "Cancella",
+      "cancelQuestion": "Sei sicuro di voler cancellare questa prenotazione?",
+      "refundNotice": "Ti verrà rimborsato {amount} ({percent}% del prezzo totale).",
+      "confirmCancel": "Cancella prenotazione",
+      "keepBooking": "Non cancellare"
     }
-  },
-  "myBookings": {
-    "title": "Le mie prenotazioni",
-    "loading": "Caricamento delle tue prenotazioni…",
-    "empty": "Non hai ancora nessuna prenotazione.",
-    "loggedOut": "Accedi per vedere le tue prenotazioni.",
-    "backHome": "Torna alla home",
-    "bookedOn": "Prenotato il {date}",
-    "cancellationPolicy": "Politica di cancellazione",
-    "night": "notte",
-    "nights": "notti"
   }
 }

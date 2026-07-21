@@ -1,10 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import type { Locale } from "@/lib/i18n-config";
 import { clearGuestSession, onGuestSessionChange, readGuestSession } from "@/lib/guest-auth";
 import LoginModal, { type LoginModalDict } from "@/components/LoginModal";
+import MyBookingsModal, { type MyBookingsDict } from "@/components/MyBookingsModal";
 
 export interface UserMenuDict {
   login: string;
@@ -12,13 +11,15 @@ export interface UserMenuDict {
   myBookings: string;
   logout: string;
   loginModal: LoginModalDict;
+  myBookingsModal: MyBookingsDict;
 }
 
-export default function UserMenu({ lang, dict }: { lang: Locale; dict: UserMenuDict }) {
+export default function UserMenu({ dict }: { dict: UserMenuDict }) {
   const [ready, setReady] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [myBookingsOpen, setMyBookingsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -83,13 +84,16 @@ export default function UserMenu({ lang, dict }: { lang: Locale; dict: UserMenuD
       {menuOpen && (
         <div className="absolute right-0 top-full pt-2 z-50">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 py-1 min-w-[160px]">
-            <Link
-              href={`/${lang}/my-bookings`}
-              onClick={() => setMenuOpen(false)}
-              className="block px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+            <button
+              type="button"
+              onClick={() => {
+                setMenuOpen(false);
+                setMyBookingsOpen(true);
+              }}
+              className="w-full text-left px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
             >
               {dict.myBookings}
-            </Link>
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -102,6 +106,10 @@ export default function UserMenu({ lang, dict }: { lang: Locale; dict: UserMenuD
             </button>
           </div>
         </div>
+      )}
+
+      {myBookingsOpen && (
+        <MyBookingsModal dict={dict.myBookingsModal} onClose={() => setMyBookingsOpen(false)} />
       )}
     </div>
   );

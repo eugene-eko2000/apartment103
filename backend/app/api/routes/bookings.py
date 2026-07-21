@@ -18,7 +18,7 @@ public_router = APIRouter(prefix="/bookings", tags=["bookings"])
 
 @public_router.get("/public/date-ranges", response_model=list[BookedDateRange])
 async def list_public_booked_date_ranges() -> list[BookedDateRange]:
-    bookings = await Booking.find_all().to_list()
+    bookings = await Booking.find(Booking.status == "Active").to_list()
     return [
         BookedDateRange(begin_date=date_range.begin_date, end_date=date_range.end_date)
         for booking in bookings
@@ -90,6 +90,21 @@ async def get_booking(
     if booking is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
     _ensure_can_access_booking(principal, booking)
+    return booking
+
+
+@router.post("/{booking_id}/cancel", response_model=Booking)
+async def cancel_booking(
+    booking_id: PydanticObjectId, principal: Principal = Depends(get_current_principal)
+) -> Booking:
+    booking = await Booking.get(booking_id, fetch_links=True)
+    if booking is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
+    _ensure_can_access_booking(principal, booking)
+    if booking.status == "Cancelled":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Booking is already cancelled")
+    booking.status = "Cancelled"
+    await booking.save()
     return booking
 
 

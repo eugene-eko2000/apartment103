@@ -78,7 +78,7 @@ export default async function Home({
                 labels={{ light: dict.themeSwitcher.light, dark: dict.themeSwitcher.dark, system: dict.themeSwitcher.system }}
                 ariaLabel={dict.themeSwitcher.label}
               />
-              <UserMenu lang={lang} dict={dict.userMenu} />
+              <UserMenu dict={dict.userMenu} />
             </div>
           </nav>
           <MobileMenu ariaLabel={dict.nav.menu}>
@@ -93,7 +93,7 @@ export default async function Home({
                 ariaLabel={dict.themeSwitcher.label}
                 expandOnClick
               />
-              <UserMenu lang={lang} dict={dict.userMenu} />
+              <UserMenu dict={dict.userMenu} />
             </div>
           </MobileMenu>
         </div>

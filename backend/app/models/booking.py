@@ -1,10 +1,13 @@
 from datetime import date
+from typing import Literal
 
 from beanie import Document, Link
 from pydantic import BaseModel, Field
 
 from app.models.cancellation_policy import CancellationRule
 from app.models.guest import Currency, Guest
+
+BookingStatus = Literal["Active", "Cancelled"]
 
 
 class BookingDateRange(BaseModel):
@@ -31,6 +34,7 @@ class Booking(Document):
     currency: Currency = "CHF"
     date_ranges: list[BookingDateRange] = Field(default_factory=list)
     cancellation_policy: BookingCancellationPolicy
+    status: BookingStatus = "Active"
 
     class Settings:
         name = "bookings"
