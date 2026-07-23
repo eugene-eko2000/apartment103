@@ -129,7 +129,6 @@
       "choosePlanTitle": "Wählen Sie Ihren Tarif",
       "refundRule": "{percent}% Rückerstattung bei Stornierung {days}+ Tage vor Anreise",
       "cancellationTimelineLabel": "Rückerstattung nach Stornierungsdatum",
-      "daysBeforeCheckIn": "Stornierungsfristen",
       "next": "Weiter"
     }
   },
@@ -173,7 +172,7 @@
       "cancelledStatus": "Storniert",
       "cancelButton": "Stornieren",
       "cancelQuestion": "Möchten Sie diese Buchung wirklich stornieren?",
-      "refundNotice": "Ihnen werden {amount} ({percent}% des Gesamtpreises) erstattet.",
+      "chargeNotice": "Ihnen werden {amount} des Gesamtpreises berechnet.",
       "confirmCancel": "Buchung stornieren",
       "keepBooking": "Nicht stornieren"
     }

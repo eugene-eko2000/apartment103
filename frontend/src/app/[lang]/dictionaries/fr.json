@@ -129,7 +129,6 @@
       "choosePlanTitle": "Choisissez votre tarif",
       "refundRule": "Remboursement de {percent}% en cas d'annulation {days}+ jours avant l'arrivée",
       "cancellationTimelineLabel": "Remboursement selon la date d'annulation",
-      "daysBeforeCheckIn": "dates limites d'annulation",
       "next": "Suivant"
     }
   },
@@ -173,7 +172,7 @@
       "cancelledStatus": "Annulée",
       "cancelButton": "Annuler",
       "cancelQuestion": "Êtes-vous sûr de vouloir annuler cette réservation ?",
-      "refundNotice": "Vous serez remboursé de {amount} ({percent}% du prix total).",
+      "chargeNotice": "Vous serez facturé {amount} du prix total.",
       "confirmCancel": "Annuler la réservation",
       "keepBooking": "Ne pas annuler"
     }

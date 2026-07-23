@@ -129,7 +129,6 @@
       "choosePlanTitle": "Choose your rate",
       "refundRule": "{percent}% refund if cancelled {days}+ days before check-in",
       "cancellationTimelineLabel": "Refund by cancellation date",
-      "daysBeforeCheckIn": "cancellation deadlines",
       "next": "Next"
     }
   },
@@ -173,7 +172,7 @@
       "cancelledStatus": "Cancelled",
       "cancelButton": "Cancel",
       "cancelQuestion": "Are you sure you want to cancel this booking?",
-      "refundNotice": "You'll be refunded {amount} ({percent}% of the total price).",
+      "chargeNotice": "You'll be charged {amount} of the total price.",
       "confirmCancel": "Cancel booking",
       "keepBooking": "Don't cancel"
     }

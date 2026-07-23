@@ -279,6 +279,8 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const pricePerNight = (matchedRate?.dailyRate ?? FALLBACK_DAILY_RATE) * cheapestPlanRatio;
   const priceCurrency: Currency = matchedRate?.currency ?? FALLBACK_CURRENCY;
   const convertedPricePerNight = convertCurrency(pricePerNight, priceCurrency, currency);
+  const priceTotal = pricePerNight * nights;
+  const convertedPriceTotal = convertCurrency(priceTotal, priceCurrency, currency);
   const isFormValid =
     !!range?.from &&
     !!range?.to &&
@@ -623,22 +625,27 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
           style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
         >
           <div className="flex items-baseline justify-between">
-            <h2 className="text-xl font-bold text-white">{dict.planYourStay}</h2>
+            <h2 className="text-xl font-bold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.35)]">{dict.planYourStay}</h2>
             <div className="text-right shrink-0">
-              <span className="text-teal-200 text-sm mr-1">{dict.fromPrefix}</span>
+              <span className="text-white/90 text-base mr-1 [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">{dict.fromPrefix}</span>
               <span className="whitespace-nowrap">
-                <span className="text-2xl font-bold text-white">{formatPrice(convertedPricePerNight, currency)}</span>
-                <span className="text-teal-200 text-sm ml-1">{dict.perNight}</span>
+                <span className="text-3xl font-bold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.35)]">
+                  {formatPrice(nights > 0 ? convertedPriceTotal : convertedPricePerNight, currency)}
+                </span>
+                <span className="text-white/90 text-base ml-1 [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
+                  {nights > 0 ? dict.total : dict.perNight}
+                </span>
               </span>
               {priceCurrency !== currency && (
-                <div className="text-teal-200 text-xs">
-                  {formatPrice(pricePerNight, priceCurrency)} {dict.perNight}
+                <div className="text-white/85 text-sm [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
+                  {formatPrice(nights > 0 ? priceTotal : pricePerNight, priceCurrency)}{" "}
+                  {nights > 0 ? dict.total : dict.perNight}
                 </div>
               )}
             </div>
           </div>
           {nights > 0 && (
-            <p className="text-teal-100 text-sm mt-1">
+            <p className="text-white/85 text-sm mt-1 [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
               {nights} {nights !== 1 ? dict.nights : dict.night} · {totalGuests}{" "}
               {totalGuests !== 1 ? dict.guests : dict.guest}
             </p>
@@ -740,14 +747,14 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
             <>
               {guestStep === "plan" && verified && range?.from && (
                 <div className="space-y-5">
-                  <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
+                  <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
                     {dict.modal.choosePlanTitle}
                   </h3>
 
                   {plans.length === 0 ? (
                     <p className="text-sm text-gray-600 dark:text-gray-300">{dict.modal.noPlan}</p>
                   ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                       {plans.map((p) => {
                         const planPricePerNight = (matchedRate?.dailyRate ?? FALLBACK_DAILY_RATE) * p.price_ratio;
                         const convertedPlanPricePerNight = convertCurrency(planPricePerNight, priceCurrency, currency);
@@ -758,24 +765,29 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                             key={p._id}
                             type="button"
                             onClick={() => setSelectedPlanId(p._id)}
-                            className={`w-full text-left p-4 rounded-xl border-2 transition-colors cursor-pointer ${
+                            className={`w-full text-left p-3 rounded-xl border-2 transition-colors cursor-pointer ${
                               isSelected
                                 ? "border-teal-400 dark:border-teal-600 bg-teal-50 dark:bg-teal-950/30"
                                 : "border-gray-200 dark:border-gray-600 hover:border-teal-300 dark:hover:border-teal-700"
                             }`}
                           >
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="font-bold text-gray-800 dark:text-gray-100">
-                                {formatPrice(convertedPlanPricePerNight, currency)}
+                            <div className="flex items-baseline justify-between gap-3">
+                              <span className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+                                {formatPrice(nights > 0 ? convertedPlanTotal : convertedPlanPricePerNight, currency)}
                               </span>
-                              <span className="text-xs text-gray-500 dark:text-gray-400">{dict.perNight}</span>
+                              {nights > 0 && (
+                                <span className="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                  {dict.total}
+                                </span>
+                              )}
                             </div>
                             {nights > 0 && (
-                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                {dict.total}: {formatPrice(convertedPlanTotal, currency)}
+                              <p className="text-base text-gray-500 dark:text-gray-400 mt-0.5">
+                                {formatPrice(convertedPlanPricePerNight, currency)}
+                                {dict.perNight}
                               </p>
                             )}
-                            <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mt-3">
+                            <p className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mt-2">
                               {dict.modal.cancellationTimelineLabel}
                             </p>
                             <CancellationTimeline
@@ -784,7 +796,6 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                               checkInDate={range.from!}
                               dateLocale={dateFnsLocale}
                               refundRuleTemplate={dict.modal.refundRule}
-                              daysBeforeCheckInLabel={dict.modal.daysBeforeCheckIn}
                             />
                           </button>
                         );

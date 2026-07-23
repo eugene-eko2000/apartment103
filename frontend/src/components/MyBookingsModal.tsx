@@ -8,6 +8,7 @@ import { convertCurrency, formatPrice } from "@/lib/currency-config";
 import { useCurrency } from "@/lib/currency-context";
 import { applicableRefundPercentage } from "@/lib/refund";
 import { readGuestSession } from "@/lib/guest-auth";
+import { fillForRefund } from "@/components/CancellationTimeline";
 
 export interface MyBookingsDict {
   close: string;
@@ -22,7 +23,7 @@ export interface MyBookingsDict {
   cancelledStatus: string;
   cancelButton: string;
   cancelQuestion: string;
-  refundNotice: string;
+  chargeNotice: string;
   confirmCancel: string;
   keepBooking: string;
 }
@@ -142,11 +143,15 @@ export default function MyBookingsModal({ dict, onClose }: { dict: MyBookingsDic
                   booking.cancellation_policy.rules,
                   differenceInCalendarDays(earliestBeginDate(booking), new Date())
                 );
-                const refundAmount = convertCurrency(
-                  totalPrice(booking) * refundPercentage,
+                const chargePercentage = 1 - refundPercentage;
+                const chargeAmount = convertCurrency(
+                  totalPrice(booking) * chargePercentage,
                   booking.currency,
                   preferredCurrency
                 );
+                // Same gradient scale as the cancellation timeline bars, keyed by the
+                // underlying refund rate so the colors line up with that visualization.
+                const chargeFill = fillForRefund(refundPercentage);
 
                 return (
                 <li key={booking._id} className={`bg-gray-50 dark:bg-gray-900/40 rounded-2xl border border-gray-100 dark:border-gray-700 p-5 ${isCancelled ? "opacity-60" : ""}`}>
@@ -198,9 +203,21 @@ export default function MyBookingsModal({ dict, onClose }: { dict: MyBookingsDic
                   {!isCancelled && isConfirming && (
                     <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 space-y-2">
                       <p className="text-sm text-gray-700 dark:text-gray-300">
-                        {dict.refundNotice
-                          .replace("{amount}", formatPrice(refundAmount, preferredCurrency))
-                          .replace("{percent}", String(Math.round(refundPercentage * 100)))}
+                        {(() => {
+                          const [before, after] = dict.chargeNotice.split("{amount}");
+                          return (
+                            <>
+                              {before}
+                              <span
+                                className="font-semibold"
+                                style={{ color: `rgb(${chargeFill[0]}, ${chargeFill[1]}, ${chargeFill[2]})` }}
+                              >
+                                {formatPrice(chargeAmount, preferredCurrency)} ({Math.round(chargePercentage * 100)}%)
+                              </span>
+                              {after}
+                            </>
+                          );
+                        })()}
                       </p>
                       <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{dict.cancelQuestion}</p>
                       {cancelError && <p className="text-xs text-red-600 dark:text-red-400">{cancelError}</p>}

@@ -24,7 +24,7 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
-function fillForRefund(refund: number): RGB {
+export function fillForRefund(refund: number): RGB {
   const r = Math.min(1, Math.max(0, refund));
   const [hi, mid, lo] = GRADIENT_STOPS;
   const [from, to] = r >= mid.stop ? [mid, hi] : [lo, mid];
@@ -47,7 +47,7 @@ function contrastRatio(l1: number, l2: number): number {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-function inkForFill(rgb: RGB): string {
+export function inkForFill(rgb: RGB): string {
   const fillLum = relativeLuminance(rgb);
   const blackContrast = contrastRatio(fillLum, 0);
   const whiteContrast = contrastRatio(fillLum, 1);
@@ -99,7 +99,6 @@ interface CancellationTimelineProps {
   checkInDate: Date;
   dateLocale: DateFnsLocale;
   refundRuleTemplate: string;
-  daysBeforeCheckInLabel: string;
 }
 
 export function CancellationTimeline({
@@ -108,7 +107,6 @@ export function CancellationTimeline({
   checkInDate,
   dateLocale,
   refundRuleTemplate,
-  daysBeforeCheckInLabel,
 }: CancellationTimelineProps) {
   const segments = buildSegments(rules);
   if (segments.length === 0) return null;
@@ -139,8 +137,8 @@ export function CancellationTimeline({
   });
 
   return (
-    <div className="mt-2.5">
-      <div className="flex h-6 w-full gap-0.5" role="img" aria-label={segments.map((seg) =>
+    <div className="mt-2">
+      <div className="flex h-[14.4px] w-full gap-0.5" role="img" aria-label={segments.map((seg) =>
         refundRuleTemplate
           .replace("{percent}", String(Math.round(seg.refundPercentage * 100)))
           .replace("{days}", String(seg.lowerDays))
@@ -171,7 +169,7 @@ export function CancellationTimeline({
           );
         })}
       </div>
-      <div className="relative mt-1 h-6 text-[10px] text-gray-500 dark:text-gray-400">
+      <div className="relative mt-1 h-6 text-xs text-gray-500 dark:text-gray-400">
         {ticks.map((tick) => {
           const translate = tick.position <= 0 ? "0%" : tick.position >= 100 ? "-100%" : "-50%";
           return (
@@ -189,9 +187,6 @@ export function CancellationTimeline({
           );
         })}
       </div>
-      <p className="mt-2.5 text-[9px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
-        {daysBeforeCheckInLabel}
-      </p>
     </div>
   );
 }
