@@ -129,7 +129,16 @@
       "choosePlanTitle": "Choose your rate",
       "refundRule": "{percent}% refund if cancelled {days}+ days before check-in",
       "cancellationTimelineLabel": "Refund by cancellation date",
-      "next": "Next"
+      "next": "Next",
+      "payment": {
+        "verifyCardTitle": "Verify your card",
+        "verifyCardHint": "Your stay is fully refundable for now, so we'll just verify your card — nothing is charged today.",
+        "payTitle": "Confirm payment",
+        "payHint": "Part of this stay is already non-refundable under your selected rate, so we'll charge that portion now.",
+        "payButton": "Pay now",
+        "verifyButton": "Verify card",
+        "processing": "Processing…"
+      }
     }
   },
   "gallery": {

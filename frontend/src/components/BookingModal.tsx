@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ApiError, getGuest, requestOtp, verifyOtp, type Guest, type GuestInput, type SubjectType } from "@/lib/api";
+import type { PaymentStepDict } from "@/components/PaymentStep";
 
 export interface BookingModalDict {
   close: string;
@@ -47,6 +48,7 @@ export interface BookingModalDict {
   refundRule: string;
   cancellationTimelineLabel: string;
   next: string;
+  payment: PaymentStepDict;
 }
 
 export interface VerifiedIdentity {

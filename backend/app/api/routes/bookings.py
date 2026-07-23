@@ -7,6 +7,7 @@ from app.models.booking import Booking, BookingCancellationPolicy
 from app.models.cancellation_policy import CancellationPolicy
 from app.models.guest import Guest
 from app.schemas.booking import BookedDateRange, BookingCreate
+from app.services.payment_reconciliation import settle_cancellation
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
 
@@ -103,6 +104,7 @@ async def cancel_booking(
     _ensure_can_access_booking(principal, booking)
     if booking.status == "Cancelled":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Booking is already cancelled")
+    await settle_cancellation(booking)
     booking.status = "Cancelled"
     await booking.save()
     return booking

@@ -129,7 +129,16 @@
       "choosePlanTitle": "Wählen Sie Ihren Tarif",
       "refundRule": "{percent}% Rückerstattung bei Stornierung {days}+ Tage vor Anreise",
       "cancellationTimelineLabel": "Rückerstattung nach Stornierungsdatum",
-      "next": "Weiter"
+      "next": "Weiter",
+      "payment": {
+        "verifyCardTitle": "Karte verifizieren",
+        "verifyCardHint": "Ihr Aufenthalt ist derzeit vollständig stornierbar, daher prüfen wir nur Ihre Karte — heute wird nichts abgebucht.",
+        "payTitle": "Zahlung bestätigen",
+        "payHint": "Ein Teil dieses Aufenthalts ist laut Ihrem gewählten Tarif bereits nicht erstattungsfähig, daher belasten wir diesen Betrag jetzt.",
+        "payButton": "Jetzt bezahlen",
+        "verifyButton": "Karte verifizieren",
+        "processing": "Wird verarbeitet…"
+      }
     }
   },
   "gallery": {

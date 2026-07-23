@@ -23,6 +23,24 @@ import { RepeatingRows } from "../RepeatingRows";
 
 const CURRENCIES: Currency[] = ["EUR", "CHF", "USD", "GBP"];
 
+const PAYMENT_STATUS_LABELS: Record<Booking["payment_status"], string> = {
+  card_verification_pending: "Awaiting card",
+  card_verified: "Card verified",
+  partially_charged: "Partially charged",
+  fully_charged: "Fully charged",
+  requires_action: "Needs guest action",
+  failed: "Payment failed",
+};
+
+const PAYMENT_STATUS_CLASSES: Record<Booking["payment_status"], string> = {
+  card_verification_pending: "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300",
+  card_verified: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+  partially_charged: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+  fully_charged: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
+  requires_action: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
+  failed: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+};
+
 const emptyDateRange = (): BookingDateRange => ({ begin_date: "", end_date: "", price: 0 });
 
 function emptyForm(guestId: string, policyId: string): BookingInput {
@@ -136,6 +154,19 @@ export default function BookingsPanel() {
       render: (b) => b.date_ranges.reduce((sum, r) => sum + r.price, 0).toFixed(2),
     },
     { key: "policy", label: "Cancellation policy", render: (b) => b.cancellation_policy.name },
+    {
+      key: "payment",
+      label: "Payment",
+      render: (b) => (
+        <span
+          className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${PAYMENT_STATUS_CLASSES[b.payment_status]}`}
+          title={b.last_payment_error ?? undefined}
+        >
+          {PAYMENT_STATUS_LABELS[b.payment_status]} ({b.amount_charged.toFixed(2)}/
+          {b.date_ranges.reduce((sum, r) => sum + r.price, 0).toFixed(2)})
+        </span>
+      ),
+    },
     {
       key: "status",
       label: "Status",

@@ -12,11 +12,13 @@ from app.api.routes import (
     closures,
     guests,
     health,
+    payments,
     plans,
     prices,
 )
 from app.core.config import settings
 from app.db.mongo import init_mongo
+from app.jobs.reconcile_payments import scheduler, start_scheduler
 
 logging.basicConfig(level=logging.INFO)
 
@@ -24,7 +26,9 @@ logging.basicConfig(level=logging.INFO)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_mongo()
+    start_scheduler()
     yield
+    scheduler.shutdown(wait=False)
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
@@ -50,3 +54,5 @@ app.include_router(bookings.public_router)
 app.include_router(bookings.router)
 app.include_router(closures.public_router)
 app.include_router(closures.router)
+app.include_router(payments.router)
+app.include_router(payments.webhook_router)

@@ -129,7 +129,16 @@
       "choosePlanTitle": "Scegli la tua tariffa",
       "refundRule": "Rimborso del {percent}% in caso di cancellazione {days}+ giorni prima del check-in",
       "cancellationTimelineLabel": "Rimborso in base alla data di cancellazione",
-      "next": "Avanti"
+      "next": "Avanti",
+      "payment": {
+        "verifyCardTitle": "Verifica la tua carta",
+        "verifyCardHint": "Il tuo soggiorno è per ora interamente rimborsabile, quindi verificheremo solo la tua carta — oggi non viene addebitato nulla.",
+        "payTitle": "Conferma il pagamento",
+        "payHint": "Una parte di questo soggiorno non è già più rimborsabile in base alla tariffa scelta, quindi addebiteremo ora questo importo.",
+        "payButton": "Paga ora",
+        "verifyButton": "Verifica carta",
+        "processing": "Elaborazione…"
+      }
     }
   },
   "gallery": {

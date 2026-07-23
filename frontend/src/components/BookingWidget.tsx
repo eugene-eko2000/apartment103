@@ -15,6 +15,7 @@ import {
   ApiError,
   createBooking,
   createGuest,
+  createPaymentIntent,
   getGuest,
   listPublicBookedDateRanges,
   listPublicClosedDateRanges,
@@ -26,12 +27,14 @@ import {
   type Currency,
   type GuestInput,
   type Language,
+  type PaymentIntentResponse,
   type Plan,
   type Price,
 } from "@/lib/api";
 import { findDailyRate, findLowestDailyRate, findMinStay, FALLBACK_CURRENCY, FALLBACK_DAILY_RATE } from "@/lib/pricing";
 import BookingModal, { emptyGuestForm, guestToForm, type BookingModalDict, type VerifiedIdentity } from "@/components/BookingModal";
 import { CancellationTimeline, getMaxThresholdDays, getVisualMaxDays } from "@/components/CancellationTimeline";
+import PaymentStep from "@/components/PaymentStep";
 import { PhoneInput } from "@/components/PhoneInput";
 import { clearGuestSession, readGuestSession, saveGuestSession } from "@/lib/guest-auth";
 
@@ -44,7 +47,7 @@ const DATE_FNS_LOCALES: Record<Locale, DateFnsLocale> = { en: enUS, de, fr, it }
 const TRANSITION_MS = 380;
 
 type Child = { age: number | null };
-type GuestFlowStep = "plan" | "form" | "submitting" | "success" | "error";
+type GuestFlowStep = "plan" | "form" | "submitting" | "payment" | "success" | "error";
 
 export interface BookingDict {
   planYourStay: string;
@@ -116,6 +119,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const [guestName, setGuestName] = useState("");
   const [pending, setPending] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [paymentIntent, setPaymentIntent] = useState<PaymentIntentResponse | null>(null);
   // True while a stored guest session's bearer token is being validated
   // against the API in response to a Book click.
   const [checkingSession, setCheckingSession] = useState(false);
@@ -367,6 +371,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     setGuestName("");
     setFormError(null);
     setPending(false);
+    setPaymentIntent(null);
   };
 
   const handleDone = () => {
@@ -389,7 +394,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
       const matchedRate = findDailyRate(prices, format(range.from, "yyyy-MM-dd"));
       const dailyRate = matchedRate?.dailyRate ?? FALLBACK_DAILY_RATE;
       const bookingCurrency: Currency = matchedRate?.currency ?? FALLBACK_CURRENCY;
-      await createBooking(token, {
+      const booking = await createBooking(token, {
         guest_id: finalGuestId,
         cancellation_policy_id: selectedPlan.cancellation_policy.id,
         currency: bookingCurrency,
@@ -401,7 +406,9 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
           },
         ],
       });
-      setGuestStep("success");
+      const intent = await createPaymentIntent(booking._id, token);
+      setPaymentIntent(intent);
+      setGuestStep("payment");
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : String(err));
       setGuestStep("error");
@@ -971,6 +978,14 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
 
               {guestStep === "submitting" && (
                 <p className="text-sm text-gray-600 dark:text-gray-300 text-center py-8">{dict.modal.submitting}</p>
+              )}
+
+              {guestStep === "payment" && paymentIntent && (
+                <PaymentStep
+                  intent={paymentIntent}
+                  dict={dict.modal.payment}
+                  onSuccess={() => setGuestStep("success")}
+                />
               )}
 
               {guestStep === "success" && (

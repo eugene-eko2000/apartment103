@@ -129,7 +129,16 @@
       "choosePlanTitle": "Choisissez votre tarif",
       "refundRule": "Remboursement de {percent}% en cas d'annulation {days}+ jours avant l'arrivée",
       "cancellationTimelineLabel": "Remboursement selon la date d'annulation",
-      "next": "Suivant"
+      "next": "Suivant",
+      "payment": {
+        "verifyCardTitle": "Vérifier votre carte",
+        "verifyCardHint": "Votre séjour est pour l'instant entièrement remboursable, nous allons donc simplement vérifier votre carte — aucun montant n'est débité aujourd'hui.",
+        "payTitle": "Confirmer le paiement",
+        "payHint": "Une partie de ce séjour n'est déjà plus remboursable selon le tarif choisi, nous allons donc débiter ce montant maintenant.",
+        "payButton": "Payer maintenant",
+        "verifyButton": "Vérifier la carte",
+        "processing": "Traitement en cours…"
+      }
     }
   },
   "gallery": {

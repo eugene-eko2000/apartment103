@@ -23,6 +23,7 @@ class Guest(Document):
     email: str
     preferred_language: Language | None = None
     preferred_currency: Currency | None = None
+    stripe_customer_id: str | None = None
 
     class Settings:
         name = "guests"

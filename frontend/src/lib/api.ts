@@ -140,6 +140,31 @@ export interface BookingGuestRef {
 
 export type BookingStatus = "Active" | "Cancelled";
 
+export type PaymentStatus =
+  | "card_verification_pending"
+  | "card_verified"
+  | "partially_charged"
+  | "fully_charged"
+  | "requires_action"
+  | "failed";
+
+export interface BookingCharge {
+  stripe_payment_intent_id: string;
+  amount: number;
+  currency: Currency;
+  reason: "initial_charge" | "scheduled_accrual" | "cancellation_settlement";
+  status: "succeeded" | "requires_action" | "failed";
+  created_at: string;
+}
+
+export interface BookingRefund {
+  stripe_refund_id: string;
+  amount: number;
+  currency: Currency;
+  reason: string;
+  created_at: string;
+}
+
 export interface Booking {
   _id: string;
   guest: BookingGuestRef;
@@ -148,6 +173,18 @@ export interface Booking {
   date_ranges: BookingDateRange[];
   cancellation_policy: { name: string; rules: CancellationRule[] };
   status: BookingStatus;
+  payment_status: PaymentStatus;
+  amount_charged: number;
+  charges: BookingCharge[];
+  refunds: BookingRefund[];
+  last_payment_error?: string | null;
+}
+
+export interface PaymentIntentResponse {
+  mode: "setup" | "payment";
+  client_secret: string;
+  amount: number;
+  currency: Currency;
 }
 
 export interface BookedDateRange {
@@ -286,6 +323,14 @@ export function deleteBooking(bookingId: string, token: string): Promise<void> {
 
 export function cancelBooking(bookingId: string, token: string): Promise<Booking> {
   return request(`/bookings/${bookingId}/cancel`, { method: "POST", headers: authHeaders(token) });
+}
+
+export function createPaymentIntent(bookingId: string, token: string): Promise<PaymentIntentResponse> {
+  return request(`/bookings/${bookingId}/payment/intent`, { method: "POST", headers: authHeaders(token) });
+}
+
+export function retryPayment(bookingId: string, token: string): Promise<PaymentIntentResponse> {
+  return request(`/bookings/${bookingId}/payment/retry`, { method: "POST", headers: authHeaders(token) });
 }
 
 export function listGuests(token: string): Promise<Guest[]> {

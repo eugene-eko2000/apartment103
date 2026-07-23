@@ -34,5 +34,12 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = True
     smtp_from_address: str = "no-reply@apartment103.example"
 
+    # Stripe. stripe_secret_key/stripe_webhook_secret are backend-only
+    # secrets; stripe_publishable_key is safe to hand to the frontend (it's
+    # only used to construct Stripe.js on the client).
+    stripe_secret_key: str | None = None
+    stripe_webhook_secret: str | None = None
+    stripe_publishable_key: str | None = None
+
 
 settings = Settings()
