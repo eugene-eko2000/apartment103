@@ -598,12 +598,14 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
             hoverIsValidCheckout &&
             isSameDay(date, hoverDate),
           available: (date) => !isRangeOrHoverDate(date) && !isPastDate(date) && !isBookedDate(date) && !hasNoPrice(date) && !isInvalidCheckoutCandidate(date),
-          unavailable: (date) => !isRangeOrHoverDate(date) && (isPastDate(date) || isBookedDate(date) || hasNoPrice(date) || isInvalidCheckoutCandidate(date)),
+          past: (date) => !isRangeOrHoverDate(date) && isPastDate(date),
+          unavailable: (date) => !isRangeOrHoverDate(date) && !isPastDate(date) && (isBookedDate(date) || hasNoPrice(date) || isInvalidCheckoutCandidate(date)),
         }}
         modifiersClassNames={{
           hoverRange: "rdp-range_middle",
           hoverRangeEnd: "rdp-range_end",
           available: "!bg-green-50 dark:!bg-green-950/40 !text-green-800 dark:!text-green-300 hover:!bg-green-100 dark:hover:!bg-green-900/40",
+          past: "!bg-gray-100 dark:!bg-gray-800/60 !text-gray-400 dark:!text-gray-600",
           unavailable: "!bg-red-50 dark:!bg-red-950/40 !text-red-700 dark:!text-red-400",
         }}
       />
