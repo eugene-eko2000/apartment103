@@ -774,10 +774,10 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                             key={p._id}
                             type="button"
                             onClick={() => setSelectedPlanId(p._id)}
-                            className={`w-full text-left p-3 rounded-xl border-2 transition-colors cursor-pointer ${
+                            className={`w-full text-left p-3 rounded-xl transition-colors cursor-pointer ${
                               isSelected
-                                ? "border-teal-400 dark:border-teal-600 bg-teal-50 dark:bg-teal-950/30"
-                                : "border-gray-200 dark:border-gray-600 hover:border-teal-300 dark:hover:border-teal-700"
+                                ? "border-[3px] border-transparent [background:linear-gradient(#f0fdfa,#f0fdfa)_padding-box,linear-gradient(135deg,#0f766e,#0891b2)_border-box] dark:[background:linear-gradient(#134e4a,#134e4a)_padding-box,linear-gradient(135deg,#2dd4bf,#22d3ee)_border-box]"
+                                : "border-2 border-gray-200 dark:border-gray-600 hover:border-teal-300 dark:hover:border-teal-700"
                             }`}
                           >
                             <div className="flex items-baseline justify-between gap-3">
