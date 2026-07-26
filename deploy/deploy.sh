@@ -16,13 +16,28 @@
 # this script.
 #
 # Usage:
-#   ./deploy.sh <preprod|prod> <user@host> [remote-path] [ssh-port]
+#   ./deploy.sh [-i ssh_key] <preprod|prod> <user@host> [remote-path] [ssh-port]
 set -euo pipefail
 
 usage() {
-  echo "Usage: $0 <preprod|prod> <user@host> [remote-path] [ssh-port]" >&2
+  echo "Usage: $0 [-i ssh_key] <preprod|prod> <user@host> [remote-path] [ssh-port]" >&2
   exit 1
 }
+
+SSH_KEY=""
+while getopts ":i:" opt; do
+  case "$opt" in
+    i) SSH_KEY="$OPTARG" ;;
+    \?) echo "Unknown option: -$OPTARG" >&2; usage ;;
+    :) echo "Option -$OPTARG requires an argument" >&2; usage ;;
+  esac
+done
+shift $((OPTIND - 1))
+
+if [[ -n "$SSH_KEY" && ! -f "$SSH_KEY" ]]; then
+  echo "SSH key not found: $SSH_KEY" >&2
+  exit 1
+fi
 
 ENVIRONMENT="${1:-}"
 SSH_TARGET="${2:-}"
@@ -33,6 +48,15 @@ if [[ "$ENVIRONMENT" != "preprod" && "$ENVIRONMENT" != "prod" ]]; then
 fi
 REMOTE_PATH="${3:-/opt/apartment103-$ENVIRONMENT}"
 SSH_PORT="${4:-22}"
+
+SSH_OPTS=(-p "$SSH_PORT")
+SCP_OPTS=(-P "$SSH_PORT")
+RSYNC_SSH="ssh -p $SSH_PORT"
+if [[ -n "$SSH_KEY" ]]; then
+  SSH_OPTS+=(-i "$SSH_KEY")
+  SCP_OPTS+=(-i "$SSH_KEY")
+  RSYNC_SSH="ssh -p $SSH_PORT -i $SSH_KEY"
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -67,9 +91,9 @@ if ! grep -Eq '^JWT_SECRET_KEY=\S' "$SECRETS_FILE"; then
 fi
 
 echo "==> Syncing repo to $SSH_TARGET:$REMOTE_PATH"
-ssh -p "$SSH_PORT" "$SSH_TARGET" "mkdir -p '$REMOTE_PATH'"
+ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "mkdir -p '$REMOTE_PATH'"
 rsync -az --delete \
-  -e "ssh -p $SSH_PORT" \
+  -e "$RSYNC_SSH" \
   --exclude '.git' \
   --exclude '.secrets' \
   --exclude 'node_modules' \
@@ -83,8 +107,8 @@ rsync -az --delete \
   "$REPO_ROOT/" "$SSH_TARGET:$REMOTE_PATH/"
 
 echo "==> Copying $ENVIRONMENT env file (non-secret config only)"
-ssh -p "$SSH_PORT" "$SSH_TARGET" "mkdir -p '$REMOTE_PATH/deploy/env'"
-scp -P "$SSH_PORT" "$ENV_FILE" "$SSH_TARGET:$REMOTE_PATH/deploy/env/$ENVIRONMENT.env"
+ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "mkdir -p '$REMOTE_PATH/deploy/env'"
+scp "${SCP_OPTS[@]}" "$ENV_FILE" "$SSH_TARGET:$REMOTE_PATH/deploy/env/$ENVIRONMENT.env"
 
 echo "==> Building and starting containers on remote host (secrets exported into the remote shell only, never written to disk)"
 {
@@ -95,12 +119,14 @@ echo "==> Building and starting containers on remote host (secrets exported into
     printf 'export %s=%q\n' "$key" "$value"
   done < "$SECRETS_FILE"
   echo "docker compose -p '$PROJECT_NAME' -f docker-compose.yml -f docker-compose.$ENVIRONMENT.yml --env-file 'env/$ENVIRONMENT.env' up -d --build"
-} | ssh -p "$SSH_PORT" "$SSH_TARGET" bash -s
+} | ssh "${SSH_OPTS[@]}" "$SSH_TARGET" bash -s
 
 echo "==> Deployed. Container status:"
-ssh -p "$SSH_PORT" "$SSH_TARGET" \
+ssh "${SSH_OPTS[@]}" "$SSH_TARGET" \
   "docker compose -p '$PROJECT_NAME' -f '$REMOTE_PATH/deploy/docker-compose.yml' -f '$REMOTE_PATH/deploy/docker-compose.$ENVIRONMENT.yml' --env-file '$REMOTE_PATH/deploy/env/$ENVIRONMENT.env' ps"
 
 echo
+SSH_HINT="ssh -p $SSH_PORT"
+[[ -n "$SSH_KEY" ]] && SSH_HINT="ssh -p $SSH_PORT -i $SSH_KEY"
 echo "Note: DB migrations are not run automatically (they don't need secrets — mongo-migrate only uses MONGO_URI/MONGO_DB). To apply them:"
-echo "  ssh -p $SSH_PORT $SSH_TARGET \"cd $REMOTE_PATH/deploy && docker compose -p $PROJECT_NAME -f docker-compose.yml -f docker-compose.$ENVIRONMENT.yml --env-file env/$ENVIRONMENT.env exec backend uv run --no-sync mongo-migrate migrate --forward --no-use-transaction\""
+echo "  $SSH_HINT $SSH_TARGET \"cd $REMOTE_PATH/deploy && docker compose -p $PROJECT_NAME -f docker-compose.yml -f docker-compose.$ENVIRONMENT.yml --env-file env/$ENVIRONMENT.env exec backend uv run --no-sync mongo-migrate migrate --forward --no-use-transaction\""
