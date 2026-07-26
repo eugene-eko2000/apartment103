@@ -45,6 +45,8 @@ const CURRENCIES: Currency[] = ["EUR", "CHF", "USD", "GBP"];
 
 const DATE_FNS_LOCALES: Record<Locale, DateFnsLocale> = { en: enUS, de, fr, it };
 const TRANSITION_MS = 380;
+// id of the app's real scrollable container (frontend/src/app/[lang]/page.tsx)
+const PAGE_SCROLL_ID = "page-scroll";
 
 type Child = { age: number | null };
 type GuestFlowStep = "plan" | "form" | "submitting" | "payment" | "success" | "error";
@@ -188,6 +190,50 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
       document.removeEventListener("scroll", updateAnchor, true);
     };
   }, [calendarOpen]);
+
+  // The calendar popover is portaled to document.body (see dateAndGuestCalendar
+  // below) so it can escape the hero's clipping ancestors — but that also takes
+  // it out of the app's real scroll container's DOM subtree, so a touch-drag
+  // starting on the popover can never native-scroll-chain to the page behind
+  // it. Forward vertical drags to that container manually; horizontal drags
+  // are left alone so the two-month row can still be swiped on narrow screens.
+  // A callback ref (rather than an effect keyed on calendarOpen) attaches the
+  // listeners at the exact moment the portaled node mounts — calendarAnchor
+  // resolves one render after calendarOpen flips true, so an effect keyed on
+  // calendarOpen alone can fire before the popover node even exists.
+  const attachCalendarTouchForwarding = (node: HTMLDivElement | null) => {
+    calendarRef.current = node;
+    if (!node) return;
+    const scrollContainer = document.getElementById(PAGE_SCROLL_ID);
+    if (!scrollContainer) return;
+
+    let startX = 0;
+    let startY = 0;
+    let forwarding = false;
+
+    const onTouchStart = (e: TouchEvent) => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      forwarding = false;
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      const dx = touch.clientX - startX;
+      const dy = touch.clientY - startY;
+      if (!forwarding) {
+        if (Math.abs(dy) < 10 || Math.abs(dy) <= Math.abs(dx)) return;
+        forwarding = true;
+      }
+      scrollContainer.scrollTop -= dy;
+      startX = touch.clientX;
+      startY = touch.clientY;
+      e.preventDefault();
+    };
+
+    node.addEventListener("touchstart", onTouchStart, { passive: true });
+    node.addEventListener("touchmove", onTouchMove, { passive: false });
+  };
 
   // Animate the widget moving/resizing between its compact and extended
   // layouts (FLIP: freeze at the pre-toggle rect, then transition to the
@@ -543,7 +589,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
 
   const dateAndGuestCalendar = calendarOpen && calendarAnchor && createPortal(
     <div
-      ref={calendarRef}
+      ref={attachCalendarTouchForwarding}
       className="fixed z-[101] flex justify-center bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 p-5 w-max max-w-[calc(100vw-1.5rem)] max-h-[calc(100vh-1.5rem)] overflow-x-auto overflow-y-auto"
       style={{ top: calendarAnchor.top, right: calendarAnchor.right }}
     >

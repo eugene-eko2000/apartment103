@@ -100,13 +100,13 @@ export default async function Home({
       </header>
 
       {/* ── SCROLLABLE CONTENT ──────────────────────────── */}
-      <div className="flex-1 overflow-y-auto">
+      <div id="page-scroll" className="flex-1 overflow-y-auto">
       <div className="min-h-full flex flex-col">
 
       {/* ── HERO ────────────────────────────────────────── */}
       <div className="shrink-0">
         <div className="max-w-7xl mx-auto px-6 py-6 lg:py-8">
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_480px] gap-12 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_480px] gap-1 lg:gap-12 items-start">
             {/* Left — apartment info */}
             <div className="text-white">
               <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -126,7 +126,7 @@ export default async function Home({
               </p>
 
               {/* Feature tags */}
-              <div className="flex flex-wrap gap-2">
+              <div className="hidden sm:flex flex-wrap gap-2">
                 {FEATURES.map((f) => (
                   <span
                     key={f.label}
