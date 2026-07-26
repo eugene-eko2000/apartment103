@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Deploys apartment103 (frontend + backend + MongoDB) to a single remote
-# host over SSH using Docker Compose. Rsyncs the repo, then builds and starts
-# the stack on the remote host.
+# Deploys apartment103 (nginx + frontend + backend + MongoDB) to a single
+# remote host over SSH using Docker Compose. Rsyncs the repo, then builds
+# and starts the stack on the remote host.
 #
 # Non-secret config comes from deploy/env/<environment>.env (rsynced to the
 # host like the rest of the repo). Real secrets come from
@@ -15,19 +15,48 @@
 # management (Vault/Swarm secrets/etc.) is a further follow-up, not part of
 # this script.
 #
+# The TLS certificate + private key are the one exception to "never written
+# to disk": nginx needs them as files, not env vars. Their filenames come
+# from SSL_CERT_FILE/SSL_KEY_FILE in deploy/env/<environment>.env; the files
+# themselves are read from .secrets/certs/<environment>/ on THIS machine and
+# scp'd (mode 600) to .secrets/certs/ under the remote deploy path, which
+# docker-compose.yml mounts into the nginx container.
+#
+# `docker`/`docker compose` on the remote host require sudo, and that sudo
+# requires a password (no NOPASSWD entry) — so it can't just be prefixed onto
+# a normal non-interactive ssh command; there's no tty for sudo to prompt on.
+# Instead, the password is read once (interactively, or from
+# $DEPLOY_SUDO_PASSWORD for CI) and streamed to `sudo -S` as the first line of
+# stdin on each remote docker invocation — the same "never touches disk"
+# treatment as the other secrets. `sudo -S` consumes exactly that one line and
+# leaves the rest of stdin (the exported secrets + compose command, for the
+# build step) untouched for the command it runs.
+#
 # Usage:
-#   ./deploy.sh [-i ssh_key] <preprod|prod> <user@host> [remote-path] [ssh-port]
+#   ./deploy.sh [-i ssh_key] [-v] <preprod|prod> <user@host> [remote-path] [ssh-port]
+#
+# -v prints ssh/scp/rsync protocol-level debug output (connection setup,
+# auth, transfer progress) — use it to see where the script is stuck when a
+# step times out. All ssh/scp calls also set ConnectTimeout and keepalive
+# options so a dead/unreachable host or a firewall dropping an idle
+# connection mid-build fails with a clear error instead of hanging silently.
 set -euo pipefail
 
 usage() {
-  echo "Usage: $0 [-i ssh_key] <preprod|prod> <user@host> [remote-path] [ssh-port]" >&2
+  echo "Usage: $0 [-i ssh_key] [-v] <preprod|prod> <user@host> [remote-path] [ssh-port]" >&2
   exit 1
 }
 
+log() {
+  echo "[$(date '+%H:%M:%S')] $*"
+}
+
 SSH_KEY=""
-while getopts ":i:" opt; do
+VERBOSE=false
+while getopts ":i:v" opt; do
   case "$opt" in
     i) SSH_KEY="$OPTARG" ;;
+    v) VERBOSE=true ;;
     \?) echo "Unknown option: -$OPTARG" >&2; usage ;;
     :) echo "Option -$OPTARG requires an argument" >&2; usage ;;
   esac
@@ -49,13 +78,21 @@ fi
 REMOTE_PATH="${3:-/opt/apartment103-$ENVIRONMENT}"
 SSH_PORT="${4:-22}"
 
-SSH_OPTS=(-p "$SSH_PORT")
-SCP_OPTS=(-P "$SSH_PORT")
-RSYNC_SSH="ssh -p $SSH_PORT"
+SSH_KEEPALIVE_OPTS=(-o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=10)
+SSH_OPTS=(-p "$SSH_PORT" "${SSH_KEEPALIVE_OPTS[@]}")
+SCP_OPTS=(-P "$SSH_PORT" "${SSH_KEEPALIVE_OPTS[@]}")
+RSYNC_SSH="ssh -p $SSH_PORT ${SSH_KEEPALIVE_OPTS[*]}"
 if [[ -n "$SSH_KEY" ]]; then
   SSH_OPTS+=(-i "$SSH_KEY")
   SCP_OPTS+=(-i "$SSH_KEY")
-  RSYNC_SSH="ssh -p $SSH_PORT -i $SSH_KEY"
+  RSYNC_SSH+=" -i $SSH_KEY"
+fi
+RSYNC_VERBOSE_OPTS=()
+if [[ "$VERBOSE" == true ]]; then
+  SSH_OPTS+=(-v)
+  SCP_OPTS+=(-v)
+  RSYNC_SSH+=" -v"
+  RSYNC_VERBOSE_OPTS=(-v --progress --stats)
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -63,6 +100,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 ENV_FILE="$SCRIPT_DIR/env/$ENVIRONMENT.env"
 SECRETS_DIR="$REPO_ROOT/.secrets"
 SECRETS_FILE="$SECRETS_DIR/$ENVIRONMENT.env"
+CERTS_DIR="$SECRETS_DIR/certs/$ENVIRONMENT"
 PROJECT_NAME="apartment103-$ENVIRONMENT"
 
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -74,6 +112,19 @@ fi
 if [[ ! -f "$SECRETS_FILE" ]]; then
   echo "Missing $SECRETS_FILE." >&2
   echo "Copy .secrets/$ENVIRONMENT.env.example to .secrets/$ENVIRONMENT.env (chmod 600) and fill in real values first." >&2
+  exit 1
+fi
+
+SSL_CERT_FILE="$(grep -E '^SSL_CERT_FILE=' "$ENV_FILE" | head -1 | cut -d= -f2-)"
+SSL_KEY_FILE="$(grep -E '^SSL_KEY_FILE=' "$ENV_FILE" | head -1 | cut -d= -f2-)"
+if [[ -z "$SSL_CERT_FILE" || -z "$SSL_KEY_FILE" ]]; then
+  echo "SSL_CERT_FILE and SSL_KEY_FILE must be set in $ENV_FILE." >&2
+  exit 1
+fi
+
+if [[ ! -f "$CERTS_DIR/$SSL_CERT_FILE" || ! -f "$CERTS_DIR/$SSL_KEY_FILE" ]]; then
+  echo "Missing $CERTS_DIR/$SSL_CERT_FILE or $CERTS_DIR/$SSL_KEY_FILE." >&2
+  echo "Place the TLS certificate chain and private key for $ENVIRONMENT there first (a single cert covering both FRONTEND_DOMAIN and API_DOMAIN as SAN entries)." >&2
   exit 1
 fi
 
@@ -90,9 +141,21 @@ if ! grep -Eq '^JWT_SECRET_KEY=\S' "$SECRETS_FILE"; then
   exit 1
 fi
 
-echo "==> Syncing repo to $SSH_TARGET:$REMOTE_PATH"
+if [[ -n "${DEPLOY_SUDO_PASSWORD:-}" ]]; then
+  SUDO_PASSWORD="$DEPLOY_SUDO_PASSWORD"
+else
+  read -rs -p "Password for sudo on $SSH_TARGET: " SUDO_PASSWORD
+  echo
+fi
+if [[ -z "$SUDO_PASSWORD" ]]; then
+  echo "A sudo password is required (set DEPLOY_SUDO_PASSWORD or enter one when prompted)." >&2
+  exit 1
+fi
+
+log "==> Syncing repo to $SSH_TARGET:$REMOTE_PATH"
 ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "mkdir -p '$REMOTE_PATH'"
 rsync -az --delete \
+  ${RSYNC_VERBOSE_OPTS[@]+"${RSYNC_VERBOSE_OPTS[@]}"} \
   -e "$RSYNC_SSH" \
   --exclude '.git' \
   --exclude '.secrets' \
@@ -105,28 +168,41 @@ rsync -az --delete \
   --exclude '*.egg-info' \
   --exclude 'deploy/env/*.env' \
   "$REPO_ROOT/" "$SSH_TARGET:$REMOTE_PATH/"
+log "==> Repo synced"
 
-echo "==> Copying $ENVIRONMENT env file (non-secret config only)"
+log "==> Copying $ENVIRONMENT env file (non-secret config only)"
 ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "mkdir -p '$REMOTE_PATH/deploy/env'"
 scp "${SCP_OPTS[@]}" "$ENV_FILE" "$SSH_TARGET:$REMOTE_PATH/deploy/env/$ENVIRONMENT.env"
 
-echo "==> Building and starting containers on remote host (secrets exported into the remote shell only, never written to disk)"
+log "==> Copying $ENVIRONMENT TLS certificate + key"
+REMOTE_CERTS_DIR="$REMOTE_PATH/.secrets/certs"
+ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "mkdir -p '$REMOTE_CERTS_DIR' && chmod 700 '$REMOTE_PATH/.secrets' '$REMOTE_CERTS_DIR'"
+scp "${SCP_OPTS[@]}" "$CERTS_DIR/$SSL_CERT_FILE" "$CERTS_DIR/$SSL_KEY_FILE" "$SSH_TARGET:$REMOTE_CERTS_DIR/"
+ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "chmod 600 '$REMOTE_CERTS_DIR/$SSL_CERT_FILE' '$REMOTE_CERTS_DIR/$SSL_KEY_FILE'"
+
+log "==> Building and starting containers on remote host (secrets exported into the remote shell only, never written to disk)"
+log "    this runs 'docker compose up -d --build' remotely — a cold build (image pulls, npm/uv installs) can take several minutes; output streams below as it happens"
 {
+  printf '%s\n' "$SUDO_PASSWORD"
   echo "set -euo pipefail"
   echo "cd '$REMOTE_PATH/deploy'"
   while IFS='=' read -r key value; do
     [[ -z "$key" || "$key" == \#* ]] && continue
     printf 'export %s=%q\n' "$key" "$value"
   done < "$SECRETS_FILE"
+  # Deliberately no `set -x` here even in verbose mode: this remote session's
+  # environment holds the sudo password + secrets fed in above, and a trace
+  # would echo them to the log.
   echo "docker compose -p '$PROJECT_NAME' -f docker-compose.yml -f docker-compose.$ENVIRONMENT.yml --env-file 'env/$ENVIRONMENT.env' up -d --build"
-} | ssh "${SSH_OPTS[@]}" "$SSH_TARGET" bash -s
+} | ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "sudo -S -p '' bash -s"
+log "==> Remote build/start finished"
 
-echo "==> Deployed. Container status:"
-ssh "${SSH_OPTS[@]}" "$SSH_TARGET" \
-  "docker compose -p '$PROJECT_NAME' -f '$REMOTE_PATH/deploy/docker-compose.yml' -f '$REMOTE_PATH/deploy/docker-compose.$ENVIRONMENT.yml' --env-file '$REMOTE_PATH/deploy/env/$ENVIRONMENT.env' ps"
+log "==> Deployed. Container status:"
+printf '%s\n' "$SUDO_PASSWORD" | ssh "${SSH_OPTS[@]}" "$SSH_TARGET" \
+  "sudo -S -p '' docker compose -p '$PROJECT_NAME' -f '$REMOTE_PATH/deploy/docker-compose.yml' -f '$REMOTE_PATH/deploy/docker-compose.$ENVIRONMENT.yml' --env-file '$REMOTE_PATH/deploy/env/$ENVIRONMENT.env' ps"
 
 echo
-SSH_HINT="ssh -p $SSH_PORT"
-[[ -n "$SSH_KEY" ]] && SSH_HINT="ssh -p $SSH_PORT -i $SSH_KEY"
-echo "Note: DB migrations are not run automatically (they don't need secrets — mongo-migrate only uses MONGO_URI/MONGO_DB). To apply them:"
-echo "  $SSH_HINT $SSH_TARGET \"cd $REMOTE_PATH/deploy && docker compose -p $PROJECT_NAME -f docker-compose.yml -f docker-compose.$ENVIRONMENT.yml --env-file env/$ENVIRONMENT.env exec backend uv run --no-sync mongo-migrate migrate --forward --no-use-transaction\""
+SSH_HINT="ssh -t -p $SSH_PORT"
+[[ -n "$SSH_KEY" ]] && SSH_HINT="ssh -t -p $SSH_PORT -i $SSH_KEY"
+echo "Note: DB migrations are not run automatically (they don't need secrets — mongo-migrate only uses MONGO_URI/MONGO_DB). To apply them (run directly in your own terminal so sudo can prompt you for its password):"
+echo "  $SSH_HINT $SSH_TARGET \"cd $REMOTE_PATH/deploy && sudo docker compose -p $PROJECT_NAME -f docker-compose.yml -f docker-compose.$ENVIRONMENT.yml --env-file env/$ENVIRONMENT.env exec backend uv run --no-sync mongo-migrate migrate --forward --no-use-transaction\""

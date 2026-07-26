@@ -11,3 +11,6 @@ services:
 
   frontend:
     restart: unless-stopped
+
+  nginx:
+    restart: unless-stopped

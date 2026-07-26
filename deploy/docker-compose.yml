@@ -1,12 +1,18 @@
-# Base stack: frontend + backend + MongoDB on a single host. Environment
-# specifics (restart/logging policy) live in docker-compose.preprod.yml /
-# docker-compose.prod.yml. Non-secret config comes from deploy/env/<env>.env;
-# real secrets come from .secrets/<env>.env, exported into the remote
-# shell's environment at `up` time rather than written to disk on the
-# deployment host — see deploy/deploy.sh. Because of that, secret-only vars
-# below must NOT use a
+# Base stack: nginx (TLS termination) + frontend + backend + MongoDB on a
+# single host. Environment specifics (restart/logging policy) live in
+# docker-compose.preprod.yml / docker-compose.prod.yml. Non-secret config
+# comes from deploy/env/<env>.env; real secrets come from .secrets/<env>.env,
+# exported into the remote shell's environment at `up` time rather than
+# written to disk on the deployment host — see deploy/deploy.sh. Because of
+# that, secret-only vars below must NOT use a
 # hard-required (${VAR:?...}) default: that would make every `docker compose`
 # subcommand (ps, logs, exec, ...) demand the secrets file too, not just `up`.
+#
+# The TLS certificate + private key are files, not env vars, so they can't go
+# through that same env-var channel — nginx needs them on disk. deploy.sh
+# copies them from .secrets/certs/<environment>/ on the deploying machine to
+# .secrets/certs/ under the remote deploy path (mode 600), which is what the
+# nginx service below mounts.
 #
 # Values here mirror backend/.env.example and frontend/.env.local.example.
 services:
@@ -51,7 +57,7 @@ services:
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
     ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
 
   frontend:
     build:
@@ -62,7 +68,24 @@ services:
     depends_on:
       - backend
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      - frontend
+      - backend
+    environment:
+      FRONTEND_DOMAIN: ${FRONTEND_DOMAIN:?FRONTEND_DOMAIN must be set in the deploy env file}
+      API_DOMAIN: ${API_DOMAIN:?API_DOMAIN must be set in the deploy env file}
+      SSL_CERT_FILE: ${SSL_CERT_FILE:?SSL_CERT_FILE must be set in the deploy env file}
+      SSL_KEY_FILE: ${SSL_KEY_FILE:?SSL_KEY_FILE must be set in the deploy env file}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx/templates:/etc/nginx/templates:ro
+      - ../.secrets/certs:/etc/nginx/certs:ro
 
 volumes:
   mongo_data:
