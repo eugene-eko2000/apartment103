@@ -206,3 +206,6 @@ SSH_HINT="ssh -t -p $SSH_PORT"
 [[ -n "$SSH_KEY" ]] && SSH_HINT="ssh -t -p $SSH_PORT -i $SSH_KEY"
 echo "Note: DB migrations are not run automatically (they don't need secrets — mongo-migrate only uses MONGO_URI/MONGO_DB). To apply them (run directly in your own terminal so sudo can prompt you for its password):"
 echo "  $SSH_HINT $SSH_TARGET \"cd $REMOTE_PATH/deploy && sudo docker compose -p $PROJECT_NAME -f docker-compose.yml -f docker-compose.$ENVIRONMENT.yml --env-file env/$ENVIRONMENT.env exec backend uv run --no-sync mongo-migrate migrate --forward --no-use-transaction\""
+echo
+echo "Note: to bootstrap the first Admin account, SSH in and run deploy/create-admin.sh directly on the host:"
+echo "  $SSH_HINT $SSH_TARGET \"cd $REMOTE_PATH/deploy && ./create-admin.sh $ENVIRONMENT\""
