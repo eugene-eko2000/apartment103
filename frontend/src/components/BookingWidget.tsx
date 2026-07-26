@@ -776,7 +776,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                             onClick={() => setSelectedPlanId(p._id)}
                             className={`w-full text-left p-3 rounded-xl transition-colors cursor-pointer ${
                               isSelected
-                                ? "border-[3px] border-transparent [background:linear-gradient(#f0fdfa,#f0fdfa)_padding-box,linear-gradient(135deg,#0f766e,#0891b2)_border-box] dark:[background:linear-gradient(#134e4a,#134e4a)_padding-box,linear-gradient(135deg,#2dd4bf,#22d3ee)_border-box]"
+                                ? "border-[3px] border-transparent [background:linear-gradient(135deg,#f0fdfa_0%,#ecfeff_100%)_padding-box,linear-gradient(135deg,#0f766e,#0891b2)_border-box] dark:[background:linear-gradient(135deg,#042f2e_0%,#083344_100%)_padding-box,linear-gradient(135deg,#0f766e,#0891b2)_border-box]"
                                 : "border-2 border-gray-200 dark:border-gray-600 hover:border-teal-300 dark:hover:border-teal-700"
                             }`}
                           >
