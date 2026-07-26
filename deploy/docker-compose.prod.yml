@@ -1,0 +1,21 @@
+# Prod overlay: always restart, and cap log growth. Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#     --env-file env/prod.env -p apartment103-prod up -d --build
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  mongo:
+    restart: always
+    logging: *default-logging
+
+  backend:
+    restart: always
+    logging: *default-logging
+
+  frontend:
+    restart: always
+    logging: *default-logging

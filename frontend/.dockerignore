@@ -1,0 +1,8 @@
+node_modules
+.next
+.git
+*.md
+.env*
+!.env.local.example
+coverage
+tsconfig.tsbuildinfo

@@ -1,0 +1,13 @@
+# Pre-prod overlay: looser restart policy, unbounded logs (small volume,
+# easier debugging). Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.preprod.yml \
+#     --env-file env/preprod.env -p apartment103-preprod up -d --build
+services:
+  mongo:
+    restart: unless-stopped
+
+  backend:
+    restart: unless-stopped
+
+  frontend:
+    restart: unless-stopped
