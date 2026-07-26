@@ -1,7 +1,12 @@
 # Base stack: frontend + backend + MongoDB on a single host. Environment
 # specifics (restart/logging policy) live in docker-compose.preprod.yml /
-# docker-compose.prod.yml; secrets/config values come from an env file under
-# deploy/env/ passed with --env-file (see deploy/deploy.sh).
+# docker-compose.prod.yml. Non-secret config comes from deploy/env/<env>.env;
+# real secrets come from .secrets/<env>.env, exported into the remote
+# shell's environment at `up` time rather than written to disk on the
+# deployment host — see deploy/deploy.sh. Because of that, secret-only vars
+# below must NOT use a
+# hard-required (${VAR:?...}) default: that would make every `docker compose`
+# subcommand (ps, logs, exec, ...) demand the secrets file too, not just `up`.
 #
 # Values here mirror backend/.env.example and frontend/.env.local.example.
 services:
@@ -29,7 +34,7 @@ services:
       MONGO_URI: mongodb://mongo:27017
       MONGO_DB: ${MONGO_DB:-apartment103}
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-[]}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set in the deploy env file}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-1440}
       OTP_LENGTH: ${OTP_LENGTH:-6}
