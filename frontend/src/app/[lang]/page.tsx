@@ -100,7 +100,11 @@ export default async function Home({
       </header>
 
       {/* ── SCROLLABLE CONTENT ──────────────────────────── */}
-      <div id="page-scroll" className="flex-1 overflow-y-auto">
+      {/* `relative` makes this the containing block for BookingWidget's
+          calendar-open breakout (position:absolute) — so a tall calendar
+          grows this container's own scrollable area instead of being
+          clipped or needing its own separate internal scroll. */}
+      <div id="page-scroll" className="flex-1 overflow-y-auto relative">
       <div className="min-h-full flex flex-col">
 
       {/* ── HERO ────────────────────────────────────────── */}

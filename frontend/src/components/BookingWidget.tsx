@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useId, useEffect, useLayoutEffect } from "react";
-import { createPortal } from "react-dom";
 import { DayPicker } from "react-day-picker";
 import type { DateRange } from "react-day-picker";
 import { format, differenceInCalendarDays, parse, isValid, isBefore, isAfter, isSameDay, subDays, addDays } from "date-fns";
@@ -45,6 +44,13 @@ const CURRENCIES: Currency[] = ["EUR", "CHF", "USD", "GBP"];
 
 const DATE_FNS_LOCALES: Record<Locale, DateFnsLocale> = { en: enUS, de, fr, it };
 const TRANSITION_MS = 380;
+// The calendar breakout's collapse reuses the same ease-out curve as its
+// expand by default, but an ease-out curve front-loads most of a shrink's
+// size change into its first frames, reading as an abrupt snap rather than
+// a smooth collapse — so closing gets its own, slower, standard ease-in-out
+// timing instead.
+const COLLAPSE_TRANSITION_MS = 560;
+const COLLAPSE_EASING = "cubic-bezier(0.4, 0, 0.2, 1)";
 // id of the app's real scrollable container (frontend/src/app/[lang]/page.tsx)
 const PAGE_SCROLL_ID = "page-scroll";
 
@@ -99,6 +105,13 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const [checkInText, setCheckInText] = useState("");
   const [checkOutText, setCheckOutText] = useState("");
   const [calendarOpen, setCalendarOpen] = useState(false);
+  // Stays mounted slightly longer than calendarOpen on close (cleared by
+  // the breakout FLIP effect's settle(), once the collapse animation
+  // actually finishes) — so the calendar is still there to be visibly
+  // clipped away by the shrinking box, instead of vanishing instantly the
+  // moment calendarOpen flips.
+  const [calendarMounted, setCalendarMounted] = useState(false);
+  if (calendarOpen && !calendarMounted) setCalendarMounted(true);
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState<Child[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -106,13 +119,21 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const [prices, setPrices] = useState<Price[]>([]);
   const [bookedRanges, setBookedRanges] = useState<DateRange[]>([]);
   const [identityModalOpen, setIdentityModalOpen] = useState(false);
-  const [calendarAnchor, setCalendarAnchor] = useState<{ top: number; right: number } | null>(null);
   const dateRef = useRef<HTMLDivElement>(null);
   const calendarRef = useRef<HTMLDivElement>(null);
   const widgetRef = useRef<HTMLDivElement>(null);
+  // Reserves flow space matching the widget's current on-screen height
+  // whenever it has broken out of flow (calendarOpen breakout) — pushes
+  // later page content (the highlights section) down as it expands, and
+  // lets it settle back up as it collapses. See the ResizeObserver effect
+  // below.
+  const spacerRef = useRef<HTMLDivElement>(null);
   // Rect captured live (via captureRect()) right before extended toggles, so
   // the FLIP effect below knows where to animate from.
   const prevRectRef = useRef<DOMRect | null>(null);
+  // Same idea, but captured right before calendarOpen toggles (compact mode
+  // only) — feeds the horizontal breakout FLIP effect further below.
+  const prevCompactRectRef = useRef<DOMRect | null>(null);
 
   // ── Post-OTP booking procedure ──────────────────────────
   const [verified, setVerified] = useState<VerifiedIdentity | null>(null);
@@ -126,12 +147,19 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   // against the API in response to a Book click.
   const [checkingSession, setCheckingSession] = useState(false);
   // The widget's pinned top once settled into (or out of) extended mode — its
-  // top edge never moves, only left/width/height animate.
+  // top edge never moves, only left/width/height animate. Reused (along with
+  // pinnedRight) for the calendar-open breakout below; the two never overlap
+  // since that breakout only ever runs while !extended.
   const [pinnedTop, setPinnedTop] = useState<number | null>(null);
+  const [pinnedRight, setPinnedRight] = useState<number | null>(null);
   const extended = verified !== null;
 
   const captureRect = () => {
     if (widgetRef.current) prevRectRef.current = widgetRef.current.getBoundingClientRect();
+  };
+
+  const captureCompactRect = () => {
+    if (widgetRef.current) prevCompactRectRef.current = widgetRef.current.getBoundingClientRect();
   };
 
   useEffect(() => {
@@ -164,76 +192,12 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
       const target = e.target as Node;
       if (dateRef.current?.contains(target)) return;
       if (calendarRef.current?.contains(target)) return;
+      captureCompactRect();
       setCalendarOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
-
-  // Pin the dropdown's top-right corner to the date row's on-screen position — it then
-  // grows left/down as it needs, without pushing the rest of the card (and getting
-  // clipped by the page's fixed-viewport, non-scrolling hero) out of view.
-  useLayoutEffect(() => {
-    if (!calendarOpen) return;
-    const updateAnchor = () => {
-      if (!dateRef.current) return;
-      const rect = dateRef.current.getBoundingClientRect();
-      setCalendarAnchor({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
-    };
-    updateAnchor();
-    window.addEventListener("resize", updateAnchor);
-    // The extended widget scrolls internally (overflow-y-auto), which moves the
-    // date row without firing a window resize/scroll event — track it directly.
-    document.addEventListener("scroll", updateAnchor, true);
-    return () => {
-      window.removeEventListener("resize", updateAnchor);
-      document.removeEventListener("scroll", updateAnchor, true);
-    };
-  }, [calendarOpen]);
-
-  // The calendar popover is portaled to document.body (see dateAndGuestCalendar
-  // below) so it can escape the hero's clipping ancestors — but that also takes
-  // it out of the app's real scroll container's DOM subtree, so a touch-drag
-  // starting on the popover can never native-scroll-chain to the page behind
-  // it. Forward vertical drags to that container manually; horizontal drags
-  // are left alone so the two-month row can still be swiped on narrow screens.
-  // A callback ref (rather than an effect keyed on calendarOpen) attaches the
-  // listeners at the exact moment the portaled node mounts — calendarAnchor
-  // resolves one render after calendarOpen flips true, so an effect keyed on
-  // calendarOpen alone can fire before the popover node even exists.
-  const attachCalendarTouchForwarding = (node: HTMLDivElement | null) => {
-    calendarRef.current = node;
-    if (!node) return;
-    const scrollContainer = document.getElementById(PAGE_SCROLL_ID);
-    if (!scrollContainer) return;
-
-    let startX = 0;
-    let startY = 0;
-    let forwarding = false;
-
-    const onTouchStart = (e: TouchEvent) => {
-      startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
-      forwarding = false;
-    };
-
-    const onTouchMove = (e: TouchEvent) => {
-      const touch = e.touches[0];
-      const dx = touch.clientX - startX;
-      const dy = touch.clientY - startY;
-      if (!forwarding) {
-        if (Math.abs(dy) < 10 || Math.abs(dy) <= Math.abs(dx)) return;
-        forwarding = true;
-      }
-      scrollContainer.scrollTop -= dy;
-      startX = touch.clientX;
-      startY = touch.clientY;
-      e.preventDefault();
-    };
-
-    node.addEventListener("touchstart", onTouchStart, { passive: true });
-    node.addEventListener("touchmove", onTouchMove, { passive: false });
-  };
 
   // Animate the widget moving/resizing between its compact and extended
   // layouts (FLIP: freeze at the pre-toggle rect, then transition to the
@@ -245,6 +209,13 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     prevRectRef.current = null;
     if (!el || !fromRect) return;
 
+    // A still-settled previous transition deliberately leaves position/top
+    // (or left/right) pinned inline — clear that out before measuring,
+    // otherwise a stale `position:fixed` combined with this render's
+    // className (which may now specify a plain `w-full`, resolving against
+    // the *viewport* while still fixed) can measure a nonsensical,
+    // over-constrained box instead of the element's true target size.
+    el.style.cssText = "";
     const toRect = el.getBoundingClientRect();
     const top = fromRect.top;
 
@@ -277,8 +248,34 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     });
 
     const settle = () => {
-      el.style.cssText = "";
+      // Clear everything EXCEPT position/top when extended — those two stay
+      // pinned via direct DOM mutation (already holding the correct frozen
+      // value from above) right up until the setPinnedTop below lands and
+      // the style prop takes over on React's next render. Clearing them
+      // here too would leave a gap, rendered via a plain event listener
+      // outside React's commit cycle, where the element is position:fixed
+      // with no top offset — falling back to CSS's "static position"
+      // default and visibly jumping before snapping to the right spot.
+      el.style.transition = "";
+      el.style.left = "";
+      el.style.right = "";
+      el.style.width = "";
+      el.style.height = "";
+      el.style.maxWidth = "";
+      el.style.maxHeight = "";
+      el.style.overflow = "";
+      el.style.zIndex = "";
+      el.style.transform = "";
+      el.style.translate = "";
+      if (!extended) {
+        el.style.position = "";
+        el.style.top = "";
+      }
       setPinnedTop(extended ? top : null);
+      // This transition always supersedes any horizontal breakout pin from
+      // the calendar-open effect below (the two never run concurrently,
+      // since that effect no-ops while extended).
+      setPinnedRight(null);
     };
     el.addEventListener("transitionend", settle, { once: true });
 
@@ -288,12 +285,174 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     };
   }, [extended]);
 
+  // Animate the widget growing/shrinking to fit the embedded calendar —
+  // breaking out of its fixed-width grid column horizontally as well as
+  // growing vertically, in one continuous motion (both width and height
+  // animate together here, same as the extended-mode FLIP above, so the
+  // bottom-left corner moves smoothly instead of resizing in two separate
+  // steps). The invariant is top+right (not just top): the widget grows
+  // leftward/downward from its original top-right corner.
+  //
+  // Positioned absolute (not fixed) relative to #page-scroll — the app's
+  // real scroll container (made `relative` in page.tsx specifically so it
+  // becomes this containing block) — rather than the viewport. That way, if
+  // the calendar makes the widget taller than the viewport, #page-scroll's
+  // own scrollable area grows to fit it and the *page* scrolls, instead of
+  // the widget clipping/scrolling its own content internally.
+  useLayoutEffect(() => {
+    const el = widgetRef.current;
+    const fromRect = prevCompactRectRef.current;
+    prevCompactRectRef.current = null;
+    if (!el || !fromRect || extended) return;
+    const scrollContainer = document.getElementById(PAGE_SCROLL_ID);
+    if (!scrollContainer) return;
+
+    // Below page.tsx's hero `lg` breakpoint (where its grid collapses to a
+    // single column), the widget already spans close to the full width, so
+    // growing it further from a right anchor reads as lopsided — center it
+    // instead, the same way extended mode's overlay centers (className
+    // below adds `left-1/2 -translate-x-1/2` only under that breakpoint).
+    const isMobile = window.innerWidth < 1024;
+
+    // Same reasoning as the extended-mode effect above: clear any leftover
+    // pinned position/top/right(/left) before measuring, so a stale
+    // `position:absolute` from the settled-open state doesn't get combined
+    // with this render's (now plain `w-full`) className into a bogus
+    // over-constrained target size when closing.
+    el.style.cssText = "";
+    // When closing, the calendar panel is deliberately still mounted (see
+    // calendarMounted) so it stays visible, clipped away by the shrinking
+    // box, instead of vanishing before the shrink even starts — but that
+    // means it would also still count toward this auto-height measurement.
+    // Hide it just for this one synchronous read, then restore it so the
+    // rest of the effect (and the animation) sees it as present.
+    const calendarEl = calendarRef.current;
+    const prevCalendarDisplay = calendarEl?.style.display ?? "";
+    if (!calendarOpen && calendarEl) calendarEl.style.display = "none";
+    const toRect = el.getBoundingClientRect();
+    if (!calendarOpen && calendarEl) calendarEl.style.display = prevCalendarDisplay;
+    const containerRect = scrollContainer.getBoundingClientRect();
+    // Convert from viewport-relative (getBoundingClientRect) to
+    // container-content-relative (position:absolute) coordinates — top
+    // needs the container's current scroll added back in; right/left don't,
+    // since #page-scroll only ever scrolls vertically.
+    const top = fromRect.top - containerRect.top + scrollContainer.scrollTop;
+    const right = containerRect.right - fromRect.right;
+    const left = fromRect.left - containerRect.left;
+
+    el.style.transition = "none";
+    el.style.position = "absolute";
+    el.style.top = `${top}px`;
+    if (isMobile) {
+      // Raw pixel left for the animation itself — same trick the
+      // extended-mode FLIP uses.
+      el.style.left = `${left}px`;
+      el.style.right = "auto";
+    } else {
+      el.style.right = `${right}px`;
+      el.style.left = "auto";
+    }
+    el.style.width = `${fromRect.width}px`;
+    el.style.height = `${fromRect.height}px`;
+    el.style.maxWidth = "none";
+    el.style.maxHeight = "none";
+    el.style.overflow = "hidden";
+    el.style.zIndex = "91";
+    // Cancel any className-driven centering transform (Tailwind v4's
+    // -translate-x-1/2 uses the standalone `translate` property, not
+    // `transform`) so it doesn't also shift the absolute `left` above.
+    el.style.transform = "none";
+    el.style.translate = "none";
+    void el.offsetHeight;
+
+    const raf = requestAnimationFrame(() => {
+      const [duration, easing] = calendarOpen
+        ? [TRANSITION_MS, "cubic-bezier(0.22, 1, 0.36, 1)"]
+        : [COLLAPSE_TRANSITION_MS, COLLAPSE_EASING];
+      const props = isMobile ? ["left", "width", "height"] : ["width", "height"];
+      el.style.transition = props
+        .map((prop) => `${prop} ${duration}ms ${easing}`)
+        .join(", ");
+      if (isMobile) el.style.left = `${toRect.left - containerRect.left}px`;
+      el.style.width = `${toRect.width}px`;
+      el.style.height = `${toRect.height}px`;
+    });
+
+    const settle = () => {
+      // Same reasoning as the extended-mode settle above: leave
+      // position/top/right(/left) pinned via direct DOM mutation (already
+      // holding the correct frozen values from above) through the gap
+      // until the setPinnedTop/setPinnedRight calls below land on React's
+      // next render — clearing them here too would let the browser paint
+      // one frame with position:fixed but no offsets, falling back to a
+      // "static position" and visibly jumping before snapping back. On
+      // mobile, `left` is cleared immediately instead — the className's
+      // `left-1/2 -translate-x-1/2` is self-sufficient with no gap, same
+      // as extended mode's own centering.
+      el.style.transition = "";
+      el.style.left = "";
+      el.style.width = "";
+      el.style.height = "";
+      el.style.maxWidth = "";
+      el.style.maxHeight = "";
+      el.style.overflow = "";
+      el.style.zIndex = "";
+      el.style.transform = "";
+      el.style.translate = "";
+      if (!calendarOpen) {
+        el.style.position = "";
+        el.style.top = "";
+        el.style.right = "";
+        // Only now — once the collapse has actually finished — remove the
+        // calendar panel from the tree for good.
+        setCalendarMounted(false);
+      }
+      setPinnedTop(calendarOpen ? top : null);
+      setPinnedRight(calendarOpen && !isMobile ? right : null);
+    };
+    el.addEventListener("transitionend", settle, { once: true });
+
+    return () => {
+      cancelAnimationFrame(raf);
+      el.removeEventListener("transitionend", settle);
+    };
+  }, [calendarOpen, extended]);
+
+  // Keep the flow spacer's height matched to the widget's actual rendered
+  // height while it's broken out of flow (calendarOpen breakout uses
+  // position:absolute; extended's own overlay uses position:fixed, so it's
+  // naturally excluded here) — ResizeObserver fires on every real layout
+  // change, including each frame of the FLIP transition above, so this
+  // tracks the widget's grow/shrink animation smoothly without needing a
+  // transition of its own. Checking the widget's *live* inline style
+  // (rather than the calendarOpen/extended state directly) matters for the
+  // closing case specifically: calendarOpen already flips to false before
+  // the shrink animation finishes, but the widget stays position:absolute,
+  // still shrinking, until its own settle() runs at the very end — so the
+  // spacer keeps tracking it down smoothly instead of snapping to 0 early.
+  useLayoutEffect(() => {
+    const widget = widgetRef.current;
+    const spacer = spacerRef.current;
+    if (!widget || !spacer) return;
+    const update = () => {
+      const breakout = widget.style.position === "absolute";
+      spacer.style.height = breakout ? `${widget.getBoundingClientRect().height}px` : "0px";
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(widget);
+    return () => observer.disconnect();
+  }, [calendarOpen, extended]);
+
   // Sync text inputs whenever the calendar range changes
   useEffect(() => {
     setCheckInText(range?.from ? format(range.from, DISPLAY_FORMAT) : "");
     setCheckOutText(range?.to ? format(range.to, DISPLAY_FORMAT) : "");
     // Auto-close once both dates are chosen
-    if (range?.from && range?.to) setCalendarOpen(false);
+    if (range?.from && range?.to) {
+      captureCompactRect();
+      setCalendarOpen(false);
+    }
   }, [range]);
 
   const handleCheckInChange = (value: string) => {
@@ -587,76 +746,81 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     (!!range?.from && !range?.to && !!hoverDate && hoverIsValidCheckout &&
       ((isAfter(date, range.from) && isBefore(date, hoverDate)) || isSameDay(date, hoverDate)));
 
-  const dateAndGuestCalendar = calendarOpen && calendarAnchor && createPortal(
-    <div
-      ref={attachCalendarTouchForwarding}
-      className="fixed z-[101] flex justify-center bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 p-5 w-max max-w-[calc(100vw-1.5rem)] max-h-[calc(100vh-1.5rem)] overflow-x-auto overflow-y-auto"
-      style={{ top: calendarAnchor.top, right: calendarAnchor.right }}
-    >
-      <DayPicker
-        mode="range"
-        navLayout="around"
-        style={{
-          "--rdp-months-gap": "1.5rem",
-        } as React.CSSProperties}
-        styles={{ months: { flexWrap: "nowrap" } }}
-        selected={range}
-        defaultMonth={range?.from ?? today}
-        onSelect={(newRange, triggerDate) => {
-          // While picking a checkout date, validate the clicked day directly
-          // against the original check-in rather than trusting react-day-picker's
-          // computed range: its own range logic silently swaps check-in to
-          // the clicked date whenever the naive selection would cross an
-          // occupied date, which would otherwise look like check-in moved.
-          if (range?.from && !range?.to && isAfter(triggerDate, range.from)) {
-            if (isValidCheckout(triggerDate)) setRange({ from: range.from, to: triggerDate });
-            return;
-          }
-          setRange(newRange);
-        }}
-        onDayClick={(date, modifiers) => {
-          if (modifiers.disabled) return;
-          // Both dates were already picked; start a fresh selection instead of adjusting the old range
-          if (range?.from && range?.to) {
-            setRange({ from: date, to: undefined });
-          }
-        }}
-        numberOfMonths={2}
-        disabled={[{ before: today }, ...bookedRanges, hasNoPrice]}
-        excludeDisabled
-        showOutsideDays={false}
-        locale={dateFnsLocale}
-        min={1}
-        onDayMouseEnter={(date) => setHoverDate(date)}
-        onDayMouseLeave={() => setHoverDate(undefined)}
-        modifiers={{
-          hoverRange: (date) =>
-            !!range?.from &&
-            !range?.to &&
-            !!hoverDate &&
-            hoverIsValidCheckout &&
-            isAfter(date, range.from) &&
-            isBefore(date, hoverDate),
-          hoverRangeEnd: (date) =>
-            !!range?.from &&
-            !range?.to &&
-            !!hoverDate &&
-            hoverIsValidCheckout &&
-            isSameDay(date, hoverDate),
-          available: (date) => !isRangeOrHoverDate(date) && !isPastDate(date) && !isBookedDate(date) && !hasNoPrice(date) && !isInvalidCheckoutCandidate(date),
-          past: (date) => !isRangeOrHoverDate(date) && isPastDate(date),
-          unavailable: (date) => !isRangeOrHoverDate(date) && !isPastDate(date) && (isBookedDate(date) || hasNoPrice(date) || isInvalidCheckoutCandidate(date)),
-        }}
-        modifiersClassNames={{
-          hoverRange: "rdp-range_middle",
-          hoverRangeEnd: "rdp-range_end",
-          available: "!bg-green-50 dark:!bg-green-950/40 !text-green-800 dark:!text-green-300 hover:!bg-green-100 dark:hover:!bg-green-900/40",
-          past: "!bg-gray-100 dark:!bg-gray-800/60 !text-gray-400 dark:!text-gray-600",
-          unavailable: "!bg-red-50 dark:!bg-red-950/40 !text-red-700 dark:!text-red-400",
-        }}
-      />
-    </div>,
-    document.body
+  // Embedded (not portaled) — a plain conditionally-mounted block, in flow
+  // right below the date fields. Its appearing/disappearing (both size and
+  // reveal) is animated entirely by the widget-resize FLIP effect above,
+  // which measures this element's natural size once mounted; giving it its
+  // own separate transition here would fight that effect's forced reflow
+  // and desync the two animations. Stays mounted through calendarMounted
+  // (not calendarOpen directly) so it's still present — and visibly clipped
+  // by the shrinking box — for the whole closing animation.
+  const dateAndGuestCalendar = calendarMounted && (
+    <div ref={calendarRef}>
+      <div className="pt-4 w-max max-w-full mx-auto overflow-x-auto">
+        <DayPicker
+          mode="range"
+          navLayout="around"
+          style={{
+            "--rdp-months-gap": "1.5rem",
+          } as React.CSSProperties}
+          styles={{ months: { flexWrap: "nowrap" } }}
+          selected={range}
+          defaultMonth={range?.from ?? today}
+          onSelect={(newRange, triggerDate) => {
+            // While picking a checkout date, validate the clicked day directly
+            // against the original check-in rather than trusting react-day-picker's
+            // computed range: its own range logic silently swaps check-in to
+            // the clicked date whenever the naive selection would cross an
+            // occupied date, which would otherwise look like check-in moved.
+            if (range?.from && !range?.to && isAfter(triggerDate, range.from)) {
+              if (isValidCheckout(triggerDate)) setRange({ from: range.from, to: triggerDate });
+              return;
+            }
+            setRange(newRange);
+          }}
+          onDayClick={(date, modifiers) => {
+            if (modifiers.disabled) return;
+            // Both dates were already picked; start a fresh selection instead of adjusting the old range
+            if (range?.from && range?.to) {
+              setRange({ from: date, to: undefined });
+            }
+          }}
+          numberOfMonths={2}
+          disabled={[{ before: today }, ...bookedRanges, hasNoPrice]}
+          excludeDisabled
+          showOutsideDays={false}
+          locale={dateFnsLocale}
+          min={1}
+          onDayMouseEnter={(date) => setHoverDate(date)}
+          onDayMouseLeave={() => setHoverDate(undefined)}
+          modifiers={{
+            hoverRange: (date) =>
+              !!range?.from &&
+              !range?.to &&
+              !!hoverDate &&
+              hoverIsValidCheckout &&
+              isAfter(date, range.from) &&
+              isBefore(date, hoverDate),
+            hoverRangeEnd: (date) =>
+              !!range?.from &&
+              !range?.to &&
+              !!hoverDate &&
+              hoverIsValidCheckout &&
+              isSameDay(date, hoverDate),
+            available: (date) => !isRangeOrHoverDate(date) && !isPastDate(date) && !isBookedDate(date) && !hasNoPrice(date) && !isInvalidCheckoutCandidate(date),
+            past: (date) => !isRangeOrHoverDate(date) && isPastDate(date),
+            unavailable: (date) => !isRangeOrHoverDate(date) && !isPastDate(date) && (isBookedDate(date) || hasNoPrice(date) || isInvalidCheckoutCandidate(date)),
+          }}
+          modifiersClassNames={{
+            hoverRange: "rdp-range_middle",
+            hoverRangeEnd: "rdp-range_end",
+            available: "!bg-green-50 dark:!bg-green-950/40 !text-green-800 dark:!text-green-300 hover:!bg-green-100 dark:hover:!bg-green-900/40",
+            past: "!bg-gray-100 dark:!bg-gray-800/60 !text-gray-400 dark:!text-gray-600",
+            unavailable: "!bg-red-50 dark:!bg-red-950/40 !text-red-700 dark:!text-red-400",
+          }}
+        />
+      </div>
+    </div>
   );
 
   return (
@@ -669,10 +833,14 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
       />
       <div
         ref={widgetRef}
-        className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full ${
-          extended ? "fixed z-[91] left-1/2 -translate-x-1/2 max-w-3xl max-h-[90vh] overflow-y-auto" : ""
+        className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl ${
+          extended
+            ? "fixed z-[91] w-full left-1/2 -translate-x-1/2 max-w-3xl max-h-[90vh] overflow-y-auto"
+            : calendarOpen
+            ? "absolute z-[91] max-w-[min(680px,calc(100vw-1.5rem))] max-lg:left-1/2 max-lg:-translate-x-1/2"
+            : "w-full"
         }`}
-        style={{ top: pinnedTop ?? undefined }}
+        style={{ top: pinnedTop ?? undefined, right: pinnedRight ?? undefined }}
       >
         {/* ── Header ────────────────────────────────────────── */}
         <div
@@ -721,7 +889,10 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                     label={dict.checkIn}
                     value={checkInText}
                     onChange={handleCheckInChange}
-                    onCalendarClick={() => setCalendarOpen((v) => !v)}
+                    onCalendarClick={() => {
+                      captureCompactRect();
+                      setCalendarOpen((v) => !v);
+                    }}
                     active={calendarOpen}
                     filled={!!range?.from}
                     openCalendarLabel={dict.openCalendar}
@@ -731,7 +902,10 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                     label={dict.checkOut}
                     value={checkOutText}
                     onChange={handleCheckOutChange}
-                    onCalendarClick={() => setCalendarOpen((v) => !v)}
+                    onCalendarClick={() => {
+                      captureCompactRect();
+                      setCalendarOpen((v) => !v);
+                    }}
                     active={calendarOpen}
                     filled={!!range?.to}
                     openCalendarLabel={dict.openCalendar}
@@ -888,7 +1062,10 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                         label={dict.checkIn}
                         value={checkInText}
                         onChange={handleCheckInChange}
-                        onCalendarClick={() => setCalendarOpen((v) => !v)}
+                        onCalendarClick={() => {
+                      captureCompactRect();
+                      setCalendarOpen((v) => !v);
+                    }}
                         active={calendarOpen}
                         filled={!!range?.from}
                         openCalendarLabel={dict.openCalendar}
@@ -898,12 +1075,14 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                         label={dict.checkOut}
                         value={checkOutText}
                         onChange={handleCheckOutChange}
-                        onCalendarClick={() => setCalendarOpen((v) => !v)}
+                        onCalendarClick={() => {
+                      captureCompactRect();
+                      setCalendarOpen((v) => !v);
+                    }}
                         active={calendarOpen}
                         filled={!!range?.to}
                         openCalendarLabel={dict.openCalendar}
                       />
-                      {dateAndGuestCalendar}
                     </section>
 
                     <div className="min-w-[92px]">
@@ -927,6 +1106,8 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                         onIncrement={addChild}
                       />
                     </div>
+
+                    <div className="w-full">{dateAndGuestCalendar}</div>
                   </div>
 
                   {childAgesBlock}
@@ -1067,6 +1248,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
           )}
         </div>
       </div>
+      <div ref={spacerRef} aria-hidden="true" style={{ height: 0 }} />
 
       {identityModalOpen && (
         <BookingModal
