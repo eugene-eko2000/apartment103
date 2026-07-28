@@ -1,3 +1,4 @@
+import math
 import re
 from datetime import datetime, timedelta, timezone
 
@@ -18,7 +19,7 @@ from app.core.security import (
 from app.models.admin import Admin
 from app.models.guest import Guest
 from app.models.otp_challenge import OtpChallenge
-from app.schemas.auth import OtpRequest, OtpVerify, TokenResponse
+from app.schemas.auth import OtpRequest, OtpRequestResponse, OtpVerify, TokenResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -49,8 +50,8 @@ async def _find_principal(identifier: str, kind: str) -> tuple[SubjectType, Pyda
     return None
 
 
-@router.post("/otp/request", status_code=status.HTTP_202_ACCEPTED)
-async def request_otp(payload: OtpRequest) -> dict:
+@router.post("/otp/request", status_code=status.HTTP_202_ACCEPTED, response_model=OtpRequestResponse)
+async def request_otp(payload: OtpRequest) -> OtpRequestResponse:
     try:
         kind = classify_identifier(payload.identifier)
     except ValueError as exc:
@@ -71,7 +72,10 @@ async def request_otp(payload: OtpRequest) -> dict:
             seconds=settings.otp_resend_cooldown_seconds
         )
         if now < cooldown_until:
-            return {"message": _OTP_REQUESTED_MESSAGE}
+            retry_after_seconds = math.ceil((cooldown_until - now).total_seconds())
+            return OtpRequestResponse(
+                message=_OTP_REQUESTED_MESSAGE, retry_after_seconds=retry_after_seconds
+            )
 
     code = generate_otp_code()
     challenge = OtpChallenge(
@@ -87,7 +91,9 @@ async def request_otp(payload: OtpRequest) -> dict:
     else:
         send_otp_sms(identifier, code)
 
-    return {"message": _OTP_REQUESTED_MESSAGE}
+    return OtpRequestResponse(
+        message=_OTP_REQUESTED_MESSAGE, retry_after_seconds=settings.otp_resend_cooldown_seconds
+    )
 
 
 @router.post("/otp/verify", response_model=TokenResponse)

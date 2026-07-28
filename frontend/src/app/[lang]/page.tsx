@@ -59,13 +59,15 @@ export default async function Home({
       <header className="shrink-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
-              style={{ background: "linear-gradient(135deg, #0f766e, #0891b2)" }}
-            >
-              103
-            </span>
-            <span className="font-semibold text-gray-800 dark:text-gray-100">Apartment 103</span>
+            {/* eslint-disable-next-line @next/next/no-img-element -- .ico isn't supported by next/image's optimizer */}
+            <img
+              src="/favicon.ico"
+              alt="Berg See Home"
+              width={32}
+              height={32}
+              className="w-8 h-8 rounded-lg"
+            />
+            <span className="font-semibold text-gray-800 dark:text-gray-100">Berg See Home</span>
           </div>
           <nav className="hidden sm:flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400">
             <GalleryButton label={dict.nav.gallery} dict={dict.gallery} />

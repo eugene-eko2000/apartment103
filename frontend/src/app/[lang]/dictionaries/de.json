@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "Apartment 103 — Ferienwohnung",
-    "description": "Buchen Sie Ihren perfekten Aufenthalt im Apartment 103. Eine wunderschön gestaltete Ferienwohnung."
+    "title": "Berg See Home — Ferienwohnung",
+    "description": "Buchen Sie Ihren perfekten Aufenthalt im Berg See Home. Eine wunderschön gestaltete Ferienwohnung."
   },
   "nav": {
     "menu": "Menü",
@@ -39,7 +39,7 @@
     }
   },
   "footer": {
-    "copyright": "© {year} Apartment 103. Alle Rechte vorbehalten.",
+    "copyright": "© {year} Berg See Home. Alle Rechte vorbehalten.",
     "privacy": "Datenschutz",
     "terms": "AGB",
     "contact": "Kontakt"
@@ -99,6 +99,7 @@
       "otpPlaceholder": "123456",
       "verifyCode": "Bestätigen",
       "resendCode": "Code erneut senden",
+      "codeResent": "Ein neuer Code wurde gesendet.",
       "changeIdentifier": "Andere E-Mail-Adresse oder Telefonnummer verwenden",
       "guestTitleCreate": "Erzählen Sie uns von sich",
       "guestTitleUpdate": "Bestätigen Sie Ihre Angaben",
@@ -166,6 +167,7 @@
       "otpPlaceholder": "123456",
       "verifyCode": "Bestätigen",
       "resendCode": "Code erneut senden",
+      "codeResent": "Ein neuer Code wurde gesendet.",
       "changeIdentifier": "Andere E-Mail-Adresse oder Telefonnummer verwenden"
     },
     "myBookingsModal": {

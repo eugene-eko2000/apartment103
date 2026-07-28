@@ -246,7 +246,12 @@ function authHeaders(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}` };
 }
 
-export function requestOtp(identifier: string): Promise<{ message: string }> {
+export interface OtpRequestResponse {
+  message: string;
+  retry_after_seconds: number;
+}
+
+export function requestOtp(identifier: string): Promise<OtpRequestResponse> {
   return request("/auth/otp/request", { method: "POST", body: JSON.stringify({ identifier }) });
 }
 

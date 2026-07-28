@@ -7,6 +7,14 @@ class OtpRequest(BaseModel):
     identifier: str
 
 
+class OtpRequestResponse(BaseModel):
+    message: str
+    # Seconds until another OTP request for this identifier will actually
+    # send a new code, so the client can show an accurate resend countdown
+    # instead of silently re-requesting into the server-side cooldown.
+    retry_after_seconds: int
+
+
 class OtpVerify(BaseModel):
     identifier: str
     code: str

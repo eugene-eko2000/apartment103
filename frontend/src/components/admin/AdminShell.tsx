@@ -39,7 +39,7 @@ export default function AdminShell({
     <div className="min-h-screen bg-slate-100 dark:bg-slate-900">
       <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <h1 className="text-base font-bold text-slate-800 dark:text-slate-100">apartment103 admin</h1>
+          <h1 className="text-base font-bold text-slate-800 dark:text-slate-100">Berg See Home admin</h1>
           <div className="flex items-center gap-4">
             <ThemeSwitcher />
             <button

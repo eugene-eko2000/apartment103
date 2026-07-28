@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "Apartment 103 — Holiday Rental",
-    "description": "Book your perfect stay at Apartment 103. A beautifully designed holiday apartment."
+    "title": "Berg See Home — Holiday Rental",
+    "description": "Book your perfect stay at Berg See Home. A beautifully designed holiday apartment."
   },
   "nav": {
     "menu": "Menu",
@@ -39,7 +39,7 @@
     }
   },
   "footer": {
-    "copyright": "© {year} Apartment 103. All rights reserved.",
+    "copyright": "© {year} Berg See Home. All rights reserved.",
     "privacy": "Privacy",
     "terms": "Terms",
     "contact": "Contact"
@@ -99,6 +99,7 @@
       "otpPlaceholder": "123456",
       "verifyCode": "Verify",
       "resendCode": "Resend code",
+      "codeResent": "A new code has been sent.",
       "changeIdentifier": "Use a different email or phone number",
       "guestTitleCreate": "Tell us about yourself",
       "guestTitleUpdate": "Confirm your details",
@@ -166,6 +167,7 @@
       "otpPlaceholder": "123456",
       "verifyCode": "Verify",
       "resendCode": "Resend code",
+      "codeResent": "A new code has been sent.",
       "changeIdentifier": "Use a different email or phone number"
     },
     "myBookingsModal": {

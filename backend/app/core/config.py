@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_name: str = "apartment103-backend"
     environment: str = "local"
@@ -40,6 +40,13 @@ class Settings(BaseSettings):
     stripe_secret_key: str | None = None
     stripe_webhook_secret: str | None = None
     stripe_publishable_key: str | None = None
+
+    # Twilio. Used to deliver OTP codes by SMS. When twilio_account_sid or
+    # twilio_auth_token is unset (default), SMS codes are logged instead of
+    # sent, which is enough for local development.
+    twilio_account_sid: str | None = None
+    twilio_auth_token: str | None = None
+    twilio_messaging_service_sid: str | None = None
 
 
 settings = Settings()

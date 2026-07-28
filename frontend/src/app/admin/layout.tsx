@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "apartment103 admin",
-  description: "Admin dashboard for apartment103",
+  title: "Berg See Home admin",
+  description: "Admin dashboard for Berg See Home",
 };
 
 export default function AdminRootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

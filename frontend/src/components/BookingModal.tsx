@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ApiError, getGuest, requestOtp, verifyOtp, type Guest, type GuestInput, type SubjectType } from "@/lib/api";
 import type { PaymentStepDict } from "@/components/PaymentStep";
+import { useOtpResendCooldown } from "@/lib/useOtpResendCooldown";
 
 export interface BookingModalDict {
   close: string;
@@ -17,6 +18,7 @@ export interface BookingModalDict {
   otpPlaceholder: string;
   verifyCode: string;
   resendCode: string;
+  codeResent: string;
   changeIdentifier: string;
   guestTitleCreate: string;
   guestTitleUpdate: string;
@@ -98,6 +100,8 @@ export default function BookingModal({
   const [otpCode, setOtpCode] = useState("");
   const [pending, setPending] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const resendCooldown = useOtpResendCooldown();
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -111,6 +115,8 @@ export default function BookingModal({
     setStep("identifier");
     setOtpCode("");
     setErrorMessage(null);
+    setResendMessage(null);
+    resendCooldown.reset();
   };
 
   const handleRequestOtp = async (e: React.SubmitEvent<HTMLFormElement>) => {
@@ -119,8 +125,10 @@ export default function BookingModal({
     setPending(true);
     setErrorMessage(null);
     try {
-      await requestOtp(identifier.trim());
+      const result = await requestOtp(identifier.trim());
       setOtpCode("");
+      setResendMessage(null);
+      resendCooldown.start(result.retry_after_seconds);
       setStep("otp");
     } catch (err) {
       setErrorMessage(err instanceof ApiError ? err.message : String(err));
@@ -130,10 +138,14 @@ export default function BookingModal({
   };
 
   const handleResendOtp = async () => {
+    if (resendCooldown.secondsLeft > 0) return;
     setPending(true);
     setErrorMessage(null);
+    setResendMessage(null);
     try {
-      await requestOtp(identifier.trim());
+      const result = await requestOtp(identifier.trim());
+      resendCooldown.start(result.retry_after_seconds);
+      setResendMessage(dict.codeResent);
     } catch (err) {
       setErrorMessage(err instanceof ApiError ? err.message : String(err));
     } finally {
@@ -258,10 +270,16 @@ export default function BookingModal({
                 />
               </div>
               {errorMessage && <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>}
+              {resendMessage && <p className="text-sm text-teal-600 dark:text-teal-400">{resendMessage}</p>}
               <SubmitButton pending={pending} label={dict.verifyCode} />
               <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                <button type="button" onClick={handleResendOtp} className="hover:text-teal-700 dark:hover:text-teal-400 cursor-pointer">
-                  {dict.resendCode}
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  disabled={pending || resendCooldown.secondsLeft > 0}
+                  className="hover:text-teal-700 dark:hover:text-teal-400 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  {resendCooldown.secondsLeft > 0 ? `${dict.resendCode} (${resendCooldown.secondsLeft}s)` : dict.resendCode}
                 </button>
                 <button type="button" onClick={resetToIdentifier} className="hover:text-teal-700 dark:hover:text-teal-400 cursor-pointer">
                   {dict.changeIdentifier}

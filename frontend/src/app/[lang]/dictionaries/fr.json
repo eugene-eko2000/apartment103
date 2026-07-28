@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "Apartment 103 — Location de vacances",
-    "description": "Réservez votre séjour idéal à l'Apartment 103. Un appartement de vacances au design soigné."
+    "title": "Berg See Home — Location de vacances",
+    "description": "Réservez votre séjour idéal à Berg See Home. Un appartement de vacances au design soigné."
   },
   "nav": {
     "menu": "Menu",
@@ -39,7 +39,7 @@
     }
   },
   "footer": {
-    "copyright": "© {year} Apartment 103. Tous droits réservés.",
+    "copyright": "© {year} Berg See Home. Tous droits réservés.",
     "privacy": "Confidentialité",
     "terms": "Conditions",
     "contact": "Contact"
@@ -99,6 +99,7 @@
       "otpPlaceholder": "123456",
       "verifyCode": "Vérifier",
       "resendCode": "Renvoyer le code",
+      "codeResent": "Un nouveau code a été envoyé.",
       "changeIdentifier": "Utiliser un autre e-mail ou numéro de téléphone",
       "guestTitleCreate": "Parlez-nous de vous",
       "guestTitleUpdate": "Confirmez vos coordonnées",
@@ -166,6 +167,7 @@
       "otpPlaceholder": "123456",
       "verifyCode": "Vérifier",
       "resendCode": "Renvoyer le code",
+      "codeResent": "Un nouveau code a été envoyé.",
       "changeIdentifier": "Utiliser un autre e-mail ou numéro de téléphone"
     },
     "myBookingsModal": {
