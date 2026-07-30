@@ -3,7 +3,7 @@
 import { useState, useRef, useId, useEffect, useLayoutEffect } from "react";
 import { DayPicker } from "react-day-picker";
 import type { DateRange } from "react-day-picker";
-import { format, differenceInCalendarDays, parse, isValid, isBefore, isAfter, isSameDay, subDays, addDays } from "date-fns";
+import { format, differenceInCalendarDays, parse, isBefore, isAfter, isSameDay, subDays, addDays } from "date-fns";
 import { enUS, de, fr, it } from "date-fns/locale";
 import type { Locale as DateFnsLocale } from "date-fns";
 import "react-day-picker/style.css";
@@ -39,6 +39,7 @@ import { clearGuestSession, readGuestSession, saveGuestSession } from "@/lib/gue
 
 const CHILD_AGES = Array.from({ length: 18 }, (_, i) => i);
 const DISPLAY_FORMAT = "dd/MM/yyyy";
+const DATE_PLACEHOLDER = "DD/MM/YYYY";
 const LANGUAGES: Language[] = ["en", "de", "fr", "it"];
 const CURRENCIES: Currency[] = ["EUR", "CHF", "USD", "GBP"];
 
@@ -91,23 +92,12 @@ export interface BookingDict {
   modal: BookingModalDict;
 }
 
-function tryParseDate(str: string): Date | null {
-  const fmts = ["dd/MM/yyyy", "d/M/yyyy", "dd-MM-yyyy", "d-M-yyyy", "dd MMM yyyy", "d MMM yyyy"];
-  for (const fmt of fmts) {
-    const d = parse(str.trim(), fmt, new Date());
-    if (isValid(d) && d.getFullYear() >= new Date().getFullYear()) return d;
-  }
-  return null;
-}
-
 export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang: Locale }) {
   const today = new Date();
   const dateFnsLocale = DATE_FNS_LOCALES[lang];
   const { currency } = useCurrency();
   const [range, setRange] = useState<DateRange | undefined>();
   const [hoverDate, setHoverDate] = useState<Date | undefined>(undefined);
-  const [checkInText, setCheckInText] = useState("");
-  const [checkOutText, setCheckOutText] = useState("");
   const [calendarOpen, setCalendarOpen] = useState(false);
   // Stays mounted slightly longer than calendarOpen on close (cleared by
   // the breakout FLIP effect's settle(), once the collapse animation
@@ -463,34 +453,18 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     return () => observer.disconnect();
   }, [calendarOpen, extended]);
 
-  // Sync text inputs whenever the calendar range changes
+  // Auto-close the calendar once both dates are chosen
   useEffect(() => {
-    setCheckInText(range?.from ? format(range.from, DISPLAY_FORMAT) : "");
-    setCheckOutText(range?.to ? format(range.to, DISPLAY_FORMAT) : "");
-    // Auto-close once both dates are chosen
     if (range?.from && range?.to) {
       captureCompactRect();
       setCalendarOpen(false);
     }
   }, [range]);
 
-  const handleCheckInChange = (value: string) => {
-    setCheckInText(value);
-    const parsed = tryParseDate(value);
-    if (parsed) {
-      setRange({ from: parsed, to: undefined });
-    }
-  };
+  const checkInText = range?.from ? format(range.from, DISPLAY_FORMAT) : "";
+  const checkOutText = range?.to ? format(range.to, DISPLAY_FORMAT) : "";
 
   const checkInMinStay = range?.from ? findMinStay(prices, format(range.from, "yyyy-MM-dd")) : 1;
-
-  const handleCheckOutChange = (value: string) => {
-    setCheckOutText(value);
-    const parsed = tryParseDate(value);
-    if (parsed && range?.from && isValidCheckout(parsed)) {
-      setRange({ from: range.from, to: parsed });
-    }
-  };
 
   const nights =
     range?.from && range?.to ? differenceInCalendarDays(range.to, range.from) : 0;
@@ -914,8 +888,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                   <DateField
                     label={dict.checkIn}
                     value={checkInText}
-                    onChange={handleCheckInChange}
-                    onCalendarClick={() => {
+                    onClick={() => {
                       captureCompactRect();
                       setCalendarOpen((v) => !v);
                     }}
@@ -927,8 +900,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                   <DateField
                     label={dict.checkOut}
                     value={checkOutText}
-                    onChange={handleCheckOutChange}
-                    onCalendarClick={() => {
+                    onClick={() => {
                       captureCompactRect();
                       setCalendarOpen((v) => !v);
                     }}
@@ -1087,11 +1059,10 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                       <DateField
                         label={dict.checkIn}
                         value={checkInText}
-                        onChange={handleCheckInChange}
-                        onCalendarClick={() => {
-                      captureCompactRect();
-                      setCalendarOpen((v) => !v);
-                    }}
+                        onClick={() => {
+                          captureCompactRect();
+                          setCalendarOpen((v) => !v);
+                        }}
                         active={calendarOpen}
                         filled={!!range?.from}
                         openCalendarLabel={dict.openCalendar}
@@ -1100,11 +1071,10 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                       <DateField
                         label={dict.checkOut}
                         value={checkOutText}
-                        onChange={handleCheckOutChange}
-                        onCalendarClick={() => {
-                      captureCompactRect();
-                      setCalendarOpen((v) => !v);
-                    }}
+                        onClick={() => {
+                          captureCompactRect();
+                          setCalendarOpen((v) => !v);
+                        }}
                         active={calendarOpen}
                         filled={!!range?.to}
                         openCalendarLabel={dict.openCalendar}
@@ -1291,16 +1261,14 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
 function DateField({
   label,
   value,
-  onChange,
-  onCalendarClick,
+  onClick,
   active,
   filled,
   openCalendarLabel,
 }: {
   label: string;
   value: string;
-  onChange: (v: string) => void;
-  onCalendarClick: () => void;
+  onClick: () => void;
   active: boolean;
   filled: boolean;
   openCalendarLabel: string;
@@ -1308,34 +1276,29 @@ function DateField({
   return (
     <div className="flex-1 min-w-0">
       <label className="block text-xs font-medium text-gray-400 dark:text-gray-500 mb-1">{label}</label>
-      <div className="relative">
-        <input
-          type="text"
-          value={value}
-          placeholder="DD/MM/YYYY"
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") e.preventDefault();
-          }}
-          className={`w-full pl-3 pr-9 py-2.5 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-1 ${
-            filled
-              ? "border-teal-400 dark:border-teal-600 bg-teal-50 dark:bg-teal-950/30 text-gray-800 dark:text-gray-100 focus:border-teal-500 focus:ring-teal-200"
-              : active
-              ? "border-teal-400 dark:border-teal-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:border-teal-500 focus:ring-teal-200"
-              : "border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:border-teal-400 focus:ring-teal-100"
-          } placeholder-gray-300 dark:placeholder-gray-500`}
-        />
-        <button
-          type="button"
-          onClick={onCalendarClick}
-          className={`absolute right-2.5 top-1/2 -translate-y-1/2 transition-colors cursor-pointer ${
-            active ? "text-teal-600 dark:text-teal-400" : "text-gray-400 dark:text-gray-500 hover:text-teal-600 dark:hover:text-teal-400"
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={openCalendarLabel}
+        className={`relative w-full pl-3 pr-9 py-2.5 rounded-xl border text-sm text-left transition-colors cursor-pointer focus:outline-none focus:ring-1 ${
+          filled
+            ? "border-teal-400 dark:border-teal-600 bg-teal-50 dark:bg-teal-950/30 text-gray-800 dark:text-gray-100 focus:border-teal-500 focus:ring-teal-200"
+            : active
+            ? "border-teal-400 dark:border-teal-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:border-teal-500 focus:ring-teal-200"
+            : "border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:border-teal-400 focus:ring-teal-100"
+        }`}
+      >
+        <span className={value ? "" : "text-gray-300 dark:text-gray-500"}>
+          {value || DATE_PLACEHOLDER}
+        </span>
+        <span
+          className={`absolute right-2.5 top-1/2 -translate-y-1/2 transition-colors ${
+            active ? "text-teal-600 dark:text-teal-400" : "text-gray-400 dark:text-gray-500"
           }`}
-          aria-label={openCalendarLabel}
         >
           <CalendarIcon />
-        </button>
-      </div>
+        </span>
+      </button>
     </div>
   );
 }
