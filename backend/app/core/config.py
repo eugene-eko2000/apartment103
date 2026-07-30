@@ -24,15 +24,11 @@ class Settings(BaseSettings):
     otp_resend_cooldown_seconds: int = 30
     otp_max_attempts: int = 5
 
-    # SMTP settings used to deliver OTP codes by email. When smtp_host is
+    # SendGrid. Used to deliver OTP codes by email. When sendgrid_api_key is
     # unset (default), emails are logged instead of sent, which is enough
     # for local development.
-    smtp_host: str | None = None
-    smtp_port: int = 587
-    smtp_username: str | None = None
-    smtp_password: str | None = None
-    smtp_use_tls: bool = True
-    smtp_from_address: str = "no-reply@apartment103.example"
+    sendgrid_api_key: str | None = None
+    sendgrid_from_address: str = "no-reply@apartment103.example"
 
     # Stripe. stripe_secret_key/stripe_webhook_secret are backend-only
     # secrets; stripe_publishable_key is safe to hand to the frontend (it's

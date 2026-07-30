@@ -1,8 +1,7 @@
 import logging
-import smtplib
-from email.message import EmailMessage
-from email.headerregistry import Address
 
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Content, Email, Mail, To
 from twilio.rest import Client as TwilioClient
 
 from app.core.config import settings
@@ -11,22 +10,18 @@ logger = logging.getLogger("app.notifications")
 
 
 def send_otp_email(to_address: str, code: str) -> None:
-    if not settings.smtp_host:
-        logger.info("OTP email (SMTP not configured, logging instead) to=%s code=%s", to_address, code)
+    if not settings.sendgrid_api_key:
+        logger.info("OTP email (SendGrid not configured, logging instead) to=%s code=%s", to_address, code)
         return
 
-    message = EmailMessage()
-    message["Subject"] = "Your Berg See Home verification code"
-    message["From"] = Address(addr_spec=settings.smtp_from_address)
-    message["To"] = Address(addr_spec=to_address)
-    message.set_content(f"Your verification code is {code}. It expires in a few minutes.")
+    from_email = Email(settings.sendgrid_from_address)
+    to_email = To(to_address)
+    subject = "Your verification code"
+    content = Content("text/plain", f"Your verification code is {code}.")
 
-    with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
-        if settings.smtp_use_tls:
-            server.starttls()
-        if settings.smtp_username and settings.smtp_password:
-            server.login(settings.smtp_username, settings.smtp_password)
-        server.send_message(message)
+    message = Mail(from_email, to_email, subject, content)
+
+    SendGridAPIClient(settings.sendgrid_api_key).send(message)
 
 
 def send_otp_sms(to_number: str, code: str) -> None:

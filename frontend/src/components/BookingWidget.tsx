@@ -53,6 +53,12 @@ const COLLAPSE_TRANSITION_MS = 560;
 const COLLAPSE_EASING = "cubic-bezier(0.4, 0, 0.2, 1)";
 // id of the app's real scrollable container (frontend/src/app/[lang]/page.tsx)
 const PAGE_SCROLL_ID = "page-scroll";
+// Height of the fixed <header> in page.tsx (h-16 = 64px, plus its 1px
+// border-b) — extended mode anchors to just below it on mobile, where the
+// overlay's own captured pre-toggle position (wherever the compact widget
+// happened to be scrolled to) isn't a sensible anchor to grow from/pin to.
+const MOBILE_HEADER_HEIGHT_PX = 65;
+const MOBILE_BREAKPOINT_PX = 1024;
 
 type Child = { age: number | null };
 type GuestFlowStep = "plan" | "form" | "submitting" | "payment" | "success" | "error";
@@ -201,8 +207,13 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
 
   // Animate the widget moving/resizing between its compact and extended
   // layouts (FLIP: freeze at the pre-toggle rect, then transition to the
-  // natural post-toggle rect). The top edge is pinned to the same value in
-  // both keyframes, so only left/width/height ever animate.
+  // natural post-toggle rect). The top edge is normally pinned to the same
+  // value in both keyframes (only left/width/height animate) — except when
+  // opening into extended mode on mobile, where pinning to the *compact*
+  // widget's current top (wherever it happened to be scrolled to) is what
+  // used to make the overlay land in an inconsistent spot. There, `top`
+  // itself is the animated target too, sliding to a fixed anchor just below
+  // the page header instead.
   useLayoutEffect(() => {
     const el = widgetRef.current;
     const fromRect = prevRectRef.current;
@@ -217,11 +228,13 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     // over-constrained box instead of the element's true target size.
     el.style.cssText = "";
     const toRect = el.getBoundingClientRect();
-    const top = fromRect.top;
+    const isMobile = window.innerWidth < MOBILE_BREAKPOINT_PX;
+    const startTop = fromRect.top;
+    const top = extended && isMobile ? MOBILE_HEADER_HEIGHT_PX : startTop;
 
     el.style.transition = "none";
     el.style.position = "fixed";
-    el.style.top = `${top}px`;
+    el.style.top = `${startTop}px`;
     el.style.left = `${fromRect.left}px`;
     el.style.width = `${fromRect.width}px`;
     el.style.height = `${fromRect.height}px`;
@@ -239,9 +252,10 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     void el.offsetHeight;
 
     const raf = requestAnimationFrame(() => {
-      el.style.transition = ["left", "width", "height"]
+      el.style.transition = ["top", "left", "width", "height"]
         .map((prop) => `${prop} ${TRANSITION_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`)
         .join(", ");
+      el.style.top = `${top}px`;
       el.style.left = `${toRect.left}px`;
       el.style.width = `${toRect.width}px`;
       el.style.height = `${toRect.height}px`;
@@ -835,7 +849,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
         ref={widgetRef}
         className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl ${
           extended
-            ? "fixed z-[91] w-full left-1/2 -translate-x-1/2 max-w-3xl max-h-[90vh] overflow-y-auto"
+            ? "fixed z-[91] w-full left-1/2 -translate-x-1/2 max-w-3xl max-h-[90vh] max-lg:max-h-[calc(100vh-65px)] overflow-y-auto"
             : calendarOpen
             ? "absolute z-[91] max-w-[min(680px,calc(100vw-1.5rem))] max-lg:left-1/2 max-lg:-translate-x-1/2"
             : "w-full"
