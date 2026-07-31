@@ -51,6 +51,10 @@ server {
     }
 
     location / {
+        # Matches the raw upload cap in app/api/routes/images.py
+        # (_MAX_UPLOAD_BYTES) — nginx's 1m default otherwise rejects image
+        # uploads with 413 before the request reaches FastAPI.
+        client_max_body_size 20m;
         proxy_pass http://backend:8000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
