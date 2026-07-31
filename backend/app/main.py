@@ -12,6 +12,7 @@ from app.api.routes import (
     closures,
     guests,
     health,
+    images,
     payments,
     plans,
     prices,
@@ -56,3 +57,5 @@ app.include_router(closures.public_router)
 app.include_router(closures.router)
 app.include_router(payments.router)
 app.include_router(payments.webhook_router)
+app.include_router(images.public_router)
+app.include_router(images.router)

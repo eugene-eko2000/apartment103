@@ -40,6 +40,16 @@ server {
     ssl_certificate_key /etc/nginx/certs/${SSL_KEY_FILE};
     ssl_protocols TLSv1.2 TLSv1.3;
 
+    # Uploaded image files, written by the backend to the shared image_data
+    # volume. Served directly by nginx instead of proxying through
+    # FastAPI/Mongo — keys are immutable (a fresh key per upload, see
+    # app/models/image.py), so long-lived caching here is always safe.
+    location /images/ {
+        alias /data/images/;
+        try_files $uri =404;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
     location / {
         proxy_pass http://backend:8000;
         proxy_set_header Host $host;

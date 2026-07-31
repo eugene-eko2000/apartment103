@@ -65,3 +65,6 @@ backend/.ruff_cache/
 # virtual environments
 backend/.venv/
 backend/venv/
+
+# local image uploads (IMAGE_STORAGE_PATH default; see app/core/config.py)
+backend/var/

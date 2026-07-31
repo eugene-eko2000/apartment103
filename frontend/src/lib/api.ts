@@ -217,6 +217,22 @@ export interface BookingInput {
   date_ranges: BookingDateRange[];
 }
 
+export type ImageCategory = "hero" | "amenities" | "gallery";
+
+export interface ImageAsset {
+  _id: string;
+  key: string;
+  category: ImageCategory;
+  content_type: string;
+  size_bytes: number;
+  width: number | null;
+  height: number | null;
+  alt: string;
+  sort_order: number;
+  uploaded_at: string;
+  labels: string[];
+}
+
 class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -483,6 +499,66 @@ export function updateAdmin(adminId: string, token: string, data: AdminInput): P
 
 export function deleteAdmin(adminId: string, token: string): Promise<void> {
   return request(`/admins/${adminId}`, { method: "DELETE", headers: authHeaders(token) });
+}
+
+export function imageUrl(key: string): string {
+  return `${API_URL}/images/${key}`;
+}
+
+export function listImages(category?: ImageCategory): Promise<ImageAsset[]> {
+  return request(`/images${category ? `?category=${category}` : ""}`);
+}
+
+export async function uploadImage(
+  token: string,
+  file: File,
+  data: { category: ImageCategory; alt: string; sort_order: number }
+): Promise<ImageAsset> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("category", data.category);
+  form.append("alt", data.alt);
+  form.append("sort_order", String(data.sort_order));
+
+  // Not routed through request(): that helper always sends
+  // Content-Type: application/json, which would break the multipart
+  // boundary the browser sets automatically for a FormData body.
+  const response = await fetch(`${API_URL}/images`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: form,
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const message = typeof body?.detail === "string" ? body.detail : `Request failed (${response.status})`;
+    throw new ApiError(response.status, message);
+  }
+  return response.json();
+}
+
+export function deleteImage(imageId: string, token: string): Promise<void> {
+  return request(`/images/${imageId}`, { method: "DELETE", headers: authHeaders(token) });
+}
+
+// Public: lets the main site resolve a stable alias (e.g. "hero-current")
+// to whichever image currently carries that label, without hardcoding a key.
+export function listImagesByLabel(label: string): Promise<ImageAsset[]> {
+  return request(`/images/labels/${encodeURIComponent(label)}`);
+}
+
+export function addImageLabel(imageId: string, token: string, label: string): Promise<ImageAsset> {
+  return request(`/images/${imageId}/labels`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ label }),
+  });
+}
+
+export function removeImageLabel(imageId: string, token: string, label: string): Promise<ImageAsset> {
+  return request(`/images/${imageId}/labels/${encodeURIComponent(label)}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
 }
 
 export { ApiError };

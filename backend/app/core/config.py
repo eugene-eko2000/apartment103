@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     mongo_uri: str = "mongodb://localhost:27017"
     mongo_db: str = "apartment103"
 
+    # Directory where uploaded image files are written. In production this
+    # is a Docker volume shared read-only with nginx, which serves the files
+    # directly (see deploy/nginx/templates/default.conf.template). Locally
+    # it's a relative path under backend/, created on first upload.
+    image_storage_path: str = "var/images"
+
     # Origins allowed to call the API from a browser (the Next.js frontend).
     cors_allow_origins: list[str] = ["http://localhost:3000"]
 

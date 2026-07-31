@@ -11,6 +11,7 @@ export type AdminTab =
   | "plans"
   | "prices"
   | "cancellation-policies"
+  | "photos"
   | "admins";
 
 const TABS: { id: AdminTab; label: string }[] = [
@@ -21,6 +22,7 @@ const TABS: { id: AdminTab; label: string }[] = [
   { id: "plans", label: "Plans" },
   { id: "prices", label: "Prices" },
   { id: "cancellation-policies", label: "Cancellation Policies" },
+  { id: "photos", label: "Photos" },
   { id: "admins", label: "Admins" },
 ];
 

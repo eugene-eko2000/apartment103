@@ -1,8 +1,5 @@
 import type { Currency, Price } from "./api";
 
-export const FALLBACK_DAILY_RATE = 150;
-export const FALLBACK_CURRENCY: Currency = "CHF";
-
 export interface MatchedRate {
   dailyRate: number;
   currency: Currency;

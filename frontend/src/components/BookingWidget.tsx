@@ -30,7 +30,7 @@ import {
   type Plan,
   type Price,
 } from "@/lib/api";
-import { findDailyRate, findLowestDailyRate, findMinStay, FALLBACK_CURRENCY, FALLBACK_DAILY_RATE } from "@/lib/pricing";
+import { findDailyRate, findLowestDailyRate, findMinStay } from "@/lib/pricing";
 import BookingModal, { emptyGuestForm, guestToForm, type BookingModalDict, type VerifiedIdentity } from "@/components/BookingModal";
 import { CancellationTimeline, getMaxThresholdDays, getVisualMaxDays } from "@/components/CancellationTimeline";
 import PaymentStep from "@/components/PaymentStep";
@@ -478,11 +478,15 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const sharedVisualMaxDays = getVisualMaxDays(
     Math.max(0, ...plans.map((p) => getMaxThresholdDays(p.cancellation_policy.rules)))
   );
-  const pricePerNight = (matchedRate?.dailyRate ?? FALLBACK_DAILY_RATE) * cheapestPlanRatio;
-  const priceCurrency: Currency = matchedRate?.currency ?? FALLBACK_CURRENCY;
-  const convertedPricePerNight = convertCurrency(pricePerNight, priceCurrency, currency);
-  const priceTotal = pricePerNight * nights;
-  const convertedPriceTotal = convertCurrency(priceTotal, priceCurrency, currency);
+  const pricePerNight = matchedRate ? matchedRate.dailyRate * cheapestPlanRatio : null;
+  const priceCurrency: Currency | null = matchedRate?.currency ?? null;
+  const convertedPricePerNight =
+    pricePerNight !== null && priceCurrency ? convertCurrency(pricePerNight, priceCurrency, currency) : null;
+  const priceTotal = pricePerNight !== null ? pricePerNight * nights : null;
+  const convertedPriceTotal =
+    priceTotal !== null && priceCurrency ? convertCurrency(priceTotal, priceCurrency, currency) : null;
+  const activePrice = nights > 0 ? convertedPriceTotal : convertedPricePerNight;
+  const activeRawPrice = nights > 0 ? priceTotal : pricePerNight;
   const isFormValid =
     !!range?.from &&
     !!range?.to &&
@@ -587,20 +591,19 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
 
   const submitBooking = async (finalGuestId: string, token: string) => {
     if (!selectedPlan || !range?.from || !range?.to) return;
+    const matchedRate = findDailyRate(prices, format(range.from, "yyyy-MM-dd"));
+    if (!matchedRate) return;
     setGuestStep("submitting");
     try {
-      const matchedRate = findDailyRate(prices, format(range.from, "yyyy-MM-dd"));
-      const dailyRate = matchedRate?.dailyRate ?? FALLBACK_DAILY_RATE;
-      const bookingCurrency: Currency = matchedRate?.currency ?? FALLBACK_CURRENCY;
       const booking = await createBooking(token, {
         guest_id: finalGuestId,
         cancellation_policy_id: selectedPlan.cancellation_policy.id,
-        currency: bookingCurrency,
+        currency: matchedRate.currency,
         date_ranges: [
           {
             begin_date: format(range.from, "yyyy-MM-dd"),
             end_date: format(range.to, "yyyy-MM-dd"),
-            price: nights * dailyRate * selectedPlan.price_ratio,
+            price: nights * matchedRate.dailyRate * selectedPlan.price_ratio,
           },
         ],
       });
@@ -852,16 +855,18 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
             <div className="text-left shrink-0">
               <span className="text-white/90 text-base mr-1 [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">{dict.fromPrefix}</span>
               <span className="whitespace-nowrap">
-                <span className="text-lg lg:text-xl font-bold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.35)]">
-                  {formatPrice(nights > 0 ? convertedPriceTotal : convertedPricePerNight, currency)}
+                <span className="inline-flex items-center text-lg lg:text-xl font-bold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.35)]">
+                  {activePrice !== null ? formatPrice(activePrice, currency) : <LoadingSpinner className="w-4 h-4" />}
                 </span>
-                <span className="text-white/90 text-base ml-1 [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
-                  {nights > 0 ? dict.total : dict.perNight}
-                </span>
+                {activePrice !== null && (
+                  <span className="text-white/90 text-base ml-1 [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
+                    {nights > 0 ? dict.total : dict.perNight}
+                  </span>
+                )}
               </span>
-              {priceCurrency !== currency && (
+              {priceCurrency !== null && priceCurrency !== currency && activeRawPrice !== null && (
                 <div className="text-white/85 text-sm [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
-                  {formatPrice(nights > 0 ? priceTotal : pricePerNight, priceCurrency)}{" "}
+                  {formatPrice(activeRawPrice, priceCurrency)}{" "}
                   {nights > 0 ? dict.total : dict.perNight}
                 </div>
               )}
@@ -983,9 +988,16 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                   ) : (
                     <div className="space-y-2">
                       {plans.map((p) => {
-                        const planPricePerNight = (matchedRate?.dailyRate ?? FALLBACK_DAILY_RATE) * p.price_ratio;
-                        const convertedPlanPricePerNight = convertCurrency(planPricePerNight, priceCurrency, currency);
-                        const convertedPlanTotal = convertCurrency(planPricePerNight * nights, priceCurrency, currency);
+                        const planPricePerNight = matchedRate ? matchedRate.dailyRate * p.price_ratio : null;
+                        const convertedPlanPricePerNight =
+                          planPricePerNight !== null && priceCurrency
+                            ? convertCurrency(planPricePerNight, priceCurrency, currency)
+                            : null;
+                        const convertedPlanTotal =
+                          planPricePerNight !== null && priceCurrency
+                            ? convertCurrency(planPricePerNight * nights, priceCurrency, currency)
+                            : null;
+                        const activePlanPrice = nights > 0 ? convertedPlanTotal : convertedPlanPricePerNight;
                         const isSelected = selectedPlanId === p._id;
                         return (
                           <button
@@ -999,16 +1011,20 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                             }`}
                           >
                             <div className="flex items-baseline justify-between gap-3">
-                              <span className="text-2xl font-bold text-gray-800 dark:text-gray-100">
-                                {formatPrice(nights > 0 ? convertedPlanTotal : convertedPlanPricePerNight, currency)}
+                              <span className="inline-flex items-center text-2xl font-bold text-gray-800 dark:text-gray-100">
+                                {activePlanPrice !== null ? (
+                                  formatPrice(activePlanPrice, currency)
+                                ) : (
+                                  <LoadingSpinner className="w-5 h-5" />
+                                )}
                               </span>
-                              {nights > 0 && (
+                              {nights > 0 && activePlanPrice !== null && (
                                 <span className="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                                   {dict.total}
                                 </span>
                               )}
                             </div>
-                            {nights > 0 && (
+                            {nights > 0 && convertedPlanPricePerNight !== null && (
                               <p className="text-base text-gray-500 dark:text-gray-400 mt-0.5">
                                 {formatPrice(convertedPlanPricePerNight, currency)}
                                 {dict.perNight}
@@ -1310,6 +1326,16 @@ function CalendarIcon() {
       <rect x="1" y="3" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />
       <path d="M1 7h14" stroke="currentColor" strokeWidth="1.5" />
       <path d="M5 1v4M11 1v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/* ── LoadingSpinner ────────────────────────────────────── */
+function LoadingSpinner({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={`animate-spin ${className}`} viewBox="0 0 24 24" fill="none" role="status" aria-label="Loading price">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
     </svg>
   );
 }

@@ -55,8 +55,11 @@ services:
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
       TWILIO_MESSAGING_SERVICE_SID: ${TWILIO_MESSAGING_SERVICE_SID:-}
+      IMAGE_STORAGE_PATH: /data/images
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - image_data:/data/images
 
   frontend:
     build:
@@ -85,6 +88,8 @@ services:
     volumes:
       - ./nginx/templates:/etc/nginx/templates:ro
       - ../.secrets/certs:/etc/nginx/certs:ro
+      - image_data:/data/images:ro
 
 volumes:
   mongo_data:
+  image_data:
