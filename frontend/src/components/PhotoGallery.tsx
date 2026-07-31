@@ -2,64 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import Image from 'next/image';
-
-const PHOTOS = [
-  '20260614_133654.jpeg',
-  '20260614_133717.jpeg',
-  '20260614_133835.jpeg',
-  '20260614_133840.jpeg',
-  '20260614_134008.jpeg',
-  '20260614_134017.jpeg',
-  '20260614_134117.jpeg',
-  '20260614_134200.jpeg',
-  '20260614_134244.jpeg',
-  '20260614_134259.jpeg',
-  '20260614_134352.jpeg',
-  '20260614_134400.jpeg',
-  '20260614_134410.jpeg',
-  '20260614_134531.jpeg',
-  '20260614_134601.jpeg',
-  '20260614_134606.jpeg',
-  '20260614_134612.jpeg',
-  '20260614_134724.jpeg',
-  '20260614_134737.jpeg',
-  '20260614_135021.jpeg',
-  '20260614_135040.jpeg',
-  '20260614_135044.jpeg',
-  '20260614_135144.jpeg',
-  '20260614_135149.jpeg',
-  '20260614_135214.jpeg',
-  '20260614_135221.jpeg',
-  '20260614_135347.jpeg',
-  '20260614_135402.jpeg',
-  '20260614_135550.jpeg',
-  '20260614_135610.jpeg',
-  '20260614_135628.jpeg',
-  '20260614_135633.jpeg',
-  '20260614_140151.jpeg',
-  '20260614_140213.jpeg',
-  '20260614_140222.jpeg',
-  '20260614_140225.jpeg',
-  '20260614_140559.jpeg',
-  '20260614_141026.jpeg',
-  '20260614_141031.jpeg',
-  '20260614_141320.jpeg',
-  '20260614_141327.jpeg',
-  '20260614_141349.jpeg',
-  '20260614_141637.jpeg',
-  '20260614_142319.jpeg',
-  '20260614_143829.jpeg',
-  '20260614_143914.jpeg',
-  '20260614_144852.jpeg',
-  '20260614_144940.jpeg',
-  '20260614_144955.jpeg',
-  '20260614_145202.jpeg',
-  '20260614_145237.jpeg',
-  '20260614_145238.jpeg',
-  '20260614_145239(0).jpeg',
-  '20260614_145239.jpeg',
-];
+import { imageUrl, listImagesByLabel, type ImageAsset } from '@/lib/api';
 
 export interface GalleryDict {
   closeGallery: string;
@@ -75,6 +18,8 @@ interface Props {
 }
 
 export default function PhotoGallery({ onClose, dict }: Props) {
+  const [photos, setPhotos] = useState<ImageAsset[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(0);
   const stripRef = useRef<HTMLDivElement>(null);
   const thumbRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -88,8 +33,18 @@ export default function PhotoGallery({ onClose, dict }: Props) {
     timer: null as ReturnType<typeof setTimeout> | null,
   });
 
+  // Admin-managed via the "gallery" label (Photos panel) rather than a
+  // static file list — adding/removing/reordering photos there updates the
+  // gallery with no frontend rebuild.
+  useEffect(() => {
+    listImagesByLabel('gallery')
+      .then(setPhotos)
+      .catch(() => setPhotos([]))
+      .finally(() => setLoading(false));
+  }, []);
+
   const prev = useCallback(() => setSelected(i => Math.max(0, i - 1)), []);
-  const next = useCallback(() => setSelected(i => Math.min(PHOTOS.length - 1, i + 1)), []);
+  const next = useCallback(() => setSelected(i => Math.min(photos.length - 1, i + 1)), [photos.length]);
 
   // Drag-to-scroll on thumbnail strip
   useEffect(() => {
@@ -208,20 +163,25 @@ export default function PhotoGallery({ onClose, dict }: Props) {
         </button>
 
         <div className="flex items-center justify-center h-full w-full">
-          <Image
-            key={PHOTOS[selected]}
-            src={`/gallery/${PHOTOS[selected]}`}
-            alt={`${dict.apartmentPhoto} ${selected + 1}`}
-            width={900}
-            height={1000}
-            className="max-h-full max-w-full w-auto h-auto rounded-2xl"
-            priority
-          />
+          {!loading && photos.length === 0 && (
+            <p className="text-white/70 text-sm">No photos yet.</p>
+          )}
+          {photos[selected] && (
+            // eslint-disable-next-line @next/next/no-img-element -- backend-served, not a Next-optimizable local/static asset
+            <img
+              key={photos[selected].key}
+              src={imageUrl(photos[selected].key)}
+              alt={`${dict.apartmentPhoto} ${selected + 1}`}
+              width={photos[selected].width ?? undefined}
+              height={photos[selected].height ?? undefined}
+              className="max-h-full max-w-full w-auto h-auto rounded-2xl"
+            />
+          )}
         </div>
 
         <button
           onClick={next}
-          disabled={selected === PHOTOS.length - 1}
+          disabled={selected >= photos.length - 1}
           aria-label={dict.nextPhoto}
           className="absolute right-6 z-10 text-white text-5xl px-2 py-3 rounded-full bg-black/20 hover:bg-black/50 disabled:opacity-0 transition-all"
         >
@@ -242,9 +202,9 @@ export default function PhotoGallery({ onClose, dict }: Props) {
             if (drag.current.wasGrabbed) { e.stopPropagation(); drag.current.wasGrabbed = false; }
           }}
         >
-          {PHOTOS.map((photo, i) => (
+          {photos.map((photo, i) => (
             <button
-              key={photo}
+              key={photo._id}
               ref={el => { thumbRefs.current[i] = el; }}
               onClick={() => setSelected(i)}
               aria-label={`${dict.photo} ${i + 1}`}
@@ -256,12 +216,11 @@ export default function PhotoGallery({ onClose, dict }: Props) {
               ].join(' ')}
               style={{ width: 44, height: 59, cursor: 'inherit' }}
             >
-              <Image
-                src={`/gallery/thumbs/${photo}`}
+              {/* eslint-disable-next-line @next/next/no-img-element -- backend-served, not a Next-optimizable local/static asset */}
+              <img
+                src={imageUrl(photo.key)}
                 alt=""
-                fill
-                className="object-cover"
-                sizes="44px"
+                className="absolute inset-0 w-full h-full object-cover"
               />
             </button>
           ))}

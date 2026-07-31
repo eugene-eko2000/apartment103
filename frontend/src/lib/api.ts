@@ -542,8 +542,11 @@ export function deleteImage(imageId: string, token: string): Promise<void> {
 
 // Public: lets the main site resolve a stable alias (e.g. "hero-current")
 // to whichever image currently carries that label, without hardcoding a key.
-export function listImagesByLabel(label: string): Promise<ImageAsset[]> {
-  return request(`/images/labels/${encodeURIComponent(label)}`);
+// `options` lets server components opt out of Next's default fetch caching
+// (`{ cache: "no-store" }`) so a label reassignment in the admin panel shows
+// up immediately instead of waiting for a rebuild/revalidation.
+export function listImagesByLabel(label: string, options?: RequestInit): Promise<ImageAsset[]> {
+  return request(`/images/labels/${encodeURIComponent(label)}`, options);
 }
 
 export function addImageLabel(imageId: string, token: string, label: string): Promise<ImageAsset> {

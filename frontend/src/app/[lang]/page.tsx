@@ -1,12 +1,14 @@
-import Image from "next/image";
 import { notFound } from "next/navigation";
 import BookingWidget from "@/components/BookingWidget";
+import MobileBookingReveal from "@/components/MobileBookingReveal";
+import ScrollHint from "@/components/ScrollHint";
 import GalleryButton from "@/components/GalleryButton";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import CurrencySwitcher from "@/components/CurrencySwitcher";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
 import UserMenu from "@/components/UserMenu";
 import MobileMenu from "@/components/MobileMenu";
+import { imageUrl, listImagesByLabel } from "@/lib/api";
 import { getDictionary, hasLocale } from "./dictionaries";
 
 export default async function Home({
@@ -18,6 +20,13 @@ export default async function Home({
   if (!hasLocale(lang)) notFound();
 
   const dict = await getDictionary(lang);
+
+  // Admin-managed via the "background" label (Photos panel) rather than a
+  // static asset — swapping the photo there updates the live site with no
+  // frontend rebuild. `cache: "no-store"` is what makes that true: it opts
+  // this page out of static generation/ISR staleness for this fetch.
+  const backgroundImages = await listImagesByLabel("background", { cache: "no-store" }).catch(() => []);
+  const backgroundImage = backgroundImages[0] ?? null;
 
   const FEATURES = [
     { icon: "🛏", label: dict.hero.features.bedrooms },
@@ -38,14 +47,15 @@ export default async function Home({
   return (
     <div>
       {/* ── FIXED BACKGROUND ────────────────────────────── */}
-      <div className="fixed inset-0 -z-10">
-        <Image
-          src="/hero2.jpeg"
-          alt="Apartment view with Lake Walensee and mountains"
-          fill
-          priority
-          className="object-cover object-center"
-        />
+      <div className="fixed inset-0 -z-10 bg-gray-800">
+        {backgroundImage && (
+          // eslint-disable-next-line @next/next/no-img-element -- backend-served, not a Next-optimizable local/static asset
+          <img
+            src={imageUrl(backgroundImage.key)}
+            alt={backgroundImage.alt || "Apartment view with Lake Walensee and mountains"}
+            className="w-full h-full object-cover object-center"
+          />
+        )}
         <div
           className="absolute inset-0"
           style={{ background: "rgba(30,30,30,0.30)" }}
@@ -148,7 +158,9 @@ export default async function Home({
 
             {/* Right — booking widget */}
             <div>
-              <BookingWidget dict={dict.booking} lang={lang} />
+              <MobileBookingReveal>
+                <BookingWidget dict={dict.booking} lang={lang} />
+              </MobileBookingReveal>
             </div>
           </div>
         </div>
@@ -179,8 +191,10 @@ export default async function Home({
       </div>{/* end flex column */}
       </div>{/* end scrollable content */}
 
+      <ScrollHint label={dict.hero.scrollHint} />
+
       {/* ── FOOTER ──────────────────────────────────────── */}
-      <footer className="shrink-0 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+      <footer id="site-footer" className="shrink-0 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
         <div className="max-w-7xl mx-auto px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-gray-400 dark:text-gray-500">
           <span>{dict.footer.copyright.replace("{year}", String(new Date().getFullYear()))}</span>
           <div className="flex gap-6">
