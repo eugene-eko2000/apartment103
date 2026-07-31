@@ -194,6 +194,12 @@ log "    this runs 'docker compose up -d --build' remotely — a cold build (ima
   # environment holds the sudo password + secrets fed in above, and a trace
   # would echo them to the log.
   echo "docker compose -p '$PROJECT_NAME' -f docker-compose.yml -f docker-compose.$ENVIRONMENT.yml --env-file 'env/$ENVIRONMENT.env' up -d --build"
+  # nginx's config templates are bind-mounted (docker-compose.yml), not baked
+  # into an image, and are only re-rendered by the container entrypoint on
+  # start — so a template-only edit doesn't change the service's resolved
+  # config and `up -d` above won't recreate it, leaving the old rendered
+  # config running. Force it every deploy so template changes always land.
+  echo "docker compose -p '$PROJECT_NAME' -f docker-compose.yml -f docker-compose.$ENVIRONMENT.yml --env-file 'env/$ENVIRONMENT.env' up -d --force-recreate nginx"
 } | ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "sudo -S -p '' bash -s"
 log "==> Remote build/start finished"
 
