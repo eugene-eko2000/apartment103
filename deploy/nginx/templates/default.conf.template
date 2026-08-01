@@ -45,13 +45,16 @@ server {
     # FastAPI/Mongo — keys are immutable (a fresh key per upload, see
     # app/models/image.py), so long-lived caching here is always safe.
     #
-    # Regex-anchored to a single path segment (the flat, slash-free key) so
-    # it matches only "/images/<key>" and never shadows the backend's own
-    # multi-segment /images/... routes (e.g. "/images/{id}/labels",
-    # "/images/labels/{label}") — a plain "/images/" prefix match used to
-    # swallow those too, returning a bare nginx 404 before the request ever
-    # reached FastAPI.
-    location ~ ^/images/([^/]+)$ {
+    # Regex-anchored to a single, dotted path segment (the flat, slash-free
+    # key, which always has a file extension — see upload_image() in
+    # app/api/routes/images.py) so it matches only "/images/<key>" and never
+    # shadows the backend's own single-segment routes that have no extension,
+    # e.g. "POST /images/reorder" or "DELETE /images/{image_id}", nor its
+    # multi-segment routes (e.g. "/images/{id}/labels",
+    # "/images/labels/{label}"). A plain "/images/" prefix match used to
+    # swallow those too, returning a bare nginx 404/405 before the request
+    # ever reached FastAPI.
+    location ~ ^/images/([^/.]+\.[^/.]+)$ {
         alias /data/images/$1;
         add_header Cache-Control "public, max-age=31536000, immutable";
     }
