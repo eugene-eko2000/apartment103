@@ -180,8 +180,8 @@ ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "mkdir -p '$REMOTE_CERTS_DIR' && chmod 700 '$
 scp "${SCP_OPTS[@]}" "$CERTS_DIR/$SSL_CERT_FILE" "$CERTS_DIR/$SSL_KEY_FILE" "$SSH_TARGET:$REMOTE_CERTS_DIR/"
 ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "chmod 600 '$REMOTE_CERTS_DIR/$SSL_CERT_FILE' '$REMOTE_CERTS_DIR/$SSL_KEY_FILE'"
 
-log "==> Building and starting containers on remote host (secrets exported into the remote shell only, never written to disk)"
-log "    this runs 'docker compose up -d --build' remotely — a cold build (image pulls, npm/uv installs) can take several minutes; output streams below as it happens"
+log "==> Building images and starting containers on remote host (secrets exported into the remote shell only, never written to disk)"
+log "    this builds images, runs pending DB migrations, then starts the stack — a cold build (image pulls, npm/uv installs) can take several minutes; output streams below as it happens"
 {
   printf '%s\n' "$SUDO_PASSWORD"
   echo "set -euo pipefail"
@@ -193,15 +193,25 @@ log "    this runs 'docker compose up -d --build' remotely — a cold build (ima
   # Deliberately no `set -x` here even in verbose mode: this remote session's
   # environment holds the sudo password + secrets fed in above, and a trace
   # would echo them to the log.
-  echo "docker compose -p '$PROJECT_NAME' -f docker-compose.yml -f docker-compose.$ENVIRONMENT.yml --env-file 'env/$ENVIRONMENT.env' up -d --build"
+  COMPOSE="docker compose -p '$PROJECT_NAME' -f docker-compose.yml -f docker-compose.$ENVIRONMENT.yml --env-file 'env/$ENVIRONMENT.env'"
+  echo "$COMPOSE build"
+  # Run migrations before anything else comes up: `run` starts mongo first
+  # (backend's depends_on: condition: service_healthy in docker-compose.yml
+  # applies to `run` too) and waits for its healthcheck, then applies pending
+  # migrations in a throwaway container. Mongo here is a standalone instance
+  # (no replica set), hence --no-use-transaction. If this fails, `set -e`
+  # aborts before backend/frontend/nginx start, so the app never boots
+  # against a half-migrated or incompatible schema.
+  echo "$COMPOSE run --rm backend uv run --no-sync mongo-migrate migrate --forward --no-use-transaction"
+  echo "$COMPOSE up -d"
   # nginx's config templates are bind-mounted (docker-compose.yml), not baked
   # into an image, and are only re-rendered by the container entrypoint on
   # start — so a template-only edit doesn't change the service's resolved
   # config and `up -d` above won't recreate it, leaving the old rendered
   # config running. Force it every deploy so template changes always land.
-  echo "docker compose -p '$PROJECT_NAME' -f docker-compose.yml -f docker-compose.$ENVIRONMENT.yml --env-file 'env/$ENVIRONMENT.env' up -d --force-recreate nginx"
+  echo "$COMPOSE up -d --force-recreate nginx"
 } | ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "sudo -S -p '' bash -s"
-log "==> Remote build/start finished"
+log "==> Remote build/migrate/start finished"
 
 log "==> Deployed. Container status:"
 printf '%s\n' "$SUDO_PASSWORD" | ssh "${SSH_OPTS[@]}" "$SSH_TARGET" \
@@ -210,8 +220,8 @@ printf '%s\n' "$SUDO_PASSWORD" | ssh "${SSH_OPTS[@]}" "$SSH_TARGET" \
 echo
 SSH_HINT="ssh -t -p $SSH_PORT"
 [[ -n "$SSH_KEY" ]] && SSH_HINT="ssh -t -p $SSH_PORT -i $SSH_KEY"
-echo "Note: DB migrations are not run automatically (they don't need secrets — mongo-migrate only uses MONGO_URI/MONGO_DB). To apply them (run directly in your own terminal so sudo can prompt you for its password):"
-echo "  $SSH_HINT $SSH_TARGET \"cd $REMOTE_PATH/deploy && sudo docker compose -p $PROJECT_NAME -f docker-compose.yml -f docker-compose.$ENVIRONMENT.yml --env-file env/$ENVIRONMENT.env exec backend uv run --no-sync mongo-migrate migrate --forward --no-use-transaction\""
+echo "Note: DB migrations were applied automatically above, before the app started. To check migration history or re-run manually if needed:"
+echo "  $SSH_HINT $SSH_TARGET \"cd $REMOTE_PATH/deploy && sudo docker compose -p $PROJECT_NAME -f docker-compose.yml -f docker-compose.$ENVIRONMENT.yml --env-file env/$ENVIRONMENT.env run --rm backend uv run --no-sync mongo-migrate migrate --forward --no-use-transaction\""
 echo
 echo "Note: to bootstrap the first Admin account, SSH in and run deploy/create-admin.sh directly on the host:"
 echo "  $SSH_HINT $SSH_TARGET \"cd $REMOTE_PATH/deploy && ./create-admin.sh $ENVIRONMENT\""
