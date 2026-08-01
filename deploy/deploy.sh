@@ -208,8 +208,24 @@ log "    this builds images, runs pending DB migrations, then starts the stack �
   # into an image, and are only re-rendered by the container entrypoint on
   # start — so a template-only edit doesn't change the service's resolved
   # config and `up -d` above won't recreate it, leaving the old rendered
-  # config running. Force it every deploy so template changes always land.
-  echo "$COMPOSE up -d --force-recreate nginx"
+  # config running. `up -d --force-recreate nginx` used to be here instead,
+  # but Compose's recreate logic runs against its own hash of the service
+  # definition (image/env/volumes list) — since none of that changed, it's
+  # not guaranteed to touch the container, so a template-only edit could
+  # silently keep serving the stale rendered config. stop+rm+up sidesteps
+  # that decision entirely: rm deletes the container object outright, so the
+  # following `up` has no existing container to reuse and must create a new
+  # one, which always re-runs the entrypoint's envsubst render.
+  echo "$COMPOSE stop nginx"
+  echo "$COMPOSE rm -f nginx"
+  echo "$COMPOSE up -d nginx"
+  # Print proof of what's actually live, right in this log — the previous
+  # approach reported success on every deploy whether or not nginx actually
+  # picked up the new template, which is exactly how a stale config kept
+  # running unnoticed.
+  echo "sleep 2"
+  echo "echo '--> nginx config as rendered inside the freshly (re)started container:'"
+  echo "$COMPOSE exec -T nginx nginx -T 2>&1 | grep -B1 -A2 'location ~'"
 } | ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "sudo -S -p '' bash -s"
 log "==> Remote build/migrate/start finished"
 
