@@ -22,7 +22,9 @@ export default function PhotoGallery({ onClose, dict }: Props) {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(0);
   const stripRef = useRef<HTMLDivElement>(null);
+  const imageAreaRef = useRef<HTMLDivElement>(null);
   const thumbRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const touch = useRef({ startX: 0, startY: 0 });
   // pending = mousedown happened; active = grab mode engaged; wasGrabbed = carry into click handler
   const drag = useRef({
     pending: false,
@@ -104,6 +106,35 @@ export default function PhotoGallery({ onClose, dict }: Props) {
     };
   }, []);
 
+  // Swipe left/right on the main image to move between photos (mobile)
+  useEffect(() => {
+    const el = imageAreaRef.current;
+    if (!el) return;
+
+    const SWIPE_THRESHOLD = 40;
+
+    const start = (e: TouchEvent) => {
+      const t = e.touches[0];
+      touch.current = { startX: t.pageX, startY: t.pageY };
+    };
+
+    const end = (e: TouchEvent) => {
+      const t = e.changedTouches[0];
+      const dx = t.pageX - touch.current.startX;
+      const dy = t.pageY - touch.current.startY;
+      if (Math.abs(dx) < SWIPE_THRESHOLD || Math.abs(dx) < Math.abs(dy)) return;
+      if (dx > 0) prev();
+      else next();
+    };
+
+    el.addEventListener('touchstart', start, { passive: true });
+    el.addEventListener('touchend', end, { passive: true });
+    return () => {
+      el.removeEventListener('touchstart', start);
+      el.removeEventListener('touchend', end);
+    };
+  }, [prev, next]);
+
   // Scroll active thumbnail into view whenever selection changes
   useEffect(() => {
     thumbRefs.current[selected]?.scrollIntoView({
@@ -143,21 +174,22 @@ export default function PhotoGallery({ onClose, dict }: Props) {
       <button
         onClick={onClose}
         aria-label={dict.closeGallery}
-        className="absolute top-6 right-8 z-10 text-white/70 hover:text-white transition-colors text-5xl leading-none"
+        className="absolute top-3 right-2.5 sm:top-6 sm:right-8 z-10 text-white/70 hover:text-white transition-colors text-3xl sm:text-5xl leading-none"
       >
         ✕
       </button>
 
       {/* ── Main image ── */}
       <div
-        className="relative flex-1 flex items-center justify-center min-h-0 px-20 pt-16 pb-4"
+        ref={imageAreaRef}
+        className="relative flex-1 flex items-center justify-center min-h-0 px-2.5 sm:px-20 pt-12 pb-2 sm:pt-16 sm:pb-4"
         onClick={e => e.stopPropagation()}
       >
         <button
           onClick={prev}
           disabled={selected === 0}
           aria-label={dict.previousPhoto}
-          className="absolute left-6 z-10 text-white text-5xl px-2 py-3 rounded-full bg-black/20 hover:bg-black/50 disabled:opacity-0 transition-all"
+          className="absolute left-0.5 sm:left-6 z-10 text-white text-3xl sm:text-5xl px-1 py-2 sm:px-2 sm:py-3 rounded-full bg-black/20 hover:bg-black/50 disabled:opacity-0 transition-all"
         >
           ‹
         </button>
@@ -183,7 +215,7 @@ export default function PhotoGallery({ onClose, dict }: Props) {
           onClick={next}
           disabled={selected >= photos.length - 1}
           aria-label={dict.nextPhoto}
-          className="absolute right-6 z-10 text-white text-5xl px-2 py-3 rounded-full bg-black/20 hover:bg-black/50 disabled:opacity-0 transition-all"
+          className="absolute right-0.5 sm:right-6 z-10 text-white text-3xl sm:text-5xl px-1 py-2 sm:px-2 sm:py-3 rounded-full bg-black/20 hover:bg-black/50 disabled:opacity-0 transition-all"
         >
           ›
         </button>
@@ -191,13 +223,17 @@ export default function PhotoGallery({ onClose, dict }: Props) {
 
       {/* ── Thumbnail strip ── */}
       <div
-        className="shrink-0 py-4 px-8"
+        className="shrink-0 py-2 px-2.5 sm:py-4 sm:px-8"
         onClick={e => e.stopPropagation()}
       >
         <div
           ref={stripRef}
           className="flex gap-1.5 overflow-x-auto"
-          style={{ scrollbarWidth: 'none', cursor: 'grab', padding: '4px' }}
+          // "safe center" centers the strip when it fits, but falls back to
+          // start-aligned once it overflows — plain `center` would center
+          // the overflow on both sides and leave the first thumbnails
+          // unreachable by scrolling (scrollLeft can't go negative).
+          style={{ scrollbarWidth: 'none', cursor: 'grab', padding: '4px', justifyContent: 'safe center' }}
           onClickCapture={e => {
             if (drag.current.wasGrabbed) { e.stopPropagation(); drag.current.wasGrabbed = false; }
           }}
