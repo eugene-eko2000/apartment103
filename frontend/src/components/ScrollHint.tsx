@@ -9,11 +9,14 @@ const PAGE_SCROLL_ID = "page-scroll";
 // height is measured so this hint can sit just above it instead of
 // overlapping its (opaque) background.
 const FOOTER_ID = "site-footer";
+// id of the booking widget's anchor wrapper (frontend/src/components/MobileBookingReveal.tsx)
+const BOOKING_WIDGET_ID = "booking-widget";
 
-// Mobile-only "scroll down to book" nudge, fixed just above the footer.
-// Visible while the page is at the very top (i.e. before the user has
-// started scrolling toward the booking widget), fades out as soon as
-// scrolling starts, and fades back in if scrolled back up to the top.
+// Mobile-only "Book" nudge, fixed just above the footer. Visible while the
+// page is at the very top (i.e. before the user has started scrolling
+// toward the booking widget), fades out as soon as scrolling starts, and
+// fades back in if scrolled back up to the top. Clicking it scrolls the
+// booking widget into view.
 export default function ScrollHint({ label }: { label: string }) {
   const [atTop, setAtTop] = useState(true);
   const [footerHeight, setFooterHeight] = useState(0);
@@ -36,11 +39,16 @@ export default function ScrollHint({ label }: { label: string }) {
     return () => observer.disconnect();
   }, []);
 
+  const scrollToWidget = () => {
+    document.getElementById(BOOKING_WIDGET_ID)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   return (
-    <div
-      aria-hidden="true"
-      className={`lg:hidden fixed inset-x-0 z-40 flex items-center justify-center gap-4 pointer-events-none transition-opacity duration-500 ease-out ${
-        atTop ? "opacity-100" : "opacity-0"
+    <button
+      type="button"
+      onClick={scrollToWidget}
+      className={`lg:hidden fixed inset-x-0 z-40 flex items-center justify-center gap-4 bg-transparent border-none transition-opacity duration-500 ease-out ${
+        atTop ? "opacity-100 pointer-events-auto cursor-pointer" : "opacity-0 pointer-events-none"
       }`}
       style={{ bottom: footerHeight + 16 }}
     >
@@ -49,7 +57,7 @@ export default function ScrollHint({ label }: { label: string }) {
         {label}
       </span>
       <DownArrow />
-    </div>
+    </button>
   );
 }
 

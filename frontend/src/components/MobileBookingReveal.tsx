@@ -23,7 +23,7 @@ export default function MobileBookingReveal({ children }: { children: React.Reac
   return (
     <>
       <div aria-hidden="true" className="lg:hidden" style={{ height: spacerHeight }} />
-      {children}
+      <div id="booking-widget">{children}</div>
     </>
   );
 }
