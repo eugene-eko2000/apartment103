@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
 import BookingWidget from "@/components/BookingWidget";
 import MobileBookingReveal from "@/components/MobileBookingReveal";
+import PhotoHoverBadge from "@/components/PhotoHoverBadge";
 import ScrollHint from "@/components/ScrollHint";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
-import { imageUrl, listImagesByLabel } from "@/lib/api";
+import { imageUrl, listImagesByLabel, type ImageAsset } from "@/lib/api";
 import { getDictionary, hasLocale } from "./dictionaries";
 
 export default async function Home({
@@ -24,14 +25,34 @@ export default async function Home({
   const backgroundImages = await listImagesByLabel("background", { cache: "no-store" }).catch(() => []);
   const backgroundImage = backgroundImages[0] ?? null;
 
+  // Photos to show when hovering feature badges, admin-managed via labels
+  // (same pattern as the "background" label above) — one label per badge.
+  const [bedroomImages, bathroomImages, viewImages, kitchenImages] = await Promise.all([
+    listImagesByLabel("bedroom", { cache: "no-store" }).catch(() => []),
+    listImagesByLabel("bathroom", { cache: "no-store" }).catch(() => []),
+    listImagesByLabel("view", { cache: "no-store" }).catch(() => []),
+    listImagesByLabel("kitchen", { cache: "no-store" }).catch(() => []),
+  ]);
+
+  const HOVER_IMAGES: Partial<Record<string, ImageAsset[]>> = {
+    bedrooms: bedroomImages,
+    bathrooms: bathroomImages,
+    view: viewImages,
+    kitchen: kitchenImages,
+  };
+
+  const HOVER_MAX_PHOTOS: Partial<Record<string, number>> = {
+    kitchen: 1,
+  };
+
   const FEATURES = [
-    { icon: "🛏", label: dict.hero.features.bedrooms },
-    { icon: "🚿", label: dict.hero.features.bathrooms },
-    { icon: "👥", label: dict.hero.features.guests },
-    { icon: "🏔", label: dict.hero.features.view },
-    { icon: "📶", label: dict.hero.features.wifi },
-    { icon: "🅿️", label: dict.hero.features.parking },
-    { icon: "🍳", label: dict.hero.features.kitchen },
+    { id: "bedrooms", icon: "🛏", label: dict.hero.features.bedrooms },
+    { id: "bathrooms", icon: "🚿", label: dict.hero.features.bathrooms },
+    { id: "guests", icon: "👥", label: dict.hero.features.guests },
+    { id: "view", icon: "🏔", label: dict.hero.features.view },
+    { id: "wifi", icon: "📶", label: dict.hero.features.wifi },
+    { id: "parking", icon: "🅿️", label: dict.hero.features.parking },
+    { id: "kitchen", icon: "🍳", label: dict.hero.features.kitchen },
   ];
 
   const HIGHLIGHTS = [
@@ -96,15 +117,26 @@ export default async function Home({
 
               {/* Feature tags */}
               <div className="hidden sm:flex flex-wrap gap-2">
-                {FEATURES.map((f) => (
-                  <span
-                    key={f.label}
-                    className="flex items-center gap-1.5 bg-white/15 backdrop-blur-sm px-3 py-1.5 rounded-full text-sm text-white"
-                  >
-                    <span>{f.icon}</span>
-                    <span>{f.label}</span>
-                  </span>
-                ))}
+                {FEATURES.map((f) => {
+                  const images = HOVER_IMAGES[f.id];
+                  return images ? (
+                    <PhotoHoverBadge
+                      key={f.id}
+                      icon={f.icon}
+                      label={f.label}
+                      images={images}
+                      maxPhotos={HOVER_MAX_PHOTOS[f.id] ?? 2}
+                    />
+                  ) : (
+                    <span
+                      key={f.id}
+                      className="flex items-center gap-1.5 bg-white/15 backdrop-blur-sm px-3 py-1.5 rounded-full text-sm text-white"
+                    >
+                      <span>{f.icon}</span>
+                      <span>{f.label}</span>
+                    </span>
+                  );
+                })}
               </div>
 
             </div>
