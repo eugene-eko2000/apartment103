@@ -188,5 +188,54 @@
       "confirmCancel": "Cancel booking",
       "keepBooking": "Don't cancel"
     }
+  },
+  "amenities": {
+    "pageTitle": "Amenities",
+    "subtitle": "Everything included in your stay at Berg See Home",
+    "backHome": "Back to home",
+    "badges": {
+      "entireApartment": "Entire apartment",
+      "size": "95 m²",
+      "privateKitchen": "Private kitchen",
+      "privateBathroom": "Private bathroom",
+      "balcony": "Balcony",
+      "lakeView": "Lake view",
+      "gardenView": "Garden view",
+      "mountainView": "Mountain view",
+      "bath": "Bath",
+      "dishwasher": "Dishwasher",
+      "flatScreenTv": "Flat-screen TV",
+      "coffeeMachine": "Coffee machine",
+      "freeWifi": "Free WiFi"
+    },
+    "sizeLabel": "Apartment size:",
+    "rooms": {
+      "bedroom1": "Bedroom 1",
+      "bedroom2": "Bedroom 2",
+      "livingRoom": "Living room"
+    },
+    "singleBeds": "2 single beds",
+    "sofaBed": "1 sofa bed",
+    "description": "This spacious apartment is comprised of 1 living room, 2 separate bedrooms and 1 bathroom with a bath and free toiletries. The fully equipped kitchen features a refrigerator, a dishwasher, kitchenware and a microwave. Featuring a balcony with lake views, this apartment also offers a tea and coffee maker and a flat-screen TV. The unit offers 5 beds.",
+    "kitchen": {
+      "title": "In your private kitchen",
+      "items": ["Refrigerator", "Coffee machine", "Microwave", "Kitchenware", "Electric kettle", "Dishwasher", "Tumble dryer", "Toaster", "Dining table"]
+    },
+    "bathroom": {
+      "title": "In your private bathroom",
+      "items": ["Bath", "Free toiletries", "Shower", "Toilet", "Towels", "Hairdryer", "Toilet paper"]
+    },
+    "view": {
+      "title": "View",
+      "items": ["Lake view", "Garden view", "Mountain view"]
+    },
+    "facilities": {
+      "title": "Apartment facilities",
+      "items": ["Balcony", "Kitchen", "Sofa", "Hardwood or parquet floors", "Linen", "Desk", "Seating area", "TV", "Refrigerator", "Ironing facilities", "Coffee machine", "Tea/Coffee maker", "Iron", "Radio", "Microwave", "Heating", "Flat-screen TV", "Kitchenware", "Fan", "DVD player", "Electric kettle", "Outdoor dining area", "Dishwasher", "Alarm clock", "Tumble dryer", "Wardrobe or closet", "Toaster", "Dining area", "Dining table", "Private apartment in building", "Sofa bed"]
+    },
+    "smoking": {
+      "title": "Smoking",
+      "value": "No smoking"
+    }
   }
 }

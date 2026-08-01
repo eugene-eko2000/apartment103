@@ -2,12 +2,8 @@ import { notFound } from "next/navigation";
 import BookingWidget from "@/components/BookingWidget";
 import MobileBookingReveal from "@/components/MobileBookingReveal";
 import ScrollHint from "@/components/ScrollHint";
-import GalleryButton from "@/components/GalleryButton";
-import LanguageSwitcher from "@/components/LanguageSwitcher";
-import CurrencySwitcher from "@/components/CurrencySwitcher";
-import ThemeSwitcher from "@/components/ThemeSwitcher";
-import UserMenu from "@/components/UserMenu";
-import MobileMenu from "@/components/MobileMenu";
+import SiteHeader from "@/components/SiteHeader";
+import SiteFooter from "@/components/SiteFooter";
 import { imageUrl, listImagesByLabel } from "@/lib/api";
 import { getDictionary, hasLocale } from "./dictionaries";
 
@@ -66,50 +62,7 @@ export default async function Home({
       <div className="relative z-10 h-screen flex flex-col overflow-hidden">
 
       {/* ── NAV ─────────────────────────────────────────── */}
-      <header className="shrink-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {/* eslint-disable-next-line @next/next/no-img-element -- .ico isn't supported by next/image's optimizer */}
-            <img
-              src="/favicon.ico"
-              alt="Berg See Home"
-              width={32}
-              height={32}
-              className="w-8 h-8 rounded-lg"
-            />
-            <span className="font-semibold text-gray-800 dark:text-gray-100">Berg See Home</span>
-          </div>
-          <nav className="hidden sm:flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400">
-            <GalleryButton label={dict.nav.gallery} dict={dict.gallery} />
-            <a href="#" className="hover:text-teal-700 dark:hover:text-teal-400 transition-colors">{dict.nav.amenities}</a>
-            <a href="#" className="hover:text-teal-700 dark:hover:text-teal-400 transition-colors">{dict.nav.location}</a>
-            <div className="flex items-center gap-4">
-              <LanguageSwitcher currentLang={lang} />
-              <CurrencySwitcher />
-              <ThemeSwitcher
-                labels={{ light: dict.themeSwitcher.light, dark: dict.themeSwitcher.dark, system: dict.themeSwitcher.system }}
-                ariaLabel={dict.themeSwitcher.label}
-              />
-              <UserMenu dict={dict.userMenu} />
-            </div>
-          </nav>
-          <MobileMenu ariaLabel={dict.nav.menu}>
-            <GalleryButton label={dict.nav.gallery} dict={dict.gallery} className="py-3" />
-            <a href="#" className="py-3 hover:text-teal-700 dark:hover:text-teal-400 transition-colors">{dict.nav.amenities}</a>
-            <a href="#" className="py-3 hover:text-teal-700 dark:hover:text-teal-400 transition-colors">{dict.nav.location}</a>
-            <div className="flex items-center gap-5 pt-4 mt-1 border-t border-gray-100 dark:border-gray-700">
-              <LanguageSwitcher currentLang={lang} expandOnClick />
-              <CurrencySwitcher expandOnClick />
-              <ThemeSwitcher
-                labels={{ light: dict.themeSwitcher.light, dark: dict.themeSwitcher.dark, system: dict.themeSwitcher.system }}
-                ariaLabel={dict.themeSwitcher.label}
-                expandOnClick
-              />
-              <UserMenu dict={dict.userMenu} />
-            </div>
-          </MobileMenu>
-        </div>
-      </header>
+      <SiteHeader lang={lang} dict={dict} />
 
       {/* ── SCROLLABLE CONTENT ──────────────────────────── */}
       {/* `relative` makes this the containing block for BookingWidget's
@@ -194,16 +147,7 @@ export default async function Home({
       <ScrollHint label={dict.hero.scrollHint} />
 
       {/* ── FOOTER ──────────────────────────────────────── */}
-      <footer id="site-footer" className="shrink-0 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
-        <div className="max-w-7xl mx-auto px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-gray-400 dark:text-gray-500">
-          <span>{dict.footer.copyright.replace("{year}", String(new Date().getFullYear()))}</span>
-          <div className="flex gap-6">
-            <a href="#" className="hover:text-teal-700 dark:hover:text-teal-400 transition-colors">{dict.footer.privacy}</a>
-            <a href="#" className="hover:text-teal-700 dark:hover:text-teal-400 transition-colors">{dict.footer.terms}</a>
-            <a href="#" className="hover:text-teal-700 dark:hover:text-teal-400 transition-colors">{dict.footer.contact}</a>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter dict={dict} />
       </div>{/* end full-viewport content */}
     </div>
   );

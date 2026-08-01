@@ -188,5 +188,54 @@
       "confirmCancel": "Annuler la réservation",
       "keepBooking": "Ne pas annuler"
     }
+  },
+  "amenities": {
+    "pageTitle": "Équipements",
+    "subtitle": "Tout ce qui est inclus dans votre séjour au Berg See Home",
+    "backHome": "Retour à l'accueil",
+    "badges": {
+      "entireApartment": "Appartement entier",
+      "size": "95 m²",
+      "privateKitchen": "Cuisine privée",
+      "privateBathroom": "Salle de bains privée",
+      "balcony": "Balcon",
+      "lakeView": "Vue sur le lac",
+      "gardenView": "Vue sur le jardin",
+      "mountainView": "Vue sur la montagne",
+      "bath": "Baignoire",
+      "dishwasher": "Lave-vaisselle",
+      "flatScreenTv": "TV à écran plat",
+      "coffeeMachine": "Machine à café",
+      "freeWifi": "Wi-Fi gratuit"
+    },
+    "sizeLabel": "Superficie de l'appartement :",
+    "rooms": {
+      "bedroom1": "Chambre 1",
+      "bedroom2": "Chambre 2",
+      "livingRoom": "Salon"
+    },
+    "singleBeds": "2 lits simples",
+    "sofaBed": "1 canapé-lit",
+    "description": "Ce vaste appartement comprend un salon, deux chambres séparées et une salle de bains avec baignoire et articles de toilette gratuits. La cuisine entièrement équipée dispose d'un réfrigérateur, d'un lave-vaisselle, d'ustensiles de cuisine et d'un four à micro-ondes. Doté d'un balcon avec vue sur le lac, cet appartement propose également une bouilloire thé/café et une TV à écran plat. Le logement propose 5 lits.",
+    "kitchen": {
+      "title": "Dans votre cuisine privée",
+      "items": ["Réfrigérateur", "Machine à café", "Four à micro-ondes", "Ustensiles de cuisine", "Bouilloire électrique", "Lave-vaisselle", "Sèche-linge", "Grille-pain", "Table à manger"]
+    },
+    "bathroom": {
+      "title": "Dans votre salle de bains privée",
+      "items": ["Baignoire", "Articles de toilette gratuits", "Douche", "Toilettes", "Serviettes", "Sèche-cheveux", "Papier toilette"]
+    },
+    "view": {
+      "title": "Vue",
+      "items": ["Vue sur le lac", "Vue sur le jardin", "Vue sur la montagne"]
+    },
+    "facilities": {
+      "title": "Équipements de l'appartement",
+      "items": ["Balcon", "Cuisine", "Canapé", "Parquet ou sol en bois", "Linge de maison", "Bureau", "Coin salon", "TV", "Réfrigérateur", "Facilités de repassage", "Machine à café", "Bouilloire thé/café", "Fer à repasser", "Radio", "Four à micro-ondes", "Chauffage", "TV à écran plat", "Ustensiles de cuisine", "Ventilateur", "Lecteur DVD", "Bouilloire électrique", "Coin repas extérieur", "Lave-vaisselle", "Réveil", "Sèche-linge", "Armoire ou penderie", "Grille-pain", "Coin repas", "Table à manger", "Appartement privé dans l'immeuble", "Canapé-lit"]
+    },
+    "smoking": {
+      "title": "Fumeur",
+      "value": "Non-fumeur"
+    }
   }
 }

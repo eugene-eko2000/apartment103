@@ -188,5 +188,54 @@
       "confirmCancel": "Buchung stornieren",
       "keepBooking": "Nicht stornieren"
     }
+  },
+  "amenities": {
+    "pageTitle": "Ausstattung",
+    "subtitle": "Alles, was in Ihrem Aufenthalt im Berg See Home enthalten ist",
+    "backHome": "Zurück zur Startseite",
+    "badges": {
+      "entireApartment": "Ganze Wohnung",
+      "size": "95 m²",
+      "privateKitchen": "Eigene Küche",
+      "privateBathroom": "Eigenes Badezimmer",
+      "balcony": "Balkon",
+      "lakeView": "Seeblick",
+      "gardenView": "Gartenblick",
+      "mountainView": "Bergblick",
+      "bath": "Badewanne",
+      "dishwasher": "Geschirrspüler",
+      "flatScreenTv": "Flachbild-TV",
+      "coffeeMachine": "Kaffeemaschine",
+      "freeWifi": "Kostenloses WLAN"
+    },
+    "sizeLabel": "Wohnungsgröße:",
+    "rooms": {
+      "bedroom1": "Schlafzimmer 1",
+      "bedroom2": "Schlafzimmer 2",
+      "livingRoom": "Wohnzimmer"
+    },
+    "singleBeds": "2 Einzelbetten",
+    "sofaBed": "1 Schlafsofa",
+    "description": "Diese geräumige Wohnung besteht aus einem Wohnzimmer, zwei separaten Schlafzimmern und einem Badezimmer mit Badewanne und kostenlosen Pflegeprodukten. Die voll ausgestattete Küche verfügt über einen Kühlschrank, einen Geschirrspüler, Kochutensilien und eine Mikrowelle. Die Wohnung bietet einen Balkon mit Seeblick sowie eine Tee- und Kaffeemaschine und einen Flachbild-TV. Die Unterkunft bietet 5 Betten.",
+    "kitchen": {
+      "title": "In Ihrer eigenen Küche",
+      "items": ["Kühlschrank", "Kaffeemaschine", "Mikrowelle", "Kochutensilien", "Wasserkocher", "Geschirrspüler", "Wäschetrockner", "Toaster", "Esstisch"]
+    },
+    "bathroom": {
+      "title": "In Ihrem eigenen Badezimmer",
+      "items": ["Badewanne", "Kostenlose Pflegeprodukte", "Dusche", "Toilette", "Handtücher", "Haartrockner", "Toilettenpapier"]
+    },
+    "view": {
+      "title": "Aussicht",
+      "items": ["Seeblick", "Gartenblick", "Bergblick"]
+    },
+    "facilities": {
+      "title": "Ausstattung der Wohnung",
+      "items": ["Balkon", "Küche", "Sofa", "Holz- oder Parkettboden", "Bettwäsche", "Schreibtisch", "Sitzecke", "TV", "Kühlschrank", "Bügelmöglichkeiten", "Kaffeemaschine", "Tee-/Kaffeemaschine", "Bügeleisen", "Radio", "Mikrowelle", "Heizung", "Flachbild-TV", "Kochutensilien", "Ventilator", "DVD-Player", "Wasserkocher", "Essbereich im Freien", "Geschirrspüler", "Wecker", "Wäschetrockner", "Kleiderschrank", "Toaster", "Essbereich", "Esstisch", "Privatwohnung im Gebäude", "Schlafsofa"]
+    },
+    "smoking": {
+      "title": "Rauchen",
+      "value": "Nichtraucher"
+    }
   }
 }

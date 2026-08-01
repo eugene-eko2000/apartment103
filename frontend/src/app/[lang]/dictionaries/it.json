@@ -188,5 +188,54 @@
       "confirmCancel": "Cancella prenotazione",
       "keepBooking": "Non cancellare"
     }
+  },
+  "amenities": {
+    "pageTitle": "Servizi",
+    "subtitle": "Tutto ciò che è incluso nel tuo soggiorno al Berg See Home",
+    "backHome": "Torna alla home",
+    "badges": {
+      "entireApartment": "Intero appartamento",
+      "size": "95 m²",
+      "privateKitchen": "Cucina privata",
+      "privateBathroom": "Bagno privato",
+      "balcony": "Balcone",
+      "lakeView": "Vista lago",
+      "gardenView": "Vista giardino",
+      "mountainView": "Vista montagna",
+      "bath": "Vasca da bagno",
+      "dishwasher": "Lavastoviglie",
+      "flatScreenTv": "TV a schermo piatto",
+      "coffeeMachine": "Macchina da caffè",
+      "freeWifi": "WiFi gratuito"
+    },
+    "sizeLabel": "Dimensioni dell'appartamento:",
+    "rooms": {
+      "bedroom1": "Camera da letto 1",
+      "bedroom2": "Camera da letto 2",
+      "livingRoom": "Soggiorno"
+    },
+    "singleBeds": "2 letti singoli",
+    "sofaBed": "1 divano letto",
+    "description": "Questo spazioso appartamento è composto da 1 soggiorno, 2 camere da letto separate e 1 bagno con vasca e set di cortesia gratuito. La cucina completamente attrezzata dispone di frigorifero, lavastoviglie, utensili da cucina e microonde. Dotato di un balcone con vista lago, l'appartamento offre anche una macchina per tè e caffè e una TV a schermo piatto. L'unità offre 5 posti letto.",
+    "kitchen": {
+      "title": "Nella tua cucina privata",
+      "items": ["Frigorifero", "Macchina da caffè", "Microonde", "Utensili da cucina", "Bollitore elettrico", "Lavastoviglie", "Asciugatrice", "Tostapane", "Tavolo da pranzo"]
+    },
+    "bathroom": {
+      "title": "Nel tuo bagno privato",
+      "items": ["Vasca da bagno", "Set di cortesia gratuito", "Doccia", "WC", "Asciugamani", "Asciugacapelli", "Carta igienica"]
+    },
+    "view": {
+      "title": "Vista",
+      "items": ["Vista lago", "Vista giardino", "Vista montagna"]
+    },
+    "facilities": {
+      "title": "Servizi dell'appartamento",
+      "items": ["Balcone", "Cucina", "Divano", "Pavimento in legno o parquet", "Biancheria", "Scrivania", "Area soggiorno", "TV", "Frigorifero", "Servizio stireria", "Macchina da caffè", "Macchina per tè/caffè", "Ferro da stiro", "Radio", "Microonde", "Riscaldamento", "TV a schermo piatto", "Utensili da cucina", "Ventilatore", "Lettore DVD", "Bollitore elettrico", "Area pranzo esterna", "Lavastoviglie", "Sveglia", "Asciugatrice", "Armadio", "Tostapane", "Zona pranzo", "Tavolo da pranzo", "Appartamento privato nell'edificio", "Divano letto"]
+    },
+    "smoking": {
+      "title": "Fumo",
+      "value": "Non fumatori"
+    }
   }
 }
