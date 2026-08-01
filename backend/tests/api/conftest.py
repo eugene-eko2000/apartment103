@@ -20,8 +20,10 @@ from app.db.mongo import init_mongo  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models.admin import Admin  # noqa: E402
 from app.models.cancellation_policy import CancellationPolicy, CancellationRule  # noqa: E402
+from app.models.category import Category  # noqa: E402
 from app.models.closure import Closure  # noqa: E402
 from app.models.guest import Guest, ResidenceAddress  # noqa: E402
+from app.models.image import Image  # noqa: E402
 
 
 @pytest.fixture
@@ -120,6 +122,27 @@ async def closure(client) -> Closure:
     closure = Closure(platform="airbnb", begin_date=date(2026, 8, 1), end_date=date(2026, 8, 5))
     await closure.insert()
     return closure
+
+
+@pytest.fixture
+async def category(client) -> Category:
+    category = Category(slug="gallery", name="Gallery", sort_order=0)
+    await category.insert()
+    return category
+
+
+@pytest.fixture
+async def image(client, category) -> Image:
+    image = Image(
+        key="gallery-test-photo-abc123.jpg",
+        category=category.slug,
+        content_type="image/jpeg",
+        size_bytes=1024,
+        alt="Test photo",
+        sort_order=0,
+    )
+    await image.insert()
+    return image
 
 
 def _auth_headers(subject_id: str, subject_type: str) -> dict[str, str]:

@@ -5,11 +5,18 @@ from pathlib import Path
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
+from pymongo import UpdateOne
 
 from app.api.deps import require_admin
 from app.core.config import settings
+from app.models.category import Category
 from app.models.image import Image
-from app.schemas.image import ALLOWED_CATEGORIES, ALLOWED_CONTENT_TYPES, OUTPUT_CONTENT_TYPES, LabelInput
+from app.schemas.image import (
+    ALLOWED_CONTENT_TYPES,
+    OUTPUT_CONTENT_TYPES,
+    LabelInput,
+    ReorderRequest,
+)
 from app.services.image_processing import compress_image
 
 router = APIRouter(prefix="/images", tags=["images"], dependencies=[Depends(require_admin)])
@@ -90,13 +97,16 @@ async def upload_image(
     file: UploadFile = File(...),
     category: str = Form(...),
     alt: str = Form(""),
-    sort_order: int = Form(0),
+    sort_order: int | None = Form(None),
 ) -> Image:
-    if category not in ALLOWED_CATEGORIES:
+    if not await Category.find_one(Category.slug == category):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"category must be one of {sorted(ALLOWED_CATEGORIES)}",
+            detail="Unknown category",
         )
+    if sort_order is None:
+        last = await Image.find(Image.category == category).sort(-Image.sort_order).first_or_none()
+        sort_order = (last.sort_order + 1) if last else 0
     resolved_content_type = _resolve_content_type(file)
     ext = ALLOWED_CONTENT_TYPES.get(resolved_content_type or "")
     if ext is None:
@@ -135,6 +145,23 @@ async def upload_image(
     )
     await image.insert()
     return image
+
+
+@router.post("/reorder", response_model=list[Image])
+async def reorder_images(payload: ReorderRequest) -> list[Image]:
+    """Bulk-persist an arrangement: same-category drag reorder and
+    cross-category moves both just resend every affected image's
+    (category, sort_order) in one shot, so this single endpoint covers both.
+    """
+    if not payload.updates:
+        return []
+    ops = [
+        UpdateOne({"_id": update.id}, {"$set": {"category": update.category, "sort_order": update.sort_order}})
+        for update in payload.updates
+    ]
+    await Image.get_pymongo_collection().bulk_write(ops)
+    ids = [update.id for update in payload.updates]
+    return await Image.find({"_id": {"$in": ids}}).sort(+Image.sort_order).to_list()
 
 
 @router.delete("/{image_id}", status_code=status.HTTP_204_NO_CONTENT)

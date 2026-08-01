@@ -1,8 +1,7 @@
 import re
 
+from beanie import PydanticObjectId
 from pydantic import BaseModel, field_validator
-
-ALLOWED_CATEGORIES = {"hero", "amenities", "gallery"}
 
 # Slug-like: lowercase letters/digits/hyphens, 1-60 chars, no leading/
 # trailing hyphen. Labels are normalized to this shape on write (see
@@ -44,3 +43,13 @@ OUTPUT_CONTENT_TYPES = {
     "png": "image/png",
     "webp": "image/webp",
 }
+
+
+class ReorderUpdate(BaseModel):
+    id: PydanticObjectId
+    category: str
+    sort_order: int
+
+
+class ReorderRequest(BaseModel):
+    updates: list[ReorderUpdate]

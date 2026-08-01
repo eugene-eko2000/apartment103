@@ -5,6 +5,7 @@ from app.core.config import settings
 from app.models.admin import Admin
 from app.models.booking import Booking
 from app.models.cancellation_policy import CancellationPolicy
+from app.models.category import Category
 from app.models.closure import Closure
 from app.models.guest import Guest
 from app.models.image import Image
@@ -32,5 +33,6 @@ async def init_mongo() -> None:
             Closure,
             PaymentEvent,
             Image,
+            Category,
         ],
     )

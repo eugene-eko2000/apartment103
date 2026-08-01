@@ -217,7 +217,15 @@ export interface BookingInput {
   date_ranges: BookingDateRange[];
 }
 
-export type ImageCategory = "hero" | "amenities" | "gallery";
+export type ImageCategory = string;
+
+export interface Category {
+  _id: string;
+  slug: string;
+  name: string;
+  sort_order: number;
+  created_at: string;
+}
 
 export interface ImageAsset {
   _id: string;
@@ -512,13 +520,15 @@ export function listImages(category?: ImageCategory): Promise<ImageAsset[]> {
 export async function uploadImage(
   token: string,
   file: File,
-  data: { category: ImageCategory; alt: string; sort_order: number }
+  data: { category: ImageCategory; alt: string; sort_order?: number }
 ): Promise<ImageAsset> {
   const form = new FormData();
   form.append("file", file);
   form.append("category", data.category);
   form.append("alt", data.alt);
-  form.append("sort_order", String(data.sort_order));
+  // Omitted (rather than sent as 0) so the backend auto-appends the photo
+  // at the end of its category instead of always prepending it.
+  if (data.sort_order !== undefined) form.append("sort_order", String(data.sort_order));
 
   // Not routed through request(): that helper always sends
   // Content-Type: application/json, which would break the multipart
@@ -562,6 +572,44 @@ export function removeImageLabel(imageId: string, token: string, label: string):
     method: "DELETE",
     headers: authHeaders(token),
   });
+}
+
+export interface ReorderUpdate {
+  id: string;
+  category: string;
+  sort_order: number;
+}
+
+export function reorderImages(token: string, updates: ReorderUpdate[]): Promise<ImageAsset[]> {
+  return request(`/images/reorder`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ updates }),
+  });
+}
+
+export function listCategories(token: string): Promise<Category[]> {
+  return request("/categories", { headers: authHeaders(token) });
+}
+
+export function createCategory(token: string, data: { slug: string; name: string }): Promise<Category> {
+  return request("/categories", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateCategory(categoryId: string, token: string, data: { name: string }): Promise<Category> {
+  return request(`/categories/${categoryId}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteCategory(categoryId: string, token: string): Promise<void> {
+  return request(`/categories/${categoryId}`, { method: "DELETE", headers: authHeaders(token) });
 }
 
 export { ApiError };

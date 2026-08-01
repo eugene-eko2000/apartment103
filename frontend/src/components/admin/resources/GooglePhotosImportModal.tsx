@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ApiError, uploadImage, type ImageCategory } from "@/lib/api";
+import { ApiError, uploadImage, type Category, type ImageCategory } from "@/lib/api";
 import { useAdminAuth } from "@/lib/admin-auth";
 import {
   createPickerSession,
@@ -17,7 +17,6 @@ import {
 } from "@/lib/googlePhotos";
 import { Modal } from "../Modal";
 import { SelectField } from "../FormFields";
-import { CATEGORIES } from "@/lib/imageCategories";
 
 type Step = "category" | "connecting" | "waiting" | "importing" | "summary";
 
@@ -39,10 +38,12 @@ function altFromFilename(filename: string): string {
 }
 
 export default function GooglePhotosImportModal({
+  categories,
   defaultCategory,
   onClose,
   onImported,
 }: {
+  categories: Category[];
   defaultCategory: ImageCategory;
   onClose: () => void;
   onImported: () => void;
@@ -106,7 +107,7 @@ export default function GooglePhotosImportModal({
       if (cancelledRef.current) break;
       try {
         const file = await downloadMediaItemFile(accessToken, item);
-        await uploadImage(token, file, { category, alt: altFromFilename(item.mediaFile.filename), sort_order: 0 });
+        await uploadImage(token, file, { category, alt: altFromFilename(item.mediaFile.filename) });
         imported += 1;
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
@@ -166,7 +167,7 @@ export default function GooglePhotosImportModal({
             <SelectField
               label="Category"
               value={category}
-              options={CATEGORIES}
+              options={categories.map((c) => ({ value: c.slug, label: c.name }))}
               onChange={(v) => setCategory(v as ImageCategory)}
             />
             {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
