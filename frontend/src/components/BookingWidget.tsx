@@ -828,6 +828,15 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   // itself a valid checkout.
   const hoverIsValidCheckout = !!hoverDate && isValidCheckout(hoverDate);
 
+  // While picking a checkout date, a date that's itself occupied (e.g. the
+  // first night of another guest's stay) is still a legitimate checkout —
+  // the guest checks out that same morning, before the next stay begins —
+  // as long as every night strictly between check-in and it is free. Such
+  // dates must stay clickable (not hard-disabled) and get their own
+  // "occupied but selectable" tint rather than red.
+  const isOccupiedValidCheckout = (date: Date) =>
+    !!range?.from && !range?.to && isBookedDate(date) && isValidCheckout(date);
+
   // Days already covered by the range-selection or hover-preview modifiers
   // keep their own (teal) styling instead of the green/red availability tint.
   const isRangeOrHoverDate = (date: Date) =>
@@ -877,7 +886,12 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
             }
           }}
           numberOfMonths={2}
-          disabled={[{ before: today }, ...bookedRanges, hasNoPrice]}
+          disabled={(date) => {
+            if (isPastDate(date)) return true;
+            if (hasNoPrice(date)) return true;
+            if (isBookedDate(date)) return !isOccupiedValidCheckout(date);
+            return false;
+          }}
           excludeDisabled
           showOutsideDays={false}
           locale={dateFnsLocale}
@@ -900,13 +914,19 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
               isSameDay(date, hoverDate),
             available: (date) => !isRangeOrHoverDate(date) && !isPastDate(date) && !isBookedDate(date) && !hasNoPrice(date) && !isInvalidCheckoutCandidate(date),
             past: (date) => !isRangeOrHoverDate(date) && isPastDate(date),
-            unavailable: (date) => !isRangeOrHoverDate(date) && !isPastDate(date) && (isBookedDate(date) || hasNoPrice(date) || isInvalidCheckoutCandidate(date)),
+            occupiedCheckout: (date) => !isRangeOrHoverDate(date) && isOccupiedValidCheckout(date),
+            unavailable: (date) =>
+              !isRangeOrHoverDate(date) &&
+              !isPastDate(date) &&
+              !isOccupiedValidCheckout(date) &&
+              (isBookedDate(date) || hasNoPrice(date) || isInvalidCheckoutCandidate(date)),
           }}
           modifiersClassNames={{
             hoverRange: "rdp-range_middle",
             hoverRangeEnd: "rdp-range_end",
             available: "!bg-green-50 dark:!bg-green-950/40 !text-green-800 dark:!text-green-300 hover:!bg-green-100 dark:hover:!bg-green-900/40",
             past: "!bg-gray-100 dark:!bg-gray-800/60 !text-gray-400 dark:!text-gray-600",
+            occupiedCheckout: "!bg-yellow-50 dark:!bg-yellow-950/40 !text-yellow-800 dark:!text-yellow-400 hover:!bg-yellow-100 dark:hover:!bg-yellow-900/40",
             unavailable: "!bg-red-50 dark:!bg-red-950/40 !text-red-700 dark:!text-red-400",
           }}
         />
