@@ -1122,41 +1122,57 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                                 : "border-2 border-gray-200 dark:border-gray-600 hover:border-teal-300 dark:hover:border-teal-700"
                             }`}
                           >
-                            <div className="flex items-baseline justify-between gap-3">
-                              <span className="inline-flex items-center text-2xl font-bold text-gray-800 dark:text-gray-100">
-                                {activePlanPrice !== null ? (
-                                  formatPrice(activePlanPrice, currency)
-                                ) : (
-                                  <LoadingSpinner className="w-5 h-5" />
+                            <div className="flex items-start gap-3">
+                              <span
+                                aria-hidden="true"
+                                className={`mt-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                                  isSelected
+                                    ? "border-teal-600 dark:border-teal-400"
+                                    : "border-gray-300 dark:border-gray-500"
+                                }`}
+                              >
+                                {isSelected && (
+                                  <span className="h-2.5 w-2.5 rounded-full bg-teal-600 dark:bg-teal-400" />
                                 )}
                               </span>
-                              {nights > 0 && activePlanPrice !== null && (
-                                <span className="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                                  {dict.total}
-                                </span>
-                              )}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-baseline justify-between gap-3">
+                                  <span className="inline-flex items-center text-2xl font-bold text-gray-800 dark:text-gray-100">
+                                    {activePlanPrice !== null ? (
+                                      formatPrice(activePlanPrice, currency)
+                                    ) : (
+                                      <LoadingSpinner className="w-5 h-5" />
+                                    )}
+                                  </span>
+                                  {nights > 0 && activePlanPrice !== null && (
+                                    <span className="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                      {dict.total}
+                                    </span>
+                                  )}
+                                </div>
+                                {nights > 0 && convertedPlanPricePerNight !== null && (
+                                  <p className="text-base text-gray-500 dark:text-gray-400 mt-0.5">
+                                    {formatPrice(convertedPlanPricePerNight, currency)}
+                                    {dict.perNight}
+                                  </p>
+                                )}
+                                {activePlanPrice !== null && (
+                                  <CancellationTimeline
+                                    rules={p.cancellation_policy.rules}
+                                    checkInDate={range.from!}
+                                    today={today}
+                                    dateLocale={dateFnsLocale}
+                                    price={activePlanPrice}
+                                    currency={currency}
+                                    cancellationLabel={dict.modal.cancellationLabel}
+                                    tillTemplate={dict.modal.cancellationTill}
+                                    rangeTemplate={dict.modal.cancellationRange}
+                                    freeLabel={dict.modal.cancellationFree}
+                                    chargeTemplate={dict.modal.cancellationCharge}
+                                  />
+                                )}
+                              </div>
                             </div>
-                            {nights > 0 && convertedPlanPricePerNight !== null && (
-                              <p className="text-base text-gray-500 dark:text-gray-400 mt-0.5">
-                                {formatPrice(convertedPlanPricePerNight, currency)}
-                                {dict.perNight}
-                              </p>
-                            )}
-                            {activePlanPrice !== null && (
-                              <CancellationTimeline
-                                rules={p.cancellation_policy.rules}
-                                checkInDate={range.from!}
-                                today={today}
-                                dateLocale={dateFnsLocale}
-                                price={activePlanPrice}
-                                currency={currency}
-                                cancellationLabel={dict.modal.cancellationLabel}
-                                tillTemplate={dict.modal.cancellationTill}
-                                rangeTemplate={dict.modal.cancellationRange}
-                                freeLabel={dict.modal.cancellationFree}
-                                chargeTemplate={dict.modal.cancellationCharge}
-                              />
-                            )}
                           </button>
                         );
                       })}
