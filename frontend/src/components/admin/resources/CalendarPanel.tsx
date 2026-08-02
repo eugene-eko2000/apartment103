@@ -181,6 +181,7 @@ export default function CalendarPanel() {
   const token = session!.token;
 
   const today = useMemo(() => new Date(), []);
+  const startOfToday = useMemo(() => new Date(today.getFullYear(), today.getMonth(), today.getDate()), [today]);
   const [month, setMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -332,10 +333,11 @@ export default function CalendarPanel() {
                 const covered =
                   weekSegments.some((s) => colIdx >= s.coveredStartCol && colIdx <= s.coveredEndCol) ||
                   weekClosureSegments.some((s) => colIdx >= s.coveredStartCol && colIdx <= s.coveredEndCol);
-                const rate = cell.inMonth && !covered ? findDailyRate(prices, dateStr) : null;
+                const isPast = cell.inMonth && cell.date < startOfToday;
+                const rate = cell.inMonth && !covered && !isPast ? findDailyRate(prices, dateStr) : null;
                 const minStay = rate ? findMinStay(prices, dateStr) : null;
                 const isToday = cell.inMonth && isSameDate(cell.date, today);
-                const isUnavailable = cell.inMonth && !covered && !rate;
+                const isUnavailable = cell.inMonth && !covered && (isPast || !rate);
 
                 return (
                   <div
