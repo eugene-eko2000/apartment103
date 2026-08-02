@@ -55,6 +55,11 @@ const COLLAPSE_TRANSITION_MS = 560;
 const COLLAPSE_EASING = "cubic-bezier(0.4, 0, 0.2, 1)";
 // id of the app's real scrollable container (frontend/src/app/[lang]/page.tsx)
 const PAGE_SCROLL_ID = "page-scroll";
+// sessionStorage key: carries the in-progress date/guest-count selection
+// across the full-page navigation that applying a guest's saved
+// preferred_language triggers (see handleVerified), so a login that
+// switches locale resumes the booking flow instead of dropping it.
+const LOCALE_SWITCH_RESUME_KEY = "booking_resume_after_locale_switch";
 // Matches the `lg:` breakpoint used throughout this file's className
 // strings — kept as a constant since the FLIP effects below need the same
 // threshold read from JS (window.innerWidth) to decide whether to run.
@@ -511,58 +516,43 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     nights >= checkInMinStay &&
     children.every((child) => child.age !== null);
 
-  const handleBookClick = async () => {
-    if (!isFormValid) return;
-    const session = readGuestSession();
-    if (session) {
-      setCheckingSession(true);
-      try {
-        // Confirm the stored bearer token is still accepted server-side
-        // before resuming straight into the guest-details step with it.
-        await verifyToken(session.token);
-        if (session.guestId) {
-          const guest = await getGuest(session.guestId, session.token);
-          handleVerified({
-            authToken: session.token,
-            expiresAt: session.expiresAt,
-            guestId: guest._id,
-            guestMode: "update",
-            isAdminBooking: false,
-            guestForm: guestToForm(guest, lang),
-          });
-          return;
-        }
-        // No guest profile was created last time (registration was verified
-        // but abandoned before submitting). A guest may now exist for this
-        // identity in the meantime, so don't blindly resume into a blank
-        // form under stale "create" assumptions — fall through to a fresh
-        // OTP verification, which re-resolves subject_type/guestId and
-        // pre-fills correctly if a matching guest is found.
-        clearGuestSession();
-      } catch {
-        // Token rejected or expired server-side — fall back to OTP below.
-        clearGuestSession();
-      } finally {
-        setCheckingSession(false);
-      }
+  // animate is false only for the locale-switch resume effect below: that
+  // call happens milliseconds after the page's very first paint, before
+  // layout/images/fonts have settled, so the compact-widget rect captureRect()
+  // would grab there isn't reliable — animating a grow-from-compact FLIP off
+  // of it left the widget stuck mid-transition (a small clipped box with
+  // stale inline styles that never got cleaned up). There's no compact state
+  // the guest actually saw on this fresh page anyway, so skipping the
+  // animation and opening straight into the natural extended layout is both
+  // safer and correct.
+  const handleVerified = (identity: VerifiedIdentity, animate = true) => {
+    const preferredLanguage = identity.guestForm.preferred_language;
+    if (preferredLanguage && preferredLanguage !== lang && range?.from && range?.to) {
+      // The guest's saved language differs from the page they're on.
+      // switchLocale navigates to a new locale route, which remounts this
+      // whole widget — so rather than opening the extended guest-details
+      // view here and having it immediately collapse away underneath the
+      // navigation (then reopen on the new page once resumed), stash the
+      // already-verified identity plus the date/guest-count selection and
+      // switch first. The mount effect below restores everything and opens
+      // the widget once, directly on the correct locale — a single
+      // transition instead of open → close → reopen.
+      window.sessionStorage.setItem(
+        LOCALE_SWITCH_RESUME_KEY,
+        JSON.stringify({
+          identity,
+          checkIn: format(range.from, "yyyy-MM-dd"),
+          checkOut: format(range.to, "yyyy-MM-dd"),
+          adults,
+          children: children.map((c) => c.age),
+        })
+      );
+      setIdentityModalOpen(false);
+      switchLocale(preferredLanguage);
+      return;
     }
-    setIdentityModalOpen(true);
-  };
 
-  const addChild = () => {
-    if (children.length < 4) setChildren([...children, { age: null }]);
-  };
-  const removeChild = () => {
-    if (children.length > 0) setChildren(children.slice(0, -1));
-  };
-  const updateChildAge = (index: number, age: number | null) => {
-    const updated = [...children];
-    updated[index].age = age;
-    setChildren(updated);
-  };
-
-  const handleVerified = (identity: VerifiedIdentity) => {
-    captureRect();
+    if (animate) captureRect();
     setVerified(identity);
     setGuestForm(identity.guestForm);
     setSelectedPlanId(plans[0]?._id ?? null);
@@ -576,10 +566,96 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
       isAdminBooking: identity.isAdminBooking,
       expiresAt: identity.expiresAt,
     });
-    const preferredLanguage = identity.guestForm.preferred_language;
-    if (preferredLanguage && preferredLanguage !== lang) {
-      switchLocale(preferredLanguage);
+  };
+
+  // Shared by handleBookClick: validates a stored guest session against the
+  // API and, if it still resolves to a guest profile, jumps straight into
+  // the guest-details step with it. Returns whether it resumed, so callers
+  // can fall back to the identifier/OTP modal otherwise.
+  const resumeFromSession = async (session: ReturnType<typeof readGuestSession>) => {
+    if (!session) return false;
+    setCheckingSession(true);
+    try {
+      // Confirm the stored bearer token is still accepted server-side
+      // before resuming straight into the guest-details step with it.
+      await verifyToken(session.token);
+      if (session.guestId) {
+        const guest = await getGuest(session.guestId, session.token);
+        handleVerified({
+          authToken: session.token,
+          expiresAt: session.expiresAt,
+          guestId: guest._id,
+          guestMode: "update",
+          isAdminBooking: false,
+          guestForm: guestToForm(guest, lang),
+        });
+        return true;
+      }
+      // No guest profile was created last time (registration was verified
+      // but abandoned before submitting). A guest may now exist for this
+      // identity in the meantime, so don't blindly resume into a blank
+      // form under stale "create" assumptions — fall through to a fresh
+      // OTP verification, which re-resolves subject_type/guestId and
+      // pre-fills correctly if a matching guest is found.
+      clearGuestSession();
+      return false;
+    } catch {
+      // Token rejected or expired server-side — fall back to OTP below.
+      clearGuestSession();
+      return false;
+    } finally {
+      setCheckingSession(false);
     }
+  };
+
+  // Restores the date/guest-count selection and already-verified identity
+  // that handleVerified stashed away just before switching to the guest's
+  // preferred-language locale, and reopens the widget directly on the
+  // correct step — this mount only ever happens right after that switch, so
+  // handleVerified's own preferredLanguage/lang check above will now match
+  // and open the widget normally instead of switching again.
+  useEffect(() => {
+    const raw = window.sessionStorage.getItem(LOCALE_SWITCH_RESUME_KEY);
+    if (!raw) return;
+    window.sessionStorage.removeItem(LOCALE_SWITCH_RESUME_KEY);
+    try {
+      const resume = JSON.parse(raw) as {
+        identity: VerifiedIdentity;
+        checkIn: string;
+        checkOut: string;
+        adults: number;
+        children: (number | null)[];
+      };
+      setRange({
+        from: parse(resume.checkIn, "yyyy-MM-dd", new Date()),
+        to: parse(resume.checkOut, "yyyy-MM-dd", new Date()),
+      });
+      setAdults(resume.adults);
+      setChildren(resume.children.map((age) => ({ age })));
+      handleVerified(resume.identity, false);
+    } catch {
+      // Malformed/stale payload — nothing to restore.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleBookClick = async () => {
+    if (!isFormValid) return;
+    const session = readGuestSession();
+    if (session && (await resumeFromSession(session))) return;
+    setIdentityModalOpen(true);
+  };
+
+  const addChild = () => {
+    if (children.length < 4) setChildren([...children, { age: null }]);
+  };
+  const removeChild = () => {
+    if (children.length > 0) setChildren(children.slice(0, -1));
+  };
+  const updateChildAge = (index: number, age: number | null) => {
+    const updated = [...children];
+    updated[index].age = age;
+    setChildren(updated);
   };
 
   const resetBookingFlow = () => {
