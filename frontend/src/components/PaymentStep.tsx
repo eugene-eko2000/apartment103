@@ -7,12 +7,14 @@ import { getStripe } from "@/lib/stripe";
 import type { PaymentIntentResponse } from "@/lib/api";
 import type { Locale } from "@/lib/i18n-config";
 import { useTheme } from "@/lib/theme-context";
+import { formatPrice } from "@/lib/currency-config";
 
 export interface PaymentStepDict {
   verifyCardTitle: string;
   verifyCardHint: string;
   payTitle: string;
   payHint: string;
+  chargeSummary: string;
   payButton: string;
   verifyButton: string;
   processing: string;
@@ -109,6 +111,15 @@ function PaymentForm({
       <p className="text-sm text-gray-600 dark:text-gray-300">
         {intent.mode === "setup" ? dict.verifyCardHint : dict.payHint}
       </p>
+
+      {intent.mode === "payment" && intent.total_price > 0 && (
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-gray-700/50 rounded-xl px-3 py-2.5">
+          {dict.chargeSummary
+            .replace("{amount}", formatPrice(intent.amount, intent.currency))
+            .replace("{percent}", String(Math.round((intent.amount / intent.total_price) * 100)))
+            .replace("{total}", formatPrice(intent.total_price, intent.currency))}
+        </p>
+      )}
 
       <div>
         <label htmlFor="cardholder-name" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">

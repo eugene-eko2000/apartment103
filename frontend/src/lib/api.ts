@@ -185,6 +185,7 @@ export interface PaymentIntentResponse {
   mode: "setup" | "payment";
   client_secret: string;
   amount: number;
+  total_price: number;
   currency: Currency;
 }
 

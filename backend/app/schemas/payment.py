@@ -9,4 +9,5 @@ class PaymentIntentResponse(BaseModel):
     mode: Literal["setup", "payment"]
     client_secret: str
     amount: float
+    total_price: float
     currency: Currency

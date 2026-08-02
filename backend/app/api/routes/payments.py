@@ -53,7 +53,11 @@ async def create_payment_intent(
     if amount <= 0:
         intent = await stripe_service.create_setup_intent(customer_id=customer_id, metadata=metadata)
         return PaymentIntentResponse(
-            mode="setup", client_secret=intent.client_secret, amount=0.0, currency=booking.currency
+            mode="setup",
+            client_secret=intent.client_secret,
+            amount=0.0,
+            total_price=booking.total_price,
+            currency=booking.currency,
         )
 
     intent = await stripe_service.create_on_session_payment_intent(
@@ -63,7 +67,11 @@ async def create_payment_intent(
         metadata={**metadata, "reason": "initial_charge"},
     )
     return PaymentIntentResponse(
-        mode="payment", client_secret=intent.client_secret, amount=amount, currency=booking.currency
+        mode="payment",
+        client_secret=intent.client_secret,
+        amount=amount,
+        total_price=booking.total_price,
+        currency=booking.currency,
     )
 
 
@@ -93,7 +101,11 @@ async def retry_payment(
         metadata={"booking_id": str(booking.id), "reason": "scheduled_accrual"},
     )
     return PaymentIntentResponse(
-        mode="payment", client_secret=intent.client_secret, amount=outstanding, currency=booking.currency
+        mode="payment",
+        client_secret=intent.client_secret,
+        amount=outstanding,
+        total_price=booking.total_price,
+        currency=booking.currency,
     )
 
 
