@@ -64,7 +64,6 @@ async def create_payment_intent(
         customer_id=customer_id,
         amount=amount,
         currency=booking.currency,
-        save_payment_method=True,
         metadata={**metadata, "reason": "initial_charge"},
     )
     return PaymentIntentResponse(
@@ -95,7 +94,6 @@ async def retry_payment(
         customer_id=customer_id,
         amount=outstanding,
         currency=booking.currency,
-        save_payment_method=True,
         metadata={"booking_id": str(booking.id), "reason": "scheduled_accrual"},
     )
     return PaymentIntentResponse(

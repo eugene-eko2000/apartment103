@@ -19,7 +19,8 @@ export interface BookingModalDict {
   verifyCode: string;
   resendCode: string;
   codeResent: string;
-  changeIdentifier: string;
+  back: string;
+  cancel: string;
   guestTitleCreate: string;
   guestTitleUpdate: string;
   familyName: string;
@@ -248,7 +249,16 @@ export default function BookingModal({
                 />
               </div>
               {errorMessage && <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>}
-              <SubmitButton pending={pending} label={dict.sendCode} />
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex-1 text-gray-600 dark:text-gray-300 font-semibold py-3 rounded-xl text-sm transition-all border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-[0.98] cursor-pointer"
+                >
+                  {dict.cancel}
+                </button>
+                <SubmitButton pending={pending} label={dict.sendCode} />
+              </div>
             </form>
           )}
 
@@ -274,7 +284,16 @@ export default function BookingModal({
               </div>
               {errorMessage && <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>}
               {resendMessage && <p className="text-sm text-teal-600 dark:text-teal-400">{resendMessage}</p>}
-              <SubmitButton pending={pending} label={dict.verifyCode} />
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={resetToIdentifier}
+                  className="flex-1 text-gray-600 dark:text-gray-300 font-semibold py-3 rounded-xl text-sm transition-all border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-[0.98] cursor-pointer"
+                >
+                  {dict.back}
+                </button>
+                <SubmitButton pending={pending} label={dict.verifyCode} />
+              </div>
               <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
                 <button
                   type="button"
@@ -284,8 +303,8 @@ export default function BookingModal({
                 >
                   {resendCooldown.secondsLeft > 0 ? `${dict.resendCode} (${resendCooldown.secondsLeft}s)` : dict.resendCode}
                 </button>
-                <button type="button" onClick={resetToIdentifier} className="hover:text-teal-700 dark:hover:text-teal-400 cursor-pointer">
-                  {dict.changeIdentifier}
+                <button type="button" onClick={onClose} className="hover:text-teal-700 dark:hover:text-teal-400 cursor-pointer">
+                  {dict.cancel}
                 </button>
               </div>
             </form>
@@ -301,7 +320,7 @@ function SubmitButton({ pending, label }: { pending: boolean; label: string }) {
     <button
       type="submit"
       disabled={pending}
-      className="w-full text-white font-semibold py-3 rounded-xl text-sm transition-all shadow-lg active:scale-[0.98] disabled:opacity-60 cursor-pointer"
+      className="flex-1 text-white font-semibold py-3 rounded-xl text-sm transition-all shadow-lg active:scale-[0.98] disabled:opacity-60 cursor-pointer"
       style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
     >
       {label}

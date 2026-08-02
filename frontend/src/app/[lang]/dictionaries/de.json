@@ -86,6 +86,7 @@
     "total": "Gesamt",
     "bookNow": "Buchen",
     "cancel": "Abbrechen",
+    "back": "Zurück",
     "noCharge": "Noch keine Abbuchung — Sie prüfen alles vor der Bestätigung",
     "modal": {
       "close": "Schließen",
@@ -101,7 +102,8 @@
       "verifyCode": "Bestätigen",
       "resendCode": "Code erneut senden",
       "codeResent": "Ein neuer Code wurde gesendet.",
-      "changeIdentifier": "Andere E-Mail-Adresse oder Telefonnummer verwenden",
+      "back": "Zurück",
+      "cancel": "Abbrechen",
       "guestTitleCreate": "Erzählen Sie uns von sich",
       "guestTitleUpdate": "Bestätigen Sie Ihre Angaben",
       "familyName": "Nachname",

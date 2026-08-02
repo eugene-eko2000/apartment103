@@ -57,22 +57,25 @@ async def create_on_session_payment_intent(
     customer_id: str,
     amount: float,
     currency: Currency,
-    save_payment_method: bool,
     metadata: dict[str, str],
 ) -> stripe.PaymentIntent:
     """For a guest-present charge (initial booking-time charge, or a guest
-    completing a recovery/retry after an off-session charge needed 3DS)."""
-    kwargs: dict = {}
-    if save_payment_method:
-        kwargs["setup_future_usage"] = "off_session"
+    completing a recovery/retry after an off-session charge needed 3DS).
+
+    setup_future_usage is set per-payment-method (rather than at the top
+    level) so the card is always saved for later off-session accrual/
+    cancellation charges without the Payment Element showing its own
+    save-my-info opt-out checkbox — saving isn't actually optional here, the
+    booking's cancellation policy depends on it.
+    """
     return await asyncio.to_thread(
         stripe.PaymentIntent.create,
         customer=customer_id,
         amount=to_minor_units(amount, currency),
         currency=currency.lower(),
         payment_method_types=["card"],
+        payment_method_options={"card": {"setup_future_usage": "off_session"}},
         metadata=metadata,
-        **kwargs,
     )
 
 

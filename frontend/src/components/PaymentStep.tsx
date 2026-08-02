@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import { getStripe } from "@/lib/stripe";
 import type { PaymentIntentResponse } from "@/lib/api";
+import type { Locale } from "@/lib/i18n-config";
 
 export interface PaymentStepDict {
   verifyCardTitle: string;
@@ -18,10 +19,12 @@ export interface PaymentStepDict {
 export default function PaymentStep({
   intent,
   dict,
+  lang,
   onSuccess,
 }: {
   intent: PaymentIntentResponse;
   dict: PaymentStepDict;
+  lang: Locale;
   onSuccess: () => void;
 }) {
   return (
@@ -29,6 +32,7 @@ export default function PaymentStep({
       stripe={getStripe()}
       options={{
         clientSecret: intent.client_secret,
+        locale: lang,
         appearance: { theme: "stripe", variables: { colorPrimary: "#0f766e", borderRadius: "12px" } },
       }}
     >

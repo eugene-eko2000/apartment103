@@ -87,6 +87,7 @@ export interface BookingDict {
   yrs: string;
   bookNow: string;
   cancel: string;
+  back: string;
   noCharge: string;
   total: string;
   modal: BookingModalDict;
@@ -1204,10 +1205,10 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                   <div className="flex gap-3">
                     <button
                       type="button"
-                      onClick={resetBookingFlow}
+                      onClick={() => setGuestStep("plan")}
                       className="flex-1 text-gray-600 dark:text-gray-300 font-semibold py-4 rounded-xl text-base transition-all border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-[0.98] cursor-pointer"
                     >
-                      {dict.cancel}
+                      {dict.back}
                     </button>
                     <button
                       type="submit"
@@ -1218,6 +1219,13 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                       {dict.bookNow}
                     </button>
                   </div>
+                  <button
+                    type="button"
+                    onClick={resetBookingFlow}
+                    className="block w-full text-center text-xs text-gray-400 dark:text-gray-500 hover:text-teal-700 dark:hover:text-teal-400 cursor-pointer"
+                  >
+                    {dict.cancel}
+                  </button>
                 </form>
               )}
 
@@ -1229,6 +1237,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                 <PaymentStep
                   intent={paymentIntent}
                   dict={dict.modal.payment}
+                  lang={lang}
                   onSuccess={() => setGuestStep("success")}
                 />
               )}
@@ -1257,6 +1266,13 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                     style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
                   >
                     {dict.modal.tryAgain}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetBookingFlow}
+                    className="block w-full text-center text-xs text-gray-400 dark:text-gray-500 hover:text-teal-700 dark:hover:text-teal-400 cursor-pointer"
+                  >
+                    {dict.cancel}
                   </button>
                 </div>
               )}

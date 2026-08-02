@@ -71,12 +71,11 @@ class TestCreatePaymentIntent:
             return "cus_test"
 
         async def fake_create_on_session_payment_intent(
-            *, customer_id, amount, currency, save_payment_method, metadata
+            *, customer_id, amount, currency, metadata
         ):
             assert customer_id == "cus_test"
             assert amount == pytest.approx(500.0)
             assert currency == "CHF"
-            assert save_payment_method is True
             assert metadata["reason"] == "initial_charge"
             return SimpleNamespace(client_secret="pi_secret_test")
 
@@ -135,7 +134,7 @@ class TestRetryPayment:
             return "cus_test"
 
         async def fake_create_on_session_payment_intent(
-            *, customer_id, amount, currency, save_payment_method, metadata
+            *, customer_id, amount, currency, metadata
         ):
             assert amount == pytest.approx(500.0)
             assert metadata["reason"] == "scheduled_accrual"
