@@ -144,7 +144,10 @@
         "payHint": "Part of this stay is already non-refundable under your selected rate, so we'll charge that portion now.",
         "payButton": "Pay now",
         "verifyButton": "Verify card",
-        "processing": "Processing…"
+        "processing": "Processing…",
+        "cardholderNameLabel": "Cardholder name",
+        "cardholderNamePlaceholder": "Name on card",
+        "cardDetailsLabel": "Card details"
       }
     }
   },

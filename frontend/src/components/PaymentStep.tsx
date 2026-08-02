@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
+import { useEffect, useState } from "react";
+import { CardElement, Elements, useElements, useStripe } from "@stripe/react-stripe-js";
+import type { StripeCardElementOptions } from "@stripe/stripe-js";
 import { getStripe } from "@/lib/stripe";
 import type { PaymentIntentResponse } from "@/lib/api";
 import type { Locale } from "@/lib/i18n-config";
@@ -14,64 +15,104 @@ export interface PaymentStepDict {
   payButton: string;
   verifyButton: string;
   processing: string;
+  cardholderNameLabel: string;
+  cardholderNamePlaceholder: string;
+  cardDetailsLabel: string;
 }
 
 export default function PaymentStep({
   intent,
   dict,
   lang,
+  guestName,
+  guestEmail,
   onSuccess,
 }: {
   intent: PaymentIntentResponse;
   dict: PaymentStepDict;
   lang: Locale;
+  guestName: string;
+  guestEmail: string;
   onSuccess: () => void;
 }) {
   return (
-    <Elements
-      stripe={getStripe()}
-      options={{
-        clientSecret: intent.client_secret,
-        locale: lang,
-        appearance: { theme: "stripe", variables: { colorPrimary: "#0f766e", borderRadius: "12px" } },
-      }}
-    >
-      <PaymentForm intent={intent} dict={dict} onSuccess={onSuccess} />
+    <Elements stripe={getStripe()} options={{ locale: lang }}>
+      <PaymentForm intent={intent} dict={dict} guestName={guestName} guestEmail={guestEmail} onSuccess={onSuccess} />
     </Elements>
   );
+}
+
+// Stripe.js renders CardElement in a cross-origin iframe, so it can't pick up
+// the surrounding `dark:` classes via CSS — its colors have to be computed
+// in JS and passed through the `style` option instead.
+function useIsDarkMode() {
+  const [isDark, setIsDark] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches,
+  );
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = (e: MediaQueryListEvent) => setIsDark(e.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+  return isDark;
 }
 
 function PaymentForm({
   intent,
   dict,
+  guestName,
+  guestEmail,
   onSuccess,
 }: {
   intent: PaymentIntentResponse;
   dict: PaymentStepDict;
+  guestName: string;
+  guestEmail: string;
   onSuccess: () => void;
 }) {
   const stripe = useStripe();
   const elements = useElements();
+  const isDark = useIsDarkMode();
+  const [cardholderName, setCardholderName] = useState(guestName);
+  const [cardComplete, setCardComplete] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleSubmit = async () => {
-    if (!stripe || !elements) return;
+    const cardElement = elements?.getElement(CardElement);
+    if (!stripe || !elements || !cardElement || !cardholderName.trim() || !cardComplete) return;
     setSubmitting(true);
     setErrorMessage(null);
-    // redirect: "if_required" keeps the guest on this same step for the card
-    // payment methods this app offers server-side — only a redirect-based
-    // method (not configured here) would ever need to leave the page.
+
+    const paymentMethod = {
+      card: cardElement,
+      billing_details: { name: cardholderName.trim(), email: guestEmail },
+    };
     const { error } =
       intent.mode === "setup"
-        ? await stripe.confirmSetup({ elements, redirect: "if_required" })
-        : await stripe.confirmPayment({ elements, redirect: "if_required" });
+        ? await stripe.confirmCardSetup(intent.client_secret, { payment_method: paymentMethod })
+        : await stripe.confirmCardPayment(intent.client_secret, { payment_method: paymentMethod });
+
     setSubmitting(false);
     if (error) {
       setErrorMessage(error.message ?? dict.processing);
       return;
     }
     onSuccess();
+  };
+
+  const cardElementOptions: StripeCardElementOptions = {
+    hidePostalCode: true,
+    style: {
+      base: {
+        fontSize: "14px",
+        fontFamily: "inherit",
+        color: isDark ? "#f3f4f6" : "#1f2937",
+        "::placeholder": { color: "#9ca3af" },
+      },
+      invalid: { color: "#dc2626" },
+    },
   };
 
   return (
@@ -82,11 +123,34 @@ function PaymentForm({
       <p className="text-sm text-gray-600 dark:text-gray-300">
         {intent.mode === "setup" ? dict.verifyCardHint : dict.payHint}
       </p>
-      <PaymentElement options={{ wallets: { link: "never" } }} />
+
+      <div>
+        <label htmlFor="cardholder-name" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+          {dict.cardholderNameLabel}
+        </label>
+        <input
+          id="cardholder-name"
+          type="text"
+          required
+          autoComplete="cc-name"
+          value={cardholderName}
+          onChange={(e) => setCardholderName(e.target.value)}
+          placeholder={dict.cardholderNamePlaceholder}
+          className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 text-sm focus:outline-none focus:ring-1 focus:ring-teal-300 focus:border-teal-400"
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{dict.cardDetailsLabel}</label>
+        <div className="w-full px-3 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus-within:ring-1 focus-within:ring-teal-300 focus-within:border-teal-400">
+          <CardElement options={cardElementOptions} onChange={(e) => setCardComplete(e.complete)} />
+        </div>
+      </div>
+
       {errorMessage && <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>}
       <button
         type="button"
-        disabled={!stripe || !elements || submitting}
+        disabled={!stripe || !elements || submitting || !cardComplete || !cardholderName.trim()}
         onClick={handleSubmit}
         className="w-full text-white font-semibold py-4 rounded-xl text-base transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}

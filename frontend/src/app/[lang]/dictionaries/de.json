@@ -144,7 +144,10 @@
         "payHint": "Ein Teil dieses Aufenthalts ist laut Ihrem gewählten Tarif bereits nicht erstattungsfähig, daher belasten wir diesen Betrag jetzt.",
         "payButton": "Jetzt bezahlen",
         "verifyButton": "Karte verifizieren",
-        "processing": "Wird verarbeitet…"
+        "processing": "Wird verarbeitet…",
+        "cardholderNameLabel": "Name des Karteninhabers",
+        "cardholderNamePlaceholder": "Name auf der Karte",
+        "cardDetailsLabel": "Kartendaten"
       }
     }
   },

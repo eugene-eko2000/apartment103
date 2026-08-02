@@ -144,7 +144,10 @@
         "payHint": "Une partie de ce séjour n'est déjà plus remboursable selon le tarif choisi, nous allons donc débiter ce montant maintenant.",
         "payButton": "Payer maintenant",
         "verifyButton": "Vérifier la carte",
-        "processing": "Traitement en cours…"
+        "processing": "Traitement en cours…",
+        "cardholderNameLabel": "Nom du titulaire",
+        "cardholderNamePlaceholder": "Nom figurant sur la carte",
+        "cardDetailsLabel": "Détails de la carte"
       }
     }
   },

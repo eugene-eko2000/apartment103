@@ -144,7 +144,10 @@
         "payHint": "Una parte di questo soggiorno non è già più rimborsabile in base alla tariffa scelta, quindi addebiteremo ora questo importo.",
         "payButton": "Paga ora",
         "verifyButton": "Verifica carta",
-        "processing": "Elaborazione…"
+        "processing": "Elaborazione…",
+        "cardholderNameLabel": "Nome del titolare",
+        "cardholderNamePlaceholder": "Nome sulla carta",
+        "cardDetailsLabel": "Dati della carta"
       }
     }
   },

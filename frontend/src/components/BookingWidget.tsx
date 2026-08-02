@@ -1233,11 +1233,13 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                 <p className="text-sm text-gray-600 dark:text-gray-300 text-center py-8">{dict.modal.submitting}</p>
               )}
 
-              {guestStep === "payment" && paymentIntent && (
+              {guestStep === "payment" && paymentIntent && guestForm && (
                 <PaymentStep
                   intent={paymentIntent}
                   dict={dict.modal.payment}
                   lang={lang}
+                  guestName={`${guestForm.first_name} ${guestForm.family_name}`.trim()}
+                  guestEmail={guestForm.email}
                   onSuccess={() => setGuestStep("success")}
                 />
               )}
