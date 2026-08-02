@@ -202,7 +202,16 @@ log "    this builds images, runs pending DB migrations, then starts the stack â
   # (no replica set), hence --no-use-transaction. If this fails, `set -e`
   # aborts before backend/frontend/nginx start, so the app never boots
   # against a half-migrated or incompatible schema.
-  echo "$COMPOSE run --rm backend uv run --no-sync mongo-migrate migrate --forward --no-use-transaction"
+  #
+  # `< /dev/null` is load-bearing: this whole remote script arrives over one
+  # shared stdin stream (piped in below), and `compose run` attaches its
+  # container's stdin to whatever fd 0 it inherits by default. Without the
+  # redirect it silently drains the rest of THIS script's text (the `up -d`,
+  # nginx stop/rm/up, and verification lines that follow) as if it were
+  # input to the migration container, before `bash -s` ever gets to read
+  # them â€” bash then just hits EOF and exits 0, so the deploy reports
+  # success while everything after the migration step quietly never ran.
+  echo "$COMPOSE run --rm backend uv run --no-sync mongo-migrate migrate --forward --no-use-transaction < /dev/null"
   echo "$COMPOSE up -d"
   # nginx's config templates are bind-mounted (docker-compose.yml), not baked
   # into an image, and are only re-rendered by the container entrypoint on
@@ -225,7 +234,7 @@ log "    this builds images, runs pending DB migrations, then starts the stack â
   # running unnoticed.
   echo "sleep 2"
   echo "echo '--> nginx config as rendered inside the freshly (re)started container:'"
-  echo "$COMPOSE exec -T nginx nginx -T 2>&1 | grep -B1 -A2 'location ~'"
+  echo "$COMPOSE exec -T nginx nginx -T < /dev/null 2>&1 | grep -B1 -A2 'location ~'"
 } | ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "sudo -S -p '' bash -s"
 log "==> Remote build/migrate/start finished"
 
