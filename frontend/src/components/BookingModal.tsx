@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ApiError, getGuest, requestOtp, verifyOtp, type Guest, type GuestInput, type SubjectType } from "@/lib/api";
 import type { PaymentStepDict } from "@/components/PaymentStep";
 import { useOtpResendCooldown } from "@/lib/useOtpResendCooldown";
+import type { Locale } from "@/lib/i18n-config";
 
 export interface BookingModalDict {
   close: string;
@@ -78,24 +79,29 @@ export const emptyGuestForm: GuestInput = {
   preferred_currency: null,
 };
 
-export function guestToForm(guest: Guest): GuestInput {
+// fallbackLang pre-fills preferred_language from the site's current locale
+// when the guest has never set one, without ever overriding a language
+// they've deliberately chosen before.
+export function guestToForm(guest: Guest, fallbackLang: Locale | null = null): GuestInput {
   return {
     family_name: guest.family_name,
     first_name: guest.first_name,
     residence_address: { ...guest.residence_address, state: guest.residence_address.state ?? "" },
     phone_number: guest.phone_number,
     email: guest.email,
-    preferred_language: guest.preferred_language ?? null,
+    preferred_language: guest.preferred_language ?? fallbackLang,
     preferred_currency: guest.preferred_currency ?? null,
   };
 }
 
 export default function BookingModal({
   dict,
+  lang,
   onClose,
   onVerified,
 }: {
   dict: BookingModalDict;
+  lang: Locale;
   onClose: () => void;
   onVerified: (identity: VerifiedIdentity) => void;
 }) {
@@ -175,7 +181,7 @@ export default function BookingModal({
           guestId: guest._id,
           guestMode: "update",
           isAdminBooking: false,
-          guestForm: guestToForm(guest),
+          guestForm: guestToForm(guest, lang),
         });
         return;
       }
@@ -194,6 +200,7 @@ export default function BookingModal({
           ...emptyGuestForm,
           email: isEmail ? identifier.trim() : "",
           phone_number: isEmail ? "" : identifier.trim(),
+          preferred_language: lang,
         },
       });
     } catch (err) {

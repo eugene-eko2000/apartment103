@@ -31,6 +31,7 @@ import {
   type Price,
 } from "@/lib/api";
 import { findDailyRate, findLowestDailyRate, findMinStay } from "@/lib/pricing";
+import { useLocaleSwitch } from "@/lib/use-locale-switch";
 import BookingModal, { guestToForm, type BookingModalDict, type VerifiedIdentity } from "@/components/BookingModal";
 import { CancellationTimeline, refundHighlightColor } from "@/components/CancellationTimeline";
 import PaymentStep from "@/components/PaymentStep";
@@ -97,6 +98,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const today = new Date();
   const dateFnsLocale = DATE_FNS_LOCALES[lang];
   const { currency } = useCurrency();
+  const switchLocale = useLocaleSwitch();
   const [range, setRange] = useState<DateRange | undefined>();
   const [hoverDate, setHoverDate] = useState<Date | undefined>(undefined);
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -157,13 +159,10 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     if (widgetRef.current) prevCompactRectRef.current = widgetRef.current.getBoundingClientRect();
   };
 
-  useEffect(() => {
-    listPublicPlans()
-      .then(setPlans)
-      .catch(() => setPlans([]));
-    listPublicPrices()
-      .then(setPrices)
-      .catch(() => setPrices([]));
+  // Re-run every time the calendar is opened (see toggleCalendar below), not
+  // just on mount — bookings/closures made elsewhere while this page stays
+  // open must still show up as soon as the guest opens the picker again.
+  const fetchAvailability = () => {
     // end_date is the checkout day (exclusive, same convention as
     // findDailyRate), so the last disabled night is the day before it — this
     // keeps a booking's checkout day available as another's check-in. Dates
@@ -179,7 +178,29 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     ]).then(([bookedRanges, closedRanges]) => {
       setBookedRanges([...bookedRanges, ...closedRanges].map(toDateRange));
     });
+  };
+
+  useEffect(() => {
+    listPublicPlans()
+      .then(setPlans)
+      .catch(() => setPlans([]));
+    listPublicPrices()
+      .then(setPrices)
+      .catch(() => setPrices([]));
+    fetchAvailability();
   }, []);
+
+  // Shared by every check-in/check-out DateField below: opening the calendar
+  // always refreshes availability first, so it can never show data staler
+  // than the last time it was opened.
+  const toggleCalendar = () => {
+    captureCompactRect();
+    setCalendarOpen((v) => {
+      const next = !v;
+      if (next) fetchAvailability();
+      return next;
+    });
+  };
 
   // Close calendar on outside click
   useEffect(() => {
@@ -507,7 +528,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
             guestId: guest._id,
             guestMode: "update",
             isAdminBooking: false,
-            guestForm: guestToForm(guest),
+            guestForm: guestToForm(guest, lang),
           });
           return;
         }
@@ -555,6 +576,10 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
       isAdminBooking: identity.isAdminBooking,
       expiresAt: identity.expiresAt,
     });
+    const preferredLanguage = identity.guestForm.preferred_language;
+    if (preferredLanguage && preferredLanguage !== lang) {
+      switchLocale(preferredLanguage);
+    }
   };
 
   const resetBookingFlow = () => {
@@ -887,10 +912,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                   <DateField
                     label={dict.checkIn}
                     value={checkInText}
-                    onClick={() => {
-                      captureCompactRect();
-                      setCalendarOpen((v) => !v);
-                    }}
+                    onClick={toggleCalendar}
                     active={calendarOpen}
                     filled={!!range?.from}
                     openCalendarLabel={dict.openCalendar}
@@ -899,10 +921,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                   <DateField
                     label={dict.checkOut}
                     value={checkOutText}
-                    onClick={() => {
-                      captureCompactRect();
-                      setCalendarOpen((v) => !v);
-                    }}
+                    onClick={toggleCalendar}
                     active={calendarOpen}
                     filled={!!range?.to}
                     openCalendarLabel={dict.openCalendar}
@@ -1077,10 +1096,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                       <DateField
                         label={dict.checkIn}
                         value={checkInText}
-                        onClick={() => {
-                          captureCompactRect();
-                          setCalendarOpen((v) => !v);
-                        }}
+                        onClick={toggleCalendar}
                         active={calendarOpen}
                         filled={!!range?.from}
                         openCalendarLabel={dict.openCalendar}
@@ -1089,10 +1105,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                       <DateField
                         label={dict.checkOut}
                         value={checkOutText}
-                        onClick={() => {
-                          captureCompactRect();
-                          setCalendarOpen((v) => !v);
-                        }}
+                        onClick={toggleCalendar}
                         active={calendarOpen}
                         filled={!!range?.to}
                         openCalendarLabel={dict.openCalendar}
@@ -1284,6 +1297,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
       {identityModalOpen && (
         <BookingModal
           dict={dict.modal}
+          lang={lang}
           onClose={() => setIdentityModalOpen(false)}
           onVerified={handleVerified}
         />

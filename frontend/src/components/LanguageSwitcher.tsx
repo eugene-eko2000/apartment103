@@ -1,10 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
 import { locales, localeNames, localeFlags, type Locale } from "@/lib/i18n-config";
-import { setCookie } from "@/lib/cookies";
-import { useCookieConsent } from "@/lib/cookie-consent-context";
+import { useLocaleSwitch } from "@/lib/use-locale-switch";
 
 export default function LanguageSwitcher({
   currentLang,
@@ -13,9 +11,7 @@ export default function LanguageSwitcher({
   currentLang: Locale;
   expandOnClick?: boolean;
 }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const { status } = useCookieConsent();
+  const switchLocale = useLocaleSwitch();
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -30,13 +26,7 @@ export default function LanguageSwitcher({
 
   const switchTo = (locale: Locale) => {
     if (locale === currentLang) return;
-    const segments = pathname.split("/");
-    segments[1] = locale;
-    if (status === "allowed") {
-      setCookie("NEXT_LOCALE", locale, 365);
-    }
-    router.push(segments.join("/") || `/${locale}`);
-    router.refresh();
+    switchLocale(locale);
   };
 
   return (
