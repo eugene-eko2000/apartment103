@@ -61,6 +61,9 @@
   },
   "booking": {
     "planYourStay": "Pianifica il tuo soggiorno",
+    "yourRateTitle": "La tua tariffa",
+    "yourDataTitle": "I tuoi dati",
+    "paymentDetailsTitle": "Dettagli di pagamento",
     "fromPrefix": "da",
     "perNight": "/ notte",
     "night": "notte",

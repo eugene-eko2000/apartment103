@@ -70,6 +70,9 @@ type GuestFlowStep = "plan" | "form" | "submitting" | "payment" | "success" | "e
 
 export interface BookingDict {
   planYourStay: string;
+  yourRateTitle: string;
+  yourDataTitle: string;
+  paymentDetailsTitle: string;
   fromPrefix: string;
   perNight: string;
   night: string;
@@ -510,6 +513,34 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     priceTotal !== null && priceCurrency ? convertCurrency(priceTotal, priceCurrency, currency) : null;
   const activePrice = nights > 0 ? convertedPriceTotal : convertedPricePerNight;
   const activeRawPrice = nights > 0 ? priceTotal : pricePerNight;
+  const selectedPlanPricePerNight =
+    selectedPlan && matchedRate ? matchedRate.dailyRate * selectedPlan.price_ratio : null;
+  const convertedSelectedPlanPricePerNight =
+    selectedPlanPricePerNight !== null && priceCurrency
+      ? convertCurrency(selectedPlanPricePerNight, priceCurrency, currency)
+      : null;
+  const selectedPlanPriceTotal = selectedPlanPricePerNight !== null ? selectedPlanPricePerNight * nights : null;
+  const convertedSelectedPlanPriceTotal =
+    selectedPlanPriceTotal !== null && priceCurrency
+      ? convertCurrency(selectedPlanPriceTotal, priceCurrency, currency)
+      : null;
+  const chosenPlanPrice = nights > 0 ? convertedSelectedPlanPriceTotal : convertedSelectedPlanPricePerNight;
+  const chosenPlanRawPrice = nights > 0 ? selectedPlanPriceTotal : selectedPlanPricePerNight;
+  // Which stage of the extended flow (rate → data → payment) the header
+  // should reflect; falls back to the initial planYourStay/"from" price
+  // outside the extended flow and on the terminal success/error screens.
+  const headerTitle = !extended
+    ? dict.planYourStay
+    : guestStep === "plan"
+    ? dict.yourRateTitle
+    : guestStep === "form"
+    ? dict.yourDataTitle
+    : guestStep === "submitting" || guestStep === "payment"
+    ? dict.paymentDetailsTitle
+    : dict.planYourStay;
+  const showFromPrefix = !extended || guestStep === "plan";
+  const headerPrice = showFromPrefix ? activePrice : chosenPlanPrice;
+  const headerRawPrice = showFromPrefix ? activeRawPrice : chosenPlanRawPrice;
   const isFormValid =
     !!range?.from &&
     !!range?.to &&
@@ -966,22 +997,24 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
           style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
         >
           <div className="flex flex-col gap-1 lg:flex-row lg:items-baseline lg:justify-between lg:gap-0">
-            <h2 className="text-lg lg:text-xl font-bold text-white whitespace-nowrap [text-shadow:0_1px_3px_rgba(0,0,0,0.35)]">{dict.planYourStay}</h2>
+            <h2 className="text-lg lg:text-xl font-bold text-white whitespace-nowrap [text-shadow:0_1px_3px_rgba(0,0,0,0.35)]">{headerTitle}</h2>
             <div className="text-left shrink-0">
-              <span className="text-white/90 text-base mr-1 [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">{dict.fromPrefix}</span>
+              {showFromPrefix && (
+                <span className="text-white/90 text-base mr-1 [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">{dict.fromPrefix}</span>
+              )}
               <span className="whitespace-nowrap">
                 <span className="inline-flex items-center text-lg lg:text-xl font-bold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.35)]">
-                  {activePrice !== null ? formatPrice(activePrice, currency) : <LoadingSpinner className="w-4 h-4" />}
+                  {headerPrice !== null ? formatPrice(headerPrice, currency) : <LoadingSpinner className="w-4 h-4" />}
                 </span>
-                {activePrice !== null && (
+                {headerPrice !== null && (
                   <span className="text-white/90 text-base ml-1 [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
                     {nights > 0 ? dict.total : dict.perNight}
                   </span>
                 )}
               </span>
-              {priceCurrency !== null && priceCurrency !== currency && activeRawPrice !== null && (
+              {priceCurrency !== null && priceCurrency !== currency && headerRawPrice !== null && (
                 <div className="text-white/85 text-sm [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
-                  {formatPrice(activeRawPrice, priceCurrency)}{" "}
+                  {formatPrice(headerRawPrice, priceCurrency)}{" "}
                   {nights > 0 ? dict.total : dict.perNight}
                 </div>
               )}
