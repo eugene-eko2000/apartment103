@@ -66,7 +66,7 @@ export default function AdminLogin() {
     setPending(true);
     setErrorMessage(null);
     try {
-      const result = await verifyOtp(identifier.trim(), otpCode.trim());
+      const result = await verifyOtp(identifier.trim(), otpCode.trim(), "admin");
       if (result.subject_type !== "admin") {
         setStep("unauthorized");
         return;

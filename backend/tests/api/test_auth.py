@@ -147,6 +147,44 @@ class TestVerifyOtp:
         assert body["subject_type"] == "admin"
         assert body["subject_id"] == str(admin.id)
 
+    async def test_default_audience_resolves_to_guest_when_identifier_is_also_an_admin(
+        self, client, admin, guest
+    ):
+        """Same person can hold both roles (e.g. staff booking for themselves).
+        The default ("guest") audience — used by the booking flow and the
+        header login — resolves to guest so the booking form identifies and
+        pre-fills them."""
+        admin.phone_number = guest.phone_number
+        await admin.save()
+
+        await _create_challenge(guest.phone_number, "111222")
+        response = await client.post(
+            "/auth/otp/verify", json={"identifier": guest.phone_number, "code": "111222"}
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["subject_type"] == "guest"
+        assert body["subject_id"] == str(guest.id)
+
+    async def test_admin_audience_resolves_to_admin_when_identifier_is_also_a_guest(
+        self, client, admin, guest
+    ):
+        """The admin-dashboard login (audience="admin") must still resolve to
+        admin for someone who holds both roles, or they'd be locked out of
+        /admin once they also have a guest profile."""
+        admin.phone_number = guest.phone_number
+        await admin.save()
+
+        await _create_challenge(guest.phone_number, "333444")
+        response = await client.post(
+            "/auth/otp/verify",
+            json={"identifier": guest.phone_number, "code": "333444", "audience": "admin"},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["subject_type"] == "admin"
+        assert body["subject_id"] == str(admin.id)
+
     async def test_marks_challenge_consumed_after_verification(self, client, guest):
         challenge = await _create_challenge(guest.email, "123456")
 
@@ -233,6 +271,34 @@ class TestVerifyOtp:
         )
         assert response.status_code == 200
         assert response.json()["subject_id"] == str(guest.id)
+
+    async def test_matches_returning_guest_who_types_phone_in_a_different_format(self, client):
+        """A guest stored with an E.164 number must still be recognized when
+        they log in typing the equivalent local/differently-punctuated form,
+        so the booking form gets pre-filled instead of treating them as new."""
+        from app.models.guest import Guest, ResidenceAddress
+
+        returning_guest = Guest(
+            family_name="Meier",
+            first_name="Anna",
+            residence_address=ResidenceAddress(
+                street_address="1 Bahnhofstrasse", zip="8001", city="Zurich", country="CH"
+            ),
+            phone_number="+41781234567",
+            email="anna@example.com",
+        )
+        await returning_guest.insert()
+
+        # The challenge is keyed by the normalized identifier, same as
+        # POST /auth/otp/request would store it.
+        await _create_challenge("+41781234567", "123456")
+        response = await client.post(
+            "/auth/otp/verify", json={"identifier": "078 123 45 67", "code": "123456"}
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["subject_type"] == "guest"
+        assert body["subject_id"] == str(returning_guest.id)
 
     async def test_issues_pending_guest_token_for_unregistered_identifier(self, client):
         await _create_challenge("newperson@example.com", "123456")

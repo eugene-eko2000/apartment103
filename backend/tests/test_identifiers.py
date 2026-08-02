@@ -64,10 +64,21 @@ class TestNormalizeIdentifier:
         assert normalize_identifier("  USER@Example.COM  ", "email") == "user@example.com"
 
     def test_normalizes_phone_by_removing_formatting_characters(self):
-        assert normalize_identifier("(555) 123-4567", "phone") == "5551234567"
+        assert normalize_identifier("+1 (555) 123-4567", "phone") == "+15551234567"
 
     def test_normalizes_phone_preserves_leading_plus(self):
         assert normalize_identifier("+1 (555) 123-4567", "phone") == "+15551234567"
 
     def test_normalizes_phone_strips_surrounding_whitespace(self):
-        assert normalize_identifier("  5551234567  ", "phone") == "5551234567"
+        assert normalize_identifier("  +15551234567  ", "phone") == "+15551234567"
+
+    def test_assumes_default_region_for_numbers_without_country_code(self):
+        assert normalize_identifier("078 123 45 67", "phone") == "+41781234567"
+
+    def test_different_formats_of_the_same_number_normalize_identically(self):
+        """A returning guest who types their number differently than before
+        (spacing, missing country code, ...) must still be matched to their
+        existing account at login."""
+        variants = ["078 123 45 67", "0781234567", "+41781234567", "0041 78 123 45 67"]
+        normalized = {normalize_identifier(v, "phone") for v in variants}
+        assert normalized == {"+41781234567"}

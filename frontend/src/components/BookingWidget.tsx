@@ -31,7 +31,7 @@ import {
   type Price,
 } from "@/lib/api";
 import { findDailyRate, findLowestDailyRate, findMinStay } from "@/lib/pricing";
-import BookingModal, { emptyGuestForm, guestToForm, type BookingModalDict, type VerifiedIdentity } from "@/components/BookingModal";
+import BookingModal, { guestToForm, type BookingModalDict, type VerifiedIdentity } from "@/components/BookingModal";
 import { CancellationTimeline, refundHighlightColor } from "@/components/CancellationTimeline";
 import PaymentStep from "@/components/PaymentStep";
 import { PhoneInput } from "@/components/PhoneInput";
@@ -509,19 +509,15 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
             isAdminBooking: false,
             guestForm: guestToForm(guest),
           });
-        } else {
-          // No guest profile yet (self-registration or admin booking was
-          // verified but never completed) — resume straight into that form.
-          handleVerified({
-            authToken: session.token,
-            expiresAt: session.expiresAt,
-            guestId: null,
-            guestMode: session.guestMode,
-            isAdminBooking: session.isAdminBooking,
-            guestForm: emptyGuestForm,
-          });
+          return;
         }
-        return;
+        // No guest profile was created last time (registration was verified
+        // but abandoned before submitting). A guest may now exist for this
+        // identity in the meantime, so don't blindly resume into a blank
+        // form under stale "create" assumptions — fall through to a fresh
+        // OTP verification, which re-resolves subject_type/guestId and
+        // pre-fills correctly if a matching guest is found.
+        clearGuestSession();
       } catch {
         // Token rejected or expired server-side — fall back to OTP below.
         clearGuestSession();

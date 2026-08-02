@@ -33,19 +33,30 @@ async def verify_token(principal: Principal = Depends(get_current_principal)) ->
     return {"status": "OK"}
 
 
-async def _find_principal(identifier: str, kind: str) -> tuple[SubjectType, PydanticObjectId] | None:
+async def _find_principal(
+    identifier: str, kind: str, audience: str
+) -> tuple[SubjectType, PydanticObjectId] | None:
     if kind == "email":
         query = {"email": {"$regex": f"^{re.escape(identifier)}$", "$options": "i"}}
     else:
         query = {"phone_number": identifier}
 
-    admin = await Admin.find_one(query)
-    if admin is not None:
-        return "admin", admin.id
+    # Someone can legitimately hold both roles (e.g. staff booking for
+    # themselves), so which one wins when an identifier matches both depends
+    # on which surface is authenticating: the admin-dashboard login needs
+    # "admin" to still resolve to admin, while guest-facing flows (booking,
+    # viewing bookings) need "guest" to identify and pre-fill the guest.
+    lookups: list[tuple[SubjectType, type[Admin] | type[Guest]]] = [
+        ("admin", Admin),
+        ("guest", Guest),
+    ]
+    if audience != "admin":
+        lookups.reverse()
 
-    guest = await Guest.find_one(query)
-    if guest is not None:
-        return "guest", guest.id
+    for subject_type, model in lookups:
+        match = await model.find_one(query)
+        if match is not None:
+            return subject_type, match.id
 
     return None
 
@@ -133,7 +144,7 @@ async def verify_otp(payload: OtpVerify) -> TokenResponse:
     challenge.consumed_at = now
     await challenge.save()
 
-    principal = await _find_principal(identifier, kind)
+    principal = await _find_principal(identifier, kind, payload.audience)
     if principal is None:
         # No Guest/Admin exists for this identifier yet: issue a narrowly
         # scoped token that only lets the client register a new Guest

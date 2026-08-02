@@ -280,8 +280,15 @@ export function requestOtp(identifier: string): Promise<OtpRequestResponse> {
   return request("/auth/otp/request", { method: "POST", body: JSON.stringify({ identifier }) });
 }
 
-export function verifyOtp(identifier: string, code: string): Promise<TokenResponse> {
-  return request("/auth/otp/verify", { method: "POST", body: JSON.stringify({ identifier, code }) });
+export function verifyOtp(
+  identifier: string,
+  code: string,
+  audience: "guest" | "admin" = "guest"
+): Promise<TokenResponse> {
+  return request("/auth/otp/verify", {
+    method: "POST",
+    body: JSON.stringify({ identifier, code, audience }),
+  });
 }
 
 export function verifyToken(token: string): Promise<{ status: string }> {

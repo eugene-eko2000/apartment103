@@ -18,6 +18,12 @@ class OtpRequestResponse(BaseModel):
 class OtpVerify(BaseModel):
     identifier: str
     code: str
+    # Which role should win when an identifier matches both an Admin and a
+    # Guest record (e.g. staff booking for themselves): the admin-dashboard
+    # login needs "admin" to still resolve to admin, while every guest-facing
+    # flow (booking, viewing bookings) needs "guest" to identify and pre-fill
+    # the returning guest.
+    audience: Literal["guest", "admin"] = "guest"
 
 
 class TokenResponse(BaseModel):

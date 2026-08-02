@@ -3,6 +3,7 @@ import logging
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Content, Email, Mail, To
 from twilio.rest import Client as TwilioClient
+from twilio.rest.api.v2010.account.message import MessageInstance
 
 from app.core.config import settings
 
@@ -38,4 +39,5 @@ def send_otp_sms(to_number: str, code: str) -> None:
         to=to_number,
         messaging_service_sid=settings.twilio_messaging_service_sid,
         body=f"Your verification code is {code}.",
+        risk_check=MessageInstance.RiskCheck.DISABLE,
     )
