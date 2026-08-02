@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { CardElement, Elements, useElements, useStripe } from "@stripe/react-stripe-js";
 import type { StripeCardElementOptions } from "@stripe/stripe-js";
 import { getStripe } from "@/lib/stripe";
 import type { PaymentIntentResponse } from "@/lib/api";
 import type { Locale } from "@/lib/i18n-config";
+import { useTheme } from "@/lib/theme-context";
 
 export interface PaymentStepDict {
   verifyCardTitle: string;
@@ -42,22 +43,6 @@ export default function PaymentStep({
   );
 }
 
-// Stripe.js renders CardElement in a cross-origin iframe, so it can't pick up
-// the surrounding `dark:` classes via CSS — its colors have to be computed
-// in JS and passed through the `style` option instead.
-function useIsDarkMode() {
-  const [isDark, setIsDark] = useState(
-    () => typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches,
-  );
-  useEffect(() => {
-    const query = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = (e: MediaQueryListEvent) => setIsDark(e.matches);
-    query.addEventListener("change", onChange);
-    return () => query.removeEventListener("change", onChange);
-  }, []);
-  return isDark;
-}
-
 function PaymentForm({
   intent,
   dict,
@@ -73,7 +58,8 @@ function PaymentForm({
 }) {
   const stripe = useStripe();
   const elements = useElements();
-  const isDark = useIsDarkMode();
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
   const [cardholderName, setCardholderName] = useState(guestName);
   const [cardComplete, setCardComplete] = useState(false);
   const [submitting, setSubmitting] = useState(false);
