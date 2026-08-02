@@ -110,9 +110,9 @@ export default function MyBookingsModal({ dict, onClose }: { dict: MyBookingsDic
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
         <div
-          className="px-6 py-4 rounded-t-2xl flex items-center justify-between sticky top-0"
+          className="px-6 py-4 rounded-t-2xl flex items-center justify-between shrink-0"
           style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
         >
           <h2 className="text-lg font-bold text-white">{dict.title}</h2>
@@ -126,7 +126,7 @@ export default function MyBookingsModal({ dict, onClose }: { dict: MyBookingsDic
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="p-6 overflow-y-auto">
           {status === "loading" && <p className="text-gray-500 dark:text-gray-400 text-sm">{dict.loading}</p>}
           {status === "loggedOut" && <p className="text-gray-500 dark:text-gray-400 text-sm">{dict.loggedOut}</p>}
           {status === "error" && <p className="text-red-600 dark:text-red-400 text-sm">{errorMessage}</p>}
