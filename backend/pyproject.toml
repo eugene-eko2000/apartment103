@@ -18,6 +18,8 @@ dependencies = [
     "pillow>=12.3.0",
     "pillow-heif>=1.5.0",
     "phonenumbers>=9.0.36",
+    "fpdf2>=2.7.9",
+    "jinja2>=3.1.4",
 ]
 
 [project.scripts]

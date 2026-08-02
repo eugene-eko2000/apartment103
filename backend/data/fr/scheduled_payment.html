@@ -1,0 +1,35 @@
+Subject: Paiement reçu — {{ business_name }}
+
+<!doctype html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: Arial, Helvetica, sans-serif; color:#222; max-width:600px; margin:0 auto; padding:16px;">
+  <span style="display:none;">Un paiement programmé a été traité</span>
+  <h2 style="margin-bottom:0;">{{ business_name }}</h2>
+  <p>Bonjour {{ guest_first_name }},</p>
+  <p>Nous avons traité un paiement programmé pour votre séjour à venir à {{ business_name }}.</p>
+
+  <h3 style="margin-bottom:4px;">Détails du paiement</h3>
+  <table style="border-collapse:collapse; width:100%;">
+    <tr><td style="padding:4px 12px 4px 0;">Motif</td><td style="padding:4px 0; text-align:right;">{% if charge_reason == "initial_charge" %}Paiement initial{% elif charge_reason == "scheduled_accrual" %}Paiement programmé{% elif charge_reason == "cancellation_settlement" %}Solde d'annulation{% else %}{{ charge_reason }}{% endif %}</td></tr>
+    <tr><td style="padding:4px 12px 4px 0;">Montant débité</td><td style="padding:4px 0; text-align:right;">{{ charge_amount | money(charge_currency) }}</td></tr>
+    <tr><td style="padding:4px 12px 4px 0;">Date</td><td style="padding:4px 0; text-align:right;">{{ charge_date }}</td></tr>
+    <tr><td style="padding:4px 12px 4px 0;">Référence de paiement</td><td style="padding:4px 0; text-align:right;">{{ charge_reference }}</td></tr>
+  </table>
+
+  <h3 style="margin-bottom:4px;">Statut du paiement</h3>
+  <p><strong>Montant débité à ce jour :</strong> {{ amount_charged | money(currency) }} sur {{ total_price | money(currency) }}</p>
+  {% if pending_schedule %}
+  <p><strong>Prochains paiements prévus :</strong></p>
+  <table style="border-collapse:collapse; width:100%;">
+  {% for entry in pending_schedule %}
+    <tr><td style="padding:4px 12px 4px 0;">{{ entry.date }}</td><td style="padding:4px 0; text-align:right;">{{ entry.amount | money(currency) }}</td></tr>
+  {% endfor %}
+  </table>
+  {% else %}
+  <p>Aucun autre paiement n'est prévu — cette réservation est intégralement réglée.</p>
+  {% endif %}
+
+  <p style="color:#888; font-size:12px; margin-top:32px;">Référence de réservation : {{ booking_id }}</p>
+</body>
+</html>

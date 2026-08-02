@@ -1,3 +1,4 @@
+import logging
 from datetime import date, datetime, timezone
 
 import stripe
@@ -9,8 +10,10 @@ from app.api.routes.bookings import _ensure_can_access_booking
 from app.models.booking import Booking, BookingCharge, BookingWebhookEvent
 from app.models.payment_event import PaymentEvent
 from app.schemas.payment import PaymentIntentResponse
-from app.services import stripe_service
+from app.services import booking_emails, stripe_service
 from app.services.charge_schedule import outstanding_amount, sync_charge_schedule_status
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["payments"])
 
@@ -113,10 +116,22 @@ async def retry_payment(
 #                                      the accrual invariant.
 #   payment_intent.payment_failed  -> requires_action (3DS needed) or failed,
 #                                      from last_payment_error.code.
+async def _send_email_safely(coro) -> None:
+    """Booking/payment emails are best-effort: a SendGrid outage or a bad
+    guest address must never fail the webhook response (Stripe would treat
+    a 5xx as delivery failure and keep retrying), since the payment state
+    they report on has already been durably saved by the time these run."""
+    try:
+        await coro
+    except Exception:
+        logger.exception("Failed to send booking/payment email")
+
+
 async def _apply_setup_succeeded(booking: Booking, setup_intent: dict) -> None:
     booking.stripe_payment_method_id = setup_intent["payment_method"]
     booking.payment_status = "card_verified"
     await booking.save()
+    await _send_email_safely(booking_emails.send_booking_confirmation_email(booking))
 
 
 async def _apply_setup_failed(booking: Booking, setup_intent: dict) -> None:
@@ -150,6 +165,12 @@ async def _apply_successful_charge(booking: Booking, payment_intent: dict) -> No
     )
     sync_charge_schedule_status(booking)
     await booking.save()
+
+    charge = booking.charges[-1]
+    if reason == "initial_charge":
+        await _send_email_safely(booking_emails.send_booking_confirmation_email(booking))
+    else:
+        await _send_email_safely(booking_emails.send_scheduled_payment_email(booking, charge))
 
 
 async def _apply_failed_charge(booking: Booking, payment_intent: dict) -> None:

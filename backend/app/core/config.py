@@ -30,11 +30,15 @@ class Settings(BaseSettings):
     otp_resend_cooldown_seconds: int = 30
     otp_max_attempts: int = 5
 
-    # SendGrid. Used to deliver OTP codes by email. When sendgrid_api_key is
-    # unset (default), emails are logged instead of sent, which is enough
-    # for local development.
+    # SendGrid. Used to deliver OTP codes and booking/payment emails. When
+    # sendgrid_api_key is unset (default), emails are logged instead of sent,
+    # which is enough for local development.
     sendgrid_api_key: str | None = None
     sendgrid_from_address: str = "no-reply@apartment103.example"
+
+    # Displayed on booking/payment emails and invoice PDFs.
+    business_name: str = "Berg See Home"
+    business_address: str | None = None
 
     # Stripe. stripe_secret_key/stripe_webhook_secret are backend-only
     # secrets; stripe_publishable_key is safe to hand to the frontend (it's

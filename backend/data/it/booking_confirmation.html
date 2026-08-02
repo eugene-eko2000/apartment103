@@ -1,0 +1,48 @@
+Subject: Prenotazione confermata — {{ business_name }}
+
+<!doctype html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: Arial, Helvetica, sans-serif; color:#222; max-width:600px; margin:0 auto; padding:16px;">
+  <span style="display:none;">La Sua prenotazione è confermata</span>
+  <h2 style="margin-bottom:0;">{{ business_name }}</h2>
+  <p>Gentile {{ guest_first_name }},</p>
+  <p>Grazie per aver prenotato il Suo soggiorno presso {{ business_name }}! Ecco i dettagli della prenotazione.</p>
+
+  <h3 style="margin-bottom:4px;">Il Suo soggiorno</h3>
+  <table style="border-collapse:collapse; width:100%;">
+    <tr><td style="padding:4px 12px 4px 0;">Arrivo</td><td style="padding:4px 0; text-align:right;">{{ check_in }}</td></tr>
+    <tr><td style="padding:4px 12px 4px 0;">Partenza</td><td style="padding:4px 0; text-align:right;">{{ check_out }}</td></tr>
+    <tr><td style="padding:4px 12px 4px 0;">Prezzo totale</td><td style="padding:4px 0; text-align:right;">{{ total_price | money(currency) }}</td></tr>
+  </table>
+
+  <p><strong>Tariffe giornaliere</strong></p>
+  <table style="border-collapse:collapse; width:100%;">
+  {% for night in nightly_rates %}
+    <tr><td style="padding:4px 12px 4px 0;">{{ night.date }}</td><td style="padding:4px 0; text-align:right;">{{ night.rate | money(currency) }}</td></tr>
+  {% endfor %}
+  </table>
+
+  <h3 style="margin-bottom:4px;">Condizioni di cancellazione — {{ cancellation_policy_name }}</h3>
+  <table style="border-collapse:collapse; width:100%;">
+  {% for rule in cancellation_rules %}
+    <tr><td style="padding:4px 12px 4px 0;">A partire da {{ rule.days_before_checkin }} giorni prima dell'arrivo</td><td style="padding:4px 0; text-align:right;">{{ rule.refund_percentage | percent }}% rimborsabile</td></tr>
+  {% endfor %}
+  </table>
+
+  <h3 style="margin-bottom:4px;">Stato del pagamento</h3>
+  <p><strong>Importo addebitato finora:</strong> {{ amount_charged | money(currency) }} su {{ total_price | money(currency) }}</p>
+  {% if pending_schedule %}
+  <p><strong>Prossimi pagamenti programmati:</strong></p>
+  <table style="border-collapse:collapse; width:100%;">
+  {% for entry in pending_schedule %}
+    <tr><td style="padding:4px 12px 4px 0;">{{ entry.date }}</td><td style="padding:4px 0; text-align:right;">{{ entry.amount | money(currency) }}</td></tr>
+  {% endfor %}
+  </table>
+  {% else %}
+  <p>Non sono previsti ulteriori pagamenti — questa prenotazione è saldata per intero.</p>
+  {% endif %}
+
+  <p style="color:#888; font-size:12px; margin-top:32px;">Riferimento prenotazione: {{ booking_id }}</p>
+</body>
+</html>

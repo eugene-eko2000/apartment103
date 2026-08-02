@@ -1,0 +1,35 @@
+Subject: Zahlung erhalten — {{ business_name }}
+
+<!doctype html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: Arial, Helvetica, sans-serif; color:#222; max-width:600px; margin:0 auto; padding:16px;">
+  <span style="display:none;">Eine geplante Zahlung wurde verarbeitet</span>
+  <h2 style="margin-bottom:0;">{{ business_name }}</h2>
+  <p>Hallo {{ guest_first_name }},</p>
+  <p>Wir haben eine geplante Zahlung für Ihren bevorstehenden Aufenthalt bei {{ business_name }} verarbeitet.</p>
+
+  <h3 style="margin-bottom:4px;">Zahlungsdetails</h3>
+  <table style="border-collapse:collapse; width:100%;">
+    <tr><td style="padding:4px 12px 4px 0;">Grund</td><td style="padding:4px 0; text-align:right;">{% if charge_reason == "initial_charge" %}Erstzahlung{% elif charge_reason == "scheduled_accrual" %}Geplante Zahlung{% elif charge_reason == "cancellation_settlement" %}Stornierungsabrechnung{% else %}{{ charge_reason }}{% endif %}</td></tr>
+    <tr><td style="padding:4px 12px 4px 0;">Belasteter Betrag</td><td style="padding:4px 0; text-align:right;">{{ charge_amount | money(charge_currency) }}</td></tr>
+    <tr><td style="padding:4px 12px 4px 0;">Datum</td><td style="padding:4px 0; text-align:right;">{{ charge_date }}</td></tr>
+    <tr><td style="padding:4px 12px 4px 0;">Zahlungsreferenz</td><td style="padding:4px 0; text-align:right;">{{ charge_reference }}</td></tr>
+  </table>
+
+  <h3 style="margin-bottom:4px;">Zahlungsstatus</h3>
+  <p><strong>Bisher belastet:</strong> {{ amount_charged | money(currency) }} von {{ total_price | money(currency) }}</p>
+  {% if pending_schedule %}
+  <p><strong>Anstehende geplante Zahlungen:</strong></p>
+  <table style="border-collapse:collapse; width:100%;">
+  {% for entry in pending_schedule %}
+    <tr><td style="padding:4px 12px 4px 0;">{{ entry.date }}</td><td style="padding:4px 0; text-align:right;">{{ entry.amount | money(currency) }}</td></tr>
+  {% endfor %}
+  </table>
+  {% else %}
+  <p>Es sind keine weiteren Zahlungen geplant — diese Buchung ist vollständig bezahlt.</p>
+  {% endif %}
+
+  <p style="color:#888; font-size:12px; margin-top:32px;">Buchungsreferenz: {{ booking_id }}</p>
+</body>
+</html>
