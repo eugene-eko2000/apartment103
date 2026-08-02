@@ -141,7 +141,6 @@
         "verifyCardTitle": "Verifica la tua carta",
         "verifyCardHint": "Il tuo soggiorno è per ora interamente rimborsabile, quindi verificheremo solo la tua carta — oggi non viene addebitato nulla.",
         "payTitle": "Conferma il pagamento",
-        "payHint": "Una parte di questo soggiorno non è già più rimborsabile in base alla tariffa scelta, quindi addebiteremo ora questo importo.",
         "chargeSummary": "Ti verrà addebitato {amount} ora — il {percent}% del totale {total} — in base alla tua politica di cancellazione.",
         "payButton": "Paga ora",
         "verifyButton": "Verifica carta",

@@ -141,7 +141,6 @@
         "verifyCardTitle": "Vérifier votre carte",
         "verifyCardHint": "Votre séjour est pour l'instant entièrement remboursable, nous allons donc simplement vérifier votre carte — aucun montant n'est débité aujourd'hui.",
         "payTitle": "Confirmer le paiement",
-        "payHint": "Une partie de ce séjour n'est déjà plus remboursable selon le tarif choisi, nous allons donc débiter ce montant maintenant.",
         "chargeSummary": "Vous serez débité de {amount} maintenant — {percent} % du total {total} — selon votre politique d'annulation.",
         "payButton": "Payer maintenant",
         "verifyButton": "Vérifier la carte",

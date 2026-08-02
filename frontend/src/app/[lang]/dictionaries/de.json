@@ -141,7 +141,6 @@
         "verifyCardTitle": "Karte verifizieren",
         "verifyCardHint": "Ihr Aufenthalt ist derzeit vollständig stornierbar, daher prüfen wir nur Ihre Karte — heute wird nichts abgebucht.",
         "payTitle": "Zahlung bestätigen",
-        "payHint": "Ein Teil dieses Aufenthalts ist laut Ihrem gewählten Tarif bereits nicht erstattungsfähig, daher belasten wir diesen Betrag jetzt.",
         "chargeSummary": "Ihnen werden jetzt {amount} berechnet — {percent} % des Gesamtbetrags von {total} — gemäß Ihrer Stornierungsbedingungen.",
         "payButton": "Jetzt bezahlen",
         "verifyButton": "Karte verifizieren",

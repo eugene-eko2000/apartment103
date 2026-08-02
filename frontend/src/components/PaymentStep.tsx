@@ -13,7 +13,6 @@ export interface PaymentStepDict {
   verifyCardTitle: string;
   verifyCardHint: string;
   payTitle: string;
-  payHint: string;
   chargeSummary: string;
   payButton: string;
   verifyButton: string;
@@ -108,9 +107,9 @@ function PaymentForm({
       <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
         {intent.mode === "setup" ? dict.verifyCardTitle : dict.payTitle}
       </h3>
-      <p className="text-sm text-gray-600 dark:text-gray-300">
-        {intent.mode === "setup" ? dict.verifyCardHint : dict.payHint}
-      </p>
+      {intent.mode === "setup" && (
+        <p className="text-sm text-gray-600 dark:text-gray-300">{dict.verifyCardHint}</p>
+      )}
 
       {intent.mode === "payment" && intent.total_price > 0 && (
         <p className="text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-gray-700/50 rounded-xl px-3 py-2.5">
