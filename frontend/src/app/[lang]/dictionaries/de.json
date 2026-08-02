@@ -129,8 +129,11 @@
       "noPlan": "Buchungen sind derzeit nicht möglich — bitte kontaktieren Sie uns direkt.",
       "selectDatesFirst": "Bitte wählen Sie zuerst Ihr An- und Abreisedatum aus.",
       "choosePlanTitle": "Wählen Sie Ihren Tarif",
-      "refundRule": "{percent}% Rückerstattung bei Stornierung {days}+ Tage vor Anreise",
-      "cancellationTimelineLabel": "Rückerstattung nach Stornierungsdatum",
+      "cancellationLabel": "Stornierung:",
+      "cancellationTill": "bis {date}",
+      "cancellationRange": "{startDate} – {endDate}",
+      "cancellationFree": "kostenlos",
+      "cancellationCharge": "{cost} Gebühr",
       "next": "Weiter",
       "payment": {
         "verifyCardTitle": "Karte verifizieren",

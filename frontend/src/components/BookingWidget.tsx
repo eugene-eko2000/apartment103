@@ -32,7 +32,7 @@ import {
 } from "@/lib/api";
 import { findDailyRate, findLowestDailyRate, findMinStay } from "@/lib/pricing";
 import BookingModal, { emptyGuestForm, guestToForm, type BookingModalDict, type VerifiedIdentity } from "@/components/BookingModal";
-import { CancellationTimeline, getMaxThresholdDays, getVisualMaxDays } from "@/components/CancellationTimeline";
+import { CancellationTimeline, refundHighlightColor } from "@/components/CancellationTimeline";
 import PaymentStep from "@/components/PaymentStep";
 import { PhoneInput } from "@/components/PhoneInput";
 import { clearGuestSession, readGuestSession, saveGuestSession } from "@/lib/guest-auth";
@@ -474,10 +474,6 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     : findLowestDailyRate(prices, format(today, "yyyy-MM-dd"));
   const selectedPlan = plans.find((p) => p._id === selectedPlanId) ?? null;
   const cheapestPlanRatio = plans.length > 0 ? Math.min(...plans.map((p) => p.price_ratio)) : 1;
-  // Shared across every plan card so their cancellation timelines use the same day scale.
-  const sharedVisualMaxDays = getVisualMaxDays(
-    Math.max(0, ...plans.map((p) => getMaxThresholdDays(p.cancellation_policy.rules)))
-  );
   const pricePerNight = matchedRate ? matchedRate.dailyRate * cheapestPlanRatio : null;
   const priceCurrency: Currency | null = matchedRate?.currency ?? null;
   const convertedPricePerNight =
@@ -999,14 +995,17 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                             : null;
                         const activePlanPrice = nights > 0 ? convertedPlanTotal : convertedPlanPricePerNight;
                         const isSelected = selectedPlanId === p._id;
+                        const highlight = refundHighlightColor(p.cancellation_policy.rules, range.from!, today);
+                        const highlightBackground = `rgba(${highlight[0]}, ${highlight[1]}, ${highlight[2]}, ${isSelected ? 0.3 : 0.14})`;
                         return (
                           <button
                             key={p._id}
                             type="button"
                             onClick={() => setSelectedPlanId(p._id)}
+                            style={{ backgroundColor: highlightBackground }}
                             className={`w-full text-left p-3 rounded-xl transition-colors cursor-pointer ${
                               isSelected
-                                ? "border-[3px] border-transparent [background:linear-gradient(135deg,#f0fdfa_0%,#ecfeff_100%)_padding-box,linear-gradient(135deg,#0f766e,#0891b2)_border-box] dark:[background:linear-gradient(135deg,#042f2e_0%,#083344_100%)_padding-box,linear-gradient(135deg,#0f766e,#0891b2)_border-box]"
+                                ? "border-[3px] border-teal-600 dark:border-teal-400"
                                 : "border-2 border-gray-200 dark:border-gray-600 hover:border-teal-300 dark:hover:border-teal-700"
                             }`}
                           >
@@ -1030,16 +1029,21 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                                 {dict.perNight}
                               </p>
                             )}
-                            <p className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mt-2">
-                              {dict.modal.cancellationTimelineLabel}
-                            </p>
-                            <CancellationTimeline
-                              rules={p.cancellation_policy.rules}
-                              visualMaxDays={sharedVisualMaxDays}
-                              checkInDate={range.from!}
-                              dateLocale={dateFnsLocale}
-                              refundRuleTemplate={dict.modal.refundRule}
-                            />
+                            {activePlanPrice !== null && (
+                              <CancellationTimeline
+                                rules={p.cancellation_policy.rules}
+                                checkInDate={range.from!}
+                                today={today}
+                                dateLocale={dateFnsLocale}
+                                price={activePlanPrice}
+                                currency={currency}
+                                cancellationLabel={dict.modal.cancellationLabel}
+                                tillTemplate={dict.modal.cancellationTill}
+                                rangeTemplate={dict.modal.cancellationRange}
+                                freeLabel={dict.modal.cancellationFree}
+                                chargeTemplate={dict.modal.cancellationCharge}
+                              />
+                            )}
                           </button>
                         );
                       })}

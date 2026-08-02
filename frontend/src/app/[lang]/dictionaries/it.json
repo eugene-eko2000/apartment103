@@ -129,8 +129,11 @@
       "noPlan": "La prenotazione non è disponibile al momento — contattaci direttamente.",
       "selectDatesFirst": "Seleziona prima le date di check-in e check-out.",
       "choosePlanTitle": "Scegli la tua tariffa",
-      "refundRule": "Rimborso del {percent}% in caso di cancellazione {days}+ giorni prima del check-in",
-      "cancellationTimelineLabel": "Rimborso in base alla data di cancellazione",
+      "cancellationLabel": "Cancellazione:",
+      "cancellationTill": "fino al {date}",
+      "cancellationRange": "{startDate} – {endDate}",
+      "cancellationFree": "gratuito",
+      "cancellationCharge": "{cost} di penale",
       "next": "Avanti",
       "payment": {
         "verifyCardTitle": "Verifica la tua carta",

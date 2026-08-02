@@ -129,8 +129,11 @@
       "noPlan": "La réservation n'est pas disponible pour le moment — merci de nous contacter directement.",
       "selectDatesFirst": "Veuillez d'abord sélectionner vos dates d'arrivée et de départ.",
       "choosePlanTitle": "Choisissez votre tarif",
-      "refundRule": "Remboursement de {percent}% en cas d'annulation {days}+ jours avant l'arrivée",
-      "cancellationTimelineLabel": "Remboursement selon la date d'annulation",
+      "cancellationLabel": "Annulation :",
+      "cancellationTill": "jusqu'au {date}",
+      "cancellationRange": "{startDate} – {endDate}",
+      "cancellationFree": "gratuit",
+      "cancellationCharge": "{cost} de frais",
       "next": "Suivant",
       "payment": {
         "verifyCardTitle": "Vérifier votre carte",

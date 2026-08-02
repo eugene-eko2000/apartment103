@@ -47,8 +47,11 @@ export interface BookingModalDict {
   noPlan: string;
   selectDatesFirst: string;
   choosePlanTitle: string;
-  refundRule: string;
-  cancellationTimelineLabel: string;
+  cancellationLabel: string;
+  cancellationTill: string;
+  cancellationRange: string;
+  cancellationFree: string;
+  cancellationCharge: string;
   next: string;
   payment: PaymentStepDict;
 }

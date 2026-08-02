@@ -129,8 +129,11 @@
       "noPlan": "Booking isn't available right now — please contact us directly.",
       "selectDatesFirst": "Please select your check-in and check-out dates first.",
       "choosePlanTitle": "Choose your rate",
-      "refundRule": "{percent}% refund if cancelled {days}+ days before check-in",
-      "cancellationTimelineLabel": "Refund by cancellation date",
+      "cancellationLabel": "Cancellation:",
+      "cancellationTill": "till {date}",
+      "cancellationRange": "{startDate} – {endDate}",
+      "cancellationFree": "free",
+      "cancellationCharge": "{cost} charge",
       "next": "Next",
       "payment": {
         "verifyCardTitle": "Verify your card",

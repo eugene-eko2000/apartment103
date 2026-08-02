@@ -1,16 +1,17 @@
 "use client";
 
-import { format, subDays } from "date-fns";
+import { addDays, differenceInCalendarDays, format, subDays } from "date-fns";
 import type { Locale as DateFnsLocale } from "date-fns";
 import type { CancellationRule } from "@/lib/api";
+import type { Currency } from "@/lib/currency-config";
+import { formatPrice } from "@/lib/currency-config";
 
 interface Segment {
   lowerDays: number;
-  upperDays: number | null;
   refundPercentage: number;
 }
 
-type RGB = [number, number, number];
+export type RGB = [number, number, number];
 
 // Gradient stops, same scale in light/dark (mode-invariant): red at 0% refund,
 // through yellow at 50%, to green at 100%.
@@ -58,18 +59,18 @@ function buildSegments(rules: CancellationRule[]): Segment[] {
   if (rules.length === 0) return [];
 
   const sorted = [...rules].sort((a, b) => b.days_before_checkin - a.days_before_checkin);
-  const raw: Segment[] = sorted.map((rule, i) => ({
+  const raw: Segment[] = sorted.map((rule) => ({
     lowerDays: rule.days_before_checkin,
-    upperDays: i === 0 ? null : sorted[i - 1].days_before_checkin,
     refundPercentage: rule.refund_percentage,
   }));
 
   const lastDays = sorted[sorted.length - 1].days_before_checkin;
   if (lastDays > 0) {
-    raw.push({ lowerDays: 0, upperDays: lastDays, refundPercentage: 0 });
+    raw.push({ lowerDays: 0, refundPercentage: 0 });
   }
 
-  // Merge adjacent bands that share the same refund rate into one visual segment.
+  // Merge adjacent bands that share the same refund rate into one line,
+  // extending the kept band's lower bound down to absorb the merged one.
   const merged: Segment[] = [];
   for (const seg of raw) {
     const prev = merged[merged.length - 1];
@@ -82,111 +83,109 @@ function buildSegments(rules: CancellationRule[]): Segment[] {
   return merged;
 }
 
-// Highest day threshold a policy's rules reach — callers combine this across
-// every plan being shown side by side so all timelines share one day scale.
-export function getMaxThresholdDays(rules: CancellationRule[]): number {
-  return rules.reduce((max, rule) => Math.max(max, rule.days_before_checkin), 0);
+interface SegmentWindow {
+  refundPercentage: number;
+  start: Date;
+  end: Date;
 }
 
-// Padding so the open-ended top segment doesn't visually end flush at the bar's edge.
-export function getVisualMaxDays(maxThresholdDays: number): number {
-  return maxThresholdDays > 0 ? Math.ceil(maxThresholdDays * 1.3) : 1;
+// Segments whose deadline has already passed (relative to today) are dropped
+// entirely; the segment today falls inside (if any) has its start pulled
+// forward to today rather than its original, already-past start date. Since
+// segments are contiguous and chronologically ordered, at most one segment
+// can straddle today, and it's always the first one left standing.
+function visibleSegmentWindows(rules: CancellationRule[], checkInDate: Date, today: Date): SegmentWindow[] {
+  const segments = buildSegments(rules);
+  const windows = segments.map((seg, i) => ({
+    refundPercentage: seg.refundPercentage,
+    start: i === 0 ? today : addDays(subDays(checkInDate, segments[i - 1].lowerDays), 1),
+    end: subDays(checkInDate, seg.lowerDays),
+  }));
+  const visible = windows.filter((w) => differenceInCalendarDays(w.end, today) >= 0);
+  return visible.map((w, i) => (i === 0 ? { ...w, start: today } : w));
+}
+
+// A single highlight color for a plan, blending every still-relevant
+// cancellation period's gradient color weighted by how many days that period
+// actually spans. E.g. a long free-cancellation window outweighs a short
+// non-refundable tail, biasing the blend toward green.
+export function refundHighlightColor(rules: CancellationRule[], checkInDate: Date, today: Date): RGB {
+  const windows = visibleSegmentWindows(rules, checkInDate, today);
+  if (windows.length === 0) {
+    const segments = buildSegments(rules);
+    return fillForRefund(segments.length === 0 ? 0 : segments[segments.length - 1].refundPercentage);
+  }
+
+  let totalWeight = 0;
+  let weightedSum: RGB = [0, 0, 0];
+  windows.forEach((w) => {
+    const days = Math.max(0, differenceInCalendarDays(w.end, w.start) + 1);
+    const fill = fillForRefund(w.refundPercentage);
+    totalWeight += days;
+    weightedSum = [weightedSum[0] + fill[0] * days, weightedSum[1] + fill[1] * days, weightedSum[2] + fill[2] * days];
+  });
+
+  if (totalWeight === 0) return fillForRefund(windows[windows.length - 1].refundPercentage);
+  return [weightedSum[0] / totalWeight, weightedSum[1] / totalWeight, weightedSum[2] / totalWeight];
 }
 
 interface CancellationTimelineProps {
   rules: CancellationRule[];
-  visualMaxDays: number;
   checkInDate: Date;
+  today: Date;
   dateLocale: DateFnsLocale;
-  refundRuleTemplate: string;
+  price: number;
+  currency: Currency;
+  cancellationLabel: string;
+  tillTemplate: string;
+  rangeTemplate: string;
+  freeLabel: string;
+  chargeTemplate: string;
 }
 
 export function CancellationTimeline({
   rules,
-  visualMaxDays,
   checkInDate,
+  today,
   dateLocale,
-  refundRuleTemplate,
+  price,
+  currency,
+  cancellationLabel,
+  tillTemplate,
+  rangeTemplate,
+  freeLabel,
+  chargeTemplate,
 }: CancellationTimelineProps) {
-  const segments = buildSegments(rules);
-  if (segments.length === 0) return null;
+  const windows = visibleSegmentWindows(rules, checkInDate, today);
+  if (windows.length === 0) return null;
 
-  const visualMax = visualMaxDays > 0 ? visualMaxDays : 1;
-  const leftPercent = (days: number) => ((visualMax - days) / visualMax) * 100;
-  const dateLabel = (daysBefore: number) =>
-    format(subDays(checkInDate, daysBefore), "MMM d", { locale: dateLocale });
-
-  const allTicks = segments.slice(0, -1).map((seg) => ({
-    key: `boundary-${seg.lowerDays}`,
-    label: dateLabel(seg.lowerDays),
-    position: leftPercent(seg.lowerDays),
-  }));
-  allTicks.push({ key: "check-in", label: dateLabel(0), position: 100 });
-
-  // Every cancellation point must stay visible, so instead of dropping labels
-  // that would crowd their neighbor, stagger them across two rows: each tick
-  // takes the top row unless it's too close to the last tick placed there, in
-  // which case it drops to the bottom row.
-  const MIN_TICK_GAP_PERCENT = 16;
-  const laneLastPosition: [number | null, number | null] = [null, null];
-  const ticks = allTicks.map((tick) => {
-    const lane =
-      laneLastPosition[0] === null || tick.position - laneLastPosition[0] >= MIN_TICK_GAP_PERCENT ? 0 : 1;
-    laneLastPosition[lane] = tick.position;
-    return { ...tick, lane };
-  });
+  const dateLabel = (date: Date) => format(date, "MMM d", { locale: dateLocale });
 
   return (
-    <div className="mt-2">
-      <div className="flex h-[14.4px] w-full gap-0.5" role="img" aria-label={segments.map((seg) =>
-        refundRuleTemplate
-          .replace("{percent}", String(Math.round(seg.refundPercentage * 100)))
-          .replace("{days}", String(seg.lowerDays))
-      ).join("; ")}>
-        {segments.map((seg, i) => {
-          const upper = seg.upperDays ?? visualMax;
-          const widthPercent = ((upper - seg.lowerDays) / visualMax) * 100;
-          const fill = fillForRefund(seg.refundPercentage);
-          const percentLabel = `${Math.round(seg.refundPercentage * 100)}%`;
-          const title = refundRuleTemplate
-            .replace("{percent}", String(Math.round(seg.refundPercentage * 100)))
-            .replace("{days}", String(seg.lowerDays));
+    <div className="mt-2 text-sm">
+      <p className="font-semibold text-gray-600 dark:text-gray-300">{cancellationLabel}</p>
+      <ul className="mt-1 space-y-0.5 text-gray-600 dark:text-gray-300">
+        {windows.map((w, i) => {
+          const datePart =
+            i === 0
+              ? tillTemplate.replace("{date}", dateLabel(w.end))
+              : rangeTemplate.replace("{startDate}", dateLabel(w.start)).replace("{endDate}", dateLabel(w.end));
+          const fill = fillForRefund(w.refundPercentage);
+          const color = `rgb(${fill[0]}, ${fill[1]}, ${fill[2]})`;
+          const valuePart =
+            w.refundPercentage >= 1
+              ? freeLabel
+              : chargeTemplate.replace("{cost}", formatPrice(price * (1 - w.refundPercentage), currency));
           return (
-            <div
-              key={i}
-              title={title}
-              className={`flex items-center justify-center overflow-hidden text-[10px] font-semibold ${
-                i === 0 ? "rounded-l-md" : ""
-              } ${i === segments.length - 1 ? "rounded-r-md" : ""}`}
-              style={{
-                width: `${widthPercent}%`,
-                backgroundColor: `rgb(${fill[0]}, ${fill[1]}, ${fill[2]})`,
-                color: inkForFill(fill),
-              }}
-            >
-              {widthPercent >= 12 && <span>{percentLabel}</span>}
-            </div>
+            <li key={w.end.getTime()}>
+              {datePart}:{" "}
+              <span className="font-semibold" style={{ color }}>
+                {valuePart}
+              </span>
+            </li>
           );
         })}
-      </div>
-      <div className="relative mt-1 h-6 text-xs text-gray-500 dark:text-gray-400">
-        {ticks.map((tick) => {
-          const translate = tick.position <= 0 ? "0%" : tick.position >= 100 ? "-100%" : "-50%";
-          return (
-            <span
-              key={tick.key}
-              className="absolute whitespace-nowrap"
-              style={{
-                left: `${tick.position}%`,
-                top: tick.lane === 0 ? 0 : "12px",
-                transform: `translateX(${translate})`,
-              }}
-            >
-              {tick.label}
-            </span>
-          );
-        })}
-      </div>
+      </ul>
     </div>
   );
 }
