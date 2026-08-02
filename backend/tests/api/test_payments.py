@@ -4,8 +4,9 @@ from types import SimpleNamespace
 import pytest
 from beanie import PydanticObjectId
 
-from app.models.booking import Booking, BookingCharge
+from app.models.booking import Booking, BookingCharge, BookingRefund
 from app.models.cancellation_policy import CancellationPolicy, CancellationRule
+from app.models.payment_event import PaymentEvent
 from app.services import stripe_service
 
 pytestmark = pytest.mark.anyio
@@ -289,6 +290,13 @@ class TestStripeWebhook:
         assert booking.stripe_payment_method_id == "pm_xyz"
         assert len(booking.charges) == 1
         assert booking.charges[0].stripe_payment_intent_id == "pi_1"
+        assert len(booking.webhook_events) == 1
+        assert booking.webhook_events[0].stripe_event_id == "evt_pi_1"
+        assert booking.webhook_events[0].data["id"] == "pi_1"
+
+        stored_event = await PaymentEvent.find_one(PaymentEvent.stripe_event_id == "evt_pi_1")
+        assert stored_event is not None
+        assert stored_event.data["id"] == "pi_1"
 
     async def test_payment_intent_failed_marks_requires_action(
         self, monkeypatch, client, guest, cancellation_policy, guest_headers
@@ -313,6 +321,133 @@ class TestStripeWebhook:
         booking = await Booking.get(PydanticObjectId(booking_id))
         assert booking.payment_status == "requires_action"
         assert booking.last_payment_error == "3DS needed"
+
+    async def test_setup_intent_failed_records_error_without_changing_status(
+        self, monkeypatch, client, guest, cancellation_policy, guest_headers
+    ):
+        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers)
+        event = SimpleNamespace(
+            id="evt_setup_fail_1",
+            type="setup_intent.setup_failed",
+            data=SimpleNamespace(
+                object={
+                    "id": "seti_2",
+                    "metadata": {"booking_id": booking_id},
+                    "last_setup_error": {"message": "Card was declined"},
+                }
+            ),
+        )
+        monkeypatch.setattr(stripe_service, "construct_webhook_event", lambda payload, sig: event)
+
+        response = await client.post("/webhooks/stripe", content=b"{}", headers={"stripe-signature": "sig"})
+        assert response.status_code == 200
+
+        booking = await Booking.get(PydanticObjectId(booking_id))
+        assert booking.payment_status == "card_verification_pending"
+        assert booking.last_payment_error == "Card was declined"
+
+    async def test_charge_refunded_records_refund_and_updates_status(
+        self, monkeypatch, client, guest, cancellation_policy, guest_headers
+    ):
+        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers, price=1000.0)
+        booking = await Booking.get(PydanticObjectId(booking_id))
+        booking.charges.append(
+            BookingCharge(
+                stripe_payment_intent_id="pi_refund_1",
+                amount=1000.0,
+                currency="CHF",
+                reason="initial_charge",
+                status="succeeded",
+            )
+        )
+        booking.amount_charged = 1000.0
+        booking.payment_status = "fully_charged"
+        await booking.save()
+
+        event = SimpleNamespace(
+            id="evt_refund_1",
+            type="charge.refunded",
+            data=SimpleNamespace(
+                object={
+                    "id": "ch_1",
+                    "payment_intent": "pi_refund_1",
+                    "currency": "chf",
+                    "metadata": {"booking_id": booking_id},
+                    "refunds": {
+                        "data": [
+                            {
+                                "id": "re_dashboard_1",
+                                "status": "succeeded",
+                                "amount": 40000,
+                                "reason": "requested_by_customer",
+                            }
+                        ]
+                    },
+                }
+            ),
+        )
+        monkeypatch.setattr(stripe_service, "construct_webhook_event", lambda payload, sig: event)
+
+        response = await client.post("/webhooks/stripe", content=b"{}", headers={"stripe-signature": "sig"})
+        assert response.status_code == 200
+
+        booking = await Booking.get(PydanticObjectId(booking_id))
+        assert booking.amount_charged == pytest.approx(600.0)
+        assert booking.payment_status == "partially_charged"
+        assert len(booking.refunds) == 1
+        assert booking.refunds[0].stripe_refund_id == "re_dashboard_1"
+        assert len(booking.webhook_events) == 1
+        assert booking.webhook_events[0].event_type == "charge.refunded"
+        assert booking.webhook_events[0].data["id"] == "ch_1"
+
+    async def test_charge_refunded_skips_already_recorded_refund(
+        self, monkeypatch, client, guest, cancellation_policy, guest_headers
+    ):
+        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers, price=1000.0)
+        booking = await Booking.get(PydanticObjectId(booking_id))
+        booking.charges.append(
+            BookingCharge(
+                stripe_payment_intent_id="pi_refund_2",
+                amount=1000.0,
+                currency="CHF",
+                reason="initial_charge",
+                status="succeeded",
+            )
+        )
+        booking.refunds.append(
+            BookingRefund(stripe_refund_id="re_admin_1", amount=200.0, currency="CHF", reason="goodwill")
+        )
+        booking.amount_charged = 800.0
+        booking.payment_status = "partially_charged"
+        await booking.save()
+
+        # Same refund (already recorded synchronously by the admin refund
+        # endpoint) arrives via webhook — must not be double-counted.
+        event = SimpleNamespace(
+            id="evt_refund_2",
+            type="charge.refunded",
+            data=SimpleNamespace(
+                object={
+                    "id": "ch_2",
+                    "payment_intent": "pi_refund_2",
+                    "currency": "chf",
+                    "metadata": {"booking_id": booking_id},
+                    "refunds": {
+                        "data": [
+                            {"id": "re_admin_1", "status": "succeeded", "amount": 20000, "reason": "goodwill"}
+                        ]
+                    },
+                }
+            ),
+        )
+        monkeypatch.setattr(stripe_service, "construct_webhook_event", lambda payload, sig: event)
+
+        response = await client.post("/webhooks/stripe", content=b"{}", headers={"stripe-signature": "sig"})
+        assert response.status_code == 200
+
+        booking = await Booking.get(PydanticObjectId(booking_id))
+        assert booking.amount_charged == pytest.approx(800.0)
+        assert len(booking.refunds) == 1
 
     async def test_duplicate_event_is_not_double_counted(
         self, monkeypatch, client, guest, cancellation_policy, guest_headers

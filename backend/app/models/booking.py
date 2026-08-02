@@ -62,6 +62,20 @@ class BookingRefund(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class BookingWebhookEvent(BaseModel):
+    """Per-booking log of every Stripe webhook event that referenced it.
+
+    Kept alongside the global PaymentEvent dedupe ledger so a booking's full
+    payment history (including the raw event payload) is visible directly on
+    the booking, without joining across collections.
+    """
+
+    stripe_event_id: str
+    event_type: str
+    data: dict
+    received_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class Booking(Document):
     guest: Link[Guest]
     booking_date: date = Field(default_factory=date.today)
@@ -80,6 +94,7 @@ class Booking(Document):
     amount_charged: float = 0.0
     charges: list[BookingCharge] = Field(default_factory=list)
     refunds: list[BookingRefund] = Field(default_factory=list)
+    webhook_events: list[BookingWebhookEvent] = Field(default_factory=list)
     last_payment_check_at: datetime | None = None
     last_payment_error: str | None = None
 

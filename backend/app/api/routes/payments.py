@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.api.deps import Principal, get_current_principal, require_admin
 from app.api.routes.bookings import _ensure_can_access_booking
-from app.models.booking import Booking, BookingCharge, BookingRefund
+from app.models.booking import Booking, BookingCharge, BookingRefund, BookingWebhookEvent
 from app.models.payment_event import PaymentEvent
 from app.schemas.payment import AdminRefundRequest, PaymentIntentResponse
 from app.services import stripe_service
@@ -137,6 +137,47 @@ async def admin_refund_booking_payment(booking_id: PydanticObjectId, payload: Ad
     return booking
 
 
+# Stripe events this handler acts on, grouped by the booking-lifecycle step
+# they belong to. Anything else is still logged (see stripe_webhook below)
+# but doesn't change payment_status/charges/refunds.
+#
+# Verification (SetupIntent path, free-cancellation bookings):
+#   setup_intent.succeeded    -> payment_status = "card_verified", store the
+#                                saved payment_method.
+#   setup_intent.setup_failed -> record last_payment_error; payment_status is
+#                                left as "card_verification_pending" since
+#                                nothing was charged and the guest can just
+#                                retry payment/intent creation.
+#
+# Payment (PaymentIntent path, initial_charge/scheduled_accrual charges):
+#   payment_intent.succeeded       -> append BookingCharge, bump
+#                                      amount_charged, derive
+#                                      partially_charged/fully_charged from
+#                                      the accrual invariant.
+#   payment_intent.payment_failed  -> requires_action (3DS needed) or failed,
+#                                      from last_payment_error.code.
+#
+# Refund (admin-initiated or issued directly from the Stripe dashboard):
+#   charge.refunded -> append any BookingRefund(s) not already recorded (the
+#                      charge's `refunds` list is the full, current set for
+#                      that charge), decrement amount_charged accordingly.
+#                      Refunds already recorded synchronously by
+#                      admin_refund_booking_payment are recognized by
+#                      stripe_refund_id and skipped, so this is safe to fire
+#                      for both dashboard-issued and admin-panel-issued
+#                      refunds without double-counting.
+async def _apply_setup_succeeded(booking: Booking, setup_intent: dict) -> None:
+    booking.stripe_payment_method_id = setup_intent["payment_method"]
+    booking.payment_status = "card_verified"
+    await booking.save()
+
+
+async def _apply_setup_failed(booking: Booking, setup_intent: dict) -> None:
+    last_error = setup_intent.get("last_setup_error") or {}
+    booking.last_payment_error = last_error.get("message", "Card verification failed")
+    await booking.save()
+
+
 async def _apply_successful_charge(booking: Booking, payment_intent: dict) -> None:
     amount = stripe_service.from_minor_units(payment_intent["amount"])
     currency = payment_intent["currency"].upper()
@@ -172,6 +213,38 @@ async def _apply_failed_charge(booking: Booking, payment_intent: dict) -> None:
     await booking.save()
 
 
+async def _apply_refund(booking: Booking, charge: dict) -> None:
+    currency = charge["currency"].upper()
+    known_refund_ids = {refund.stripe_refund_id for refund in booking.refunds}
+    newly_refunded = 0.0
+    for refund in charge.get("refunds", {}).get("data", []):
+        if refund["status"] != "succeeded" or refund["id"] in known_refund_ids:
+            continue
+        amount = stripe_service.from_minor_units(refund["amount"])
+        booking.refunds.append(
+            BookingRefund(
+                stripe_refund_id=refund["id"],
+                amount=amount,
+                currency=currency,
+                reason=refund.get("reason") or "requested_by_customer",
+            )
+        )
+        newly_refunded += amount
+    if newly_refunded:
+        booking.amount_charged = max(booking.amount_charged - newly_refunded, 0.0)
+        booking.payment_status = "card_verified" if booking.amount_charged <= 0 else "partially_charged"
+    await booking.save()
+
+
+_WEBHOOK_HANDLERS = {
+    "setup_intent.succeeded": _apply_setup_succeeded,
+    "setup_intent.setup_failed": _apply_setup_failed,
+    "payment_intent.succeeded": _apply_successful_charge,
+    "payment_intent.payment_failed": _apply_failed_charge,
+    "charge.refunded": _apply_refund,
+}
+
+
 @webhook_router.post("/webhooks/stripe", include_in_schema=False)
 async def stripe_webhook(request: Request) -> dict[str, str]:
     payload = await request.body()
@@ -193,19 +266,23 @@ async def stripe_webhook(request: Request) -> dict[str, str]:
         booking = await Booking.get(PydanticObjectId(booking_id_str))
 
     if booking is not None:
-        if event.type == "setup_intent.succeeded":
-            booking.stripe_payment_method_id = obj["payment_method"]
-            booking.payment_status = "card_verified"
+        # Log every event that references this booking, with its raw payload,
+        # before dispatching — the charge/refund/status update below (if any)
+        # is saved together with this log entry in one write.
+        booking.webhook_events.append(
+            BookingWebhookEvent(stripe_event_id=event.id, event_type=event.type, data=obj)
+        )
+        handler = _WEBHOOK_HANDLERS.get(event.type)
+        if handler is not None:
+            await handler(booking, obj)
+        else:
             await booking.save()
-        elif event.type == "payment_intent.succeeded":
-            await _apply_successful_charge(booking, obj)
-        elif event.type == "payment_intent.payment_failed":
-            await _apply_failed_charge(booking, obj)
 
     await PaymentEvent(
         stripe_event_id=event.id,
         event_type=event.type,
         processed_at=datetime.now(timezone.utc),
         booking_id=booking.id if booking else None,
+        data=obj,
     ).insert()
     return {"status": "ok"}
