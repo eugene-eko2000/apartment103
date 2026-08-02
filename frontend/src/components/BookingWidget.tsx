@@ -592,15 +592,16 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     if (!matchedRate) return;
     setGuestStep("submitting");
     try {
+      const priceInBaseCurrency = nights * matchedRate.dailyRate * selectedPlan.price_ratio;
       const booking = await createBooking(token, {
         guest_id: finalGuestId,
         cancellation_policy_id: selectedPlan.cancellation_policy.id,
-        currency: matchedRate.currency,
+        currency,
         date_ranges: [
           {
             begin_date: format(range.from, "yyyy-MM-dd"),
             end_date: format(range.to, "yyyy-MM-dd"),
-            price: nights * matchedRate.dailyRate * selectedPlan.price_ratio,
+            price: convertCurrency(priceInBaseCurrency, matchedRate.currency, currency),
           },
         ],
       });
