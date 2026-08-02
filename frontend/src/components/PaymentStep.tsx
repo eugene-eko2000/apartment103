@@ -82,7 +82,7 @@ function PaymentForm({
       <p className="text-sm text-gray-600 dark:text-gray-300">
         {intent.mode === "setup" ? dict.verifyCardHint : dict.payHint}
       </p>
-      <PaymentElement />
+      <PaymentElement options={{ wallets: { link: "never" } }} />
       {errorMessage && <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>}
       <button
         type="button"
