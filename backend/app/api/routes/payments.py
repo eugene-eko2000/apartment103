@@ -259,7 +259,10 @@ async def stripe_webhook(request: Request) -> dict[str, str]:
     if await PaymentEvent.find_one(PaymentEvent.stripe_event_id == event.id) is not None:
         return {"status": "duplicate"}
 
-    obj = event.data.object
+    # stripe-python's StripeObject no longer subclasses dict, so it doesn't
+    # support .get() — convert to a plain (recursively-converted) dict here so
+    # the handlers below, which use .get() throughout, keep working.
+    obj = event.data.object.to_dict()
     booking_id_str = obj.get("metadata", {}).get("booking_id")
     booking: Booking | None = None
     if booking_id_str:
