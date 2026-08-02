@@ -110,13 +110,6 @@ class BookingCharge(BaseModel):
     status: Literal["succeeded", "requires_action", "failed"]
     created_at: datetime
 
-class BookingRefund(BaseModel):
-    stripe_refund_id: str
-    amount: float
-    currency: Currency
-    reason: str
-    created_at: datetime
-
 PaymentStatus = Literal[
     "card_verification_pending", "card_verified",   # SetupIntent path
     "partially_charged", "fully_charged",            # accrual in progress / done
@@ -129,14 +122,15 @@ class Booking(Document):
     payment_status: PaymentStatus = "card_verification_pending"
     amount_charged: float = 0.0
     charges: list[BookingCharge] = Field(default_factory=list)
-    refunds: list[BookingRefund] = Field(default_factory=list)
     last_payment_check_at: datetime | None = None
     last_payment_error: str | None = None
 ```
 
-`amount_charged` plus the `charges`/`refunds` audit trail avoids re-deriving
-anything from Stripe on every read, and gives the admin panel and support
-disputes a full record without a live API call.
+`amount_charged` plus the `charges` audit trail avoids re-deriving anything
+from Stripe on every read, and gives the admin panel and support disputes a
+full record without a live API call. The app never issues refunds — a
+booking is only ever charged more, never handed money back, so there's no
+`refunds` list or refund endpoint to keep in sync.
 
 **New collection `PaymentEvent`** (`app/models/payment_event.py`) — dedupe
 ledger for incoming webhooks, since Stripe retries delivery:
@@ -178,10 +172,9 @@ only, never for actual charging decisions. Reference check-in date =
     `amount_charged`, update `payment_status`
   - `payment_intent.payment_failed` → set `last_payment_error`,
     `payment_status = "failed"`
-  - `charge.refunded` → append `BookingRefund`
-- Admin-only recovery endpoints: `POST /admin/bookings/{id}/payment/retry`,
-  `POST /admin/bookings/{id}/payment/refund` (manual override for support
-  cases).
+- Recovery endpoint: `POST /bookings/{id}/payment/retry`, for a booking left
+  in `requires_action`/`failed`. There is no refund endpoint — the app never
+  issues refunds (see the cancellation flow below).
 
 ## Daily reconciliation job
 
@@ -224,14 +217,12 @@ Currently just flips `status`. Change to:
 2. If `amount_charged < amount_owed` → one final off-session PaymentIntent
    for the difference (`reason = "cancellation_settlement"`), same code path
    as the daily job.
-3. If `amount_charged > amount_owed` (shouldn't happen in normal operation,
-   but defensive — e.g. an admin edited the policy rules after the fact) →
-   partial refund for the difference.
-4. Set `status = "Cancelled"`.
+3. Set `status = "Cancelled"`.
 
-Because the accrual invariant does the work continuously, cancellation almost
-never needs an actual Stripe refund — only, at most, one more forfeiture
-charge for whatever accrued since the last daily check.
+There is no refund step. A booking is expected to already be charged for
+whatever it owes by the time it's cancelled (the daily job never falls
+behind), so cancellation only ever charges one more forfeiture increment for
+whatever accrued since the last daily check — it never hands money back.
 
 ## Currency
 
@@ -293,8 +284,7 @@ from what the guest actually agreed to pay.
    converges to `total_price` exactly at the 0%-refund boundary, with no
    double-charging on repeated runs.
 5. Exercise cancellation at each policy stage (before any charge, mid-accrual,
-   fully charged) and confirm the settlement/refund logic matches the
-   invariant.
+   fully charged) and confirm the settlement logic matches the invariant.
 6. Test the off-session failure paths: force `authentication_required`
    (3DS-required saved card) and `card_declined` test cards in the daily job,
    confirm the guest-facing recovery email/page and the admin `requires_action`

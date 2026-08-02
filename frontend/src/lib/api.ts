@@ -157,14 +157,6 @@ export interface BookingCharge {
   created_at: string;
 }
 
-export interface BookingRefund {
-  stripe_refund_id: string;
-  amount: number;
-  currency: Currency;
-  reason: string;
-  created_at: string;
-}
-
 export interface BookingWebhookEvent {
   stripe_event_id: string;
   event_type: string;
@@ -184,7 +176,6 @@ export interface Booking {
   payment_status: PaymentStatus;
   amount_charged: number;
   charges: BookingCharge[];
-  refunds: BookingRefund[];
   webhook_events: BookingWebhookEvent[];
   last_payment_check_at?: string | null;
   last_payment_error?: string | null;

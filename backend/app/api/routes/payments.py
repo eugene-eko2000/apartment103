@@ -4,17 +4,13 @@ import stripe
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from app.api.deps import Principal, get_current_principal, require_admin
+from app.api.deps import Principal, get_current_principal
 from app.api.routes.bookings import _ensure_can_access_booking
-from app.models.booking import Booking, BookingCharge, BookingRefund, BookingWebhookEvent
+from app.models.booking import Booking, BookingCharge, BookingWebhookEvent
 from app.models.payment_event import PaymentEvent
-from app.schemas.payment import AdminRefundRequest, PaymentIntentResponse
+from app.schemas.payment import PaymentIntentResponse
 from app.services import stripe_service
-from app.services.cancellation import (
-    accrued_non_refundable_amount,
-    applicable_refund_percentage,
-    days_before_checkin,
-)
+from app.services.charge_schedule import outstanding_amount, sync_charge_schedule_status
 
 router = APIRouter(tags=["payments"])
 
@@ -50,16 +46,13 @@ async def create_payment_intent(
     customer_id = await stripe_service.get_or_create_customer(booking.guest)
     metadata = {"booking_id": str(booking.id)}
 
-    refund_percentage = applicable_refund_percentage(
-        booking.cancellation_policy.rules, days_before_checkin(booking, date.today())
-    )
-    if refund_percentage >= 1.0:
+    amount = outstanding_amount(booking, date.today())
+    if amount <= 0:
         intent = await stripe_service.create_setup_intent(customer_id=customer_id, metadata=metadata)
         return PaymentIntentResponse(
             mode="setup", client_secret=intent.client_secret, amount=0.0, currency=booking.currency
         )
 
-    amount = booking.total_price * (1 - refund_percentage)
     intent = await stripe_service.create_on_session_payment_intent(
         customer_id=customer_id,
         amount=amount,
@@ -85,7 +78,7 @@ async def retry_payment(
     if booking.payment_status not in ("requires_action", "failed"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No outstanding payment issue to retry")
 
-    outstanding = accrued_non_refundable_amount(booking, date.today()) - booking.amount_charged
+    outstanding = outstanding_amount(booking, date.today())
     if outstanding <= 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nothing outstanding to charge")
 
@@ -101,45 +94,9 @@ async def retry_payment(
     )
 
 
-@router.post(
-    "/admin/bookings/{booking_id}/payment/refund",
-    response_model=Booking,
-    dependencies=[Depends(require_admin)],
-)
-async def admin_refund_booking_payment(booking_id: PydanticObjectId, payload: AdminRefundRequest) -> Booking:
-    booking = await _get_booking_or_404(booking_id)
-    if not booking.charges:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No charges to refund")
-    if payload.amount > booking.amount_charged:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Refund amount exceeds the amount charged"
-        )
-    # Manual support-tool simplification: refunds against the most recent
-    # charge. If it doesn't cover the requested amount, Stripe rejects the
-    # call and the admin should refund in smaller pieces across charges.
-    latest_charge = booking.charges[-1]
-    refund = await stripe_service.create_refund(
-        payment_intent_id=latest_charge.stripe_payment_intent_id,
-        amount=payload.amount,
-        currency=booking.currency,
-    )
-    booking.refunds.append(
-        BookingRefund(
-            stripe_refund_id=refund.id,
-            amount=payload.amount,
-            currency=booking.currency,
-            reason=payload.reason,
-        )
-    )
-    booking.amount_charged -= payload.amount
-    booking.payment_status = "card_verified" if booking.amount_charged <= 0 else "partially_charged"
-    await booking.save()
-    return booking
-
-
 # Stripe events this handler acts on, grouped by the booking-lifecycle step
 # they belong to. Anything else is still logged (see stripe_webhook below)
-# but doesn't change payment_status/charges/refunds.
+# but doesn't change payment_status/charges.
 #
 # Verification (SetupIntent path, free-cancellation bookings):
 #   setup_intent.succeeded    -> payment_status = "card_verified", store the
@@ -156,16 +113,6 @@ async def admin_refund_booking_payment(booking_id: PydanticObjectId, payload: Ad
 #                                      the accrual invariant.
 #   payment_intent.payment_failed  -> requires_action (3DS needed) or failed,
 #                                      from last_payment_error.code.
-#
-# Refund (admin-initiated or issued directly from the Stripe dashboard):
-#   charge.refunded -> append any BookingRefund(s) not already recorded (the
-#                      charge's `refunds` list is the full, current set for
-#                      that charge), decrement amount_charged accordingly.
-#                      Refunds already recorded synchronously by
-#                      admin_refund_booking_payment are recognized by
-#                      stripe_refund_id and skipped, so this is safe to fire
-#                      for both dashboard-issued and admin-panel-issued
-#                      refunds without double-counting.
 async def _apply_setup_succeeded(booking: Booking, setup_intent: dict) -> None:
     booking.stripe_payment_method_id = setup_intent["payment_method"]
     booking.payment_status = "card_verified"
@@ -201,6 +148,7 @@ async def _apply_successful_charge(booking: Booking, payment_intent: dict) -> No
         if booking.amount_charged >= booking.total_price - _FULLY_CHARGED_EPSILON
         else "partially_charged"
     )
+    sync_charge_schedule_status(booking)
     await booking.save()
 
 
@@ -213,35 +161,11 @@ async def _apply_failed_charge(booking: Booking, payment_intent: dict) -> None:
     await booking.save()
 
 
-async def _apply_refund(booking: Booking, charge: dict) -> None:
-    currency = charge["currency"].upper()
-    known_refund_ids = {refund.stripe_refund_id for refund in booking.refunds}
-    newly_refunded = 0.0
-    for refund in charge.get("refunds", {}).get("data", []):
-        if refund["status"] != "succeeded" or refund["id"] in known_refund_ids:
-            continue
-        amount = stripe_service.from_minor_units(refund["amount"])
-        booking.refunds.append(
-            BookingRefund(
-                stripe_refund_id=refund["id"],
-                amount=amount,
-                currency=currency,
-                reason=refund.get("reason") or "requested_by_customer",
-            )
-        )
-        newly_refunded += amount
-    if newly_refunded:
-        booking.amount_charged = max(booking.amount_charged - newly_refunded, 0.0)
-        booking.payment_status = "card_verified" if booking.amount_charged <= 0 else "partially_charged"
-    await booking.save()
-
-
 _WEBHOOK_HANDLERS = {
     "setup_intent.succeeded": _apply_setup_succeeded,
     "setup_intent.setup_failed": _apply_setup_failed,
     "payment_intent.succeeded": _apply_successful_charge,
     "payment_intent.payment_failed": _apply_failed_charge,
-    "charge.refunded": _apply_refund,
 }
 
 
@@ -270,8 +194,8 @@ async def stripe_webhook(request: Request) -> dict[str, str]:
 
     if booking is not None:
         # Log every event that references this booking, with its raw payload,
-        # before dispatching — the charge/refund/status update below (if any)
-        # is saved together with this log entry in one write.
+        # before dispatching — the charge/status update below (if any) is
+        # saved together with this log entry in one write.
         booking.webhook_events.append(
             BookingWebhookEvent(stripe_event_id=event.id, event_type=event.type, data=obj)
         )

@@ -7,6 +7,7 @@ from app.models.booking import Booking, BookingCancellationPolicy
 from app.models.cancellation_policy import CancellationPolicy
 from app.models.guest import Guest
 from app.schemas.booking import BookedDateRange, BookingCreate
+from app.services.charge_schedule import build_charge_schedule
 from app.services.payment_reconciliation import settle_cancellation
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
@@ -68,6 +69,7 @@ async def create_booking(
         date_ranges=payload.date_ranges,
         cancellation_policy=_snapshot_cancellation_policy(cancellation_policy),
     )
+    booking.charge_schedule = build_charge_schedule(booking)
     await booking.insert()
     return booking
 
@@ -126,6 +128,7 @@ async def update_booking(
     booking.currency = payload.currency
     booking.date_ranges = payload.date_ranges
     booking.cancellation_policy = _snapshot_cancellation_policy(cancellation_policy)
+    booking.charge_schedule = build_charge_schedule(booking)
     await booking.save()
     return booking
 

@@ -25,6 +25,7 @@ PaymentStatus = Literal[
 
 BookingChargeReason = Literal["initial_charge", "scheduled_accrual", "cancellation_settlement"]
 BookingChargeStatus = Literal["succeeded", "requires_action", "failed"]
+BookingChargeScheduleStatus = Literal["pending", "done"]
 
 
 class BookingDateRange(BaseModel):
@@ -54,12 +55,17 @@ class BookingCharge(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class BookingRefund(BaseModel):
-    stripe_refund_id: str
-    amount: float
-    currency: Currency
-    reason: str
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+class BookingChargeScheduleEntry(BaseModel):
+    """One increment of the total price becoming due, computed once at
+    booking time from the cancellation policy snapshot — see
+    app.services.charge_schedule.build_charge_schedule. Reconciliation and the
+    payment endpoints only ever consult this stored schedule instead of
+    re-deriving amounts from the cancellation policy live on every call.
+    """
+
+    charge_date: date
+    amount: float = Field(ge=0)
+    status: BookingChargeScheduleStatus = "pending"
 
 
 class BookingWebhookEvent(BaseModel):
@@ -82,6 +88,7 @@ class Booking(Document):
     currency: Currency = "CHF"
     date_ranges: list[BookingDateRange] = Field(default_factory=list)
     cancellation_policy: BookingCancellationPolicy
+    charge_schedule: list[BookingChargeScheduleEntry] = Field(default_factory=list)
     status: BookingStatus = "Active"
 
     # Stripe/payment state. stripe_payment_method_id is the card saved for
@@ -93,7 +100,6 @@ class Booking(Document):
     payment_status: PaymentStatus = "card_verification_pending"
     amount_charged: float = 0.0
     charges: list[BookingCharge] = Field(default_factory=list)
-    refunds: list[BookingRefund] = Field(default_factory=list)
     webhook_events: list[BookingWebhookEvent] = Field(default_factory=list)
     last_payment_check_at: datetime | None = None
     last_payment_error: str | None = None

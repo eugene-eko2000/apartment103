@@ -1,9 +1,11 @@
-"""Server-side cancellation-refund math.
+"""Server-side cancellation-refund math: what fraction of a booking is
+refundable as of a given date, given its cancellation policy.
 
-This is the authoritative implementation for anything that moves money.
 Mirrors `applicableRefundPercentage` in frontend/src/lib/refund.ts (kept
-there for the instant UI preview only) — the two must stay in sync, but only
-this one gets to decide what Stripe actually charges.
+there for the instant UI preview only) — the two must stay in sync. This
+module only answers "what fraction is refundable"; turning that into actual
+charge amounts and dates is app.services.charge_schedule, which is what
+actually decides what Stripe charges.
 """
 
 from datetime import date
@@ -31,12 +33,3 @@ def applicable_refund_percentage(rules: list[CancellationRule], days_before_chec
         if days_before_check_in >= rule.days_before_checkin:
             return rule.refund_percentage
     return 0.0
-
-
-def accrued_non_refundable_amount(booking: Booking, as_of: date) -> float:
-    """The amount that's safe to have captured as of `as_of`: whatever the
-    guest would forfeit if they cancelled today."""
-    refund_percentage = applicable_refund_percentage(
-        booking.cancellation_policy.rules, days_before_checkin(booking, as_of)
-    )
-    return booking.total_price * (1 - refund_percentage)

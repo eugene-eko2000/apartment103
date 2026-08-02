@@ -337,31 +337,6 @@ export default function BookingsPanel() {
 
               <div>
                 <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
-                  Refunds ({editing.refunds.length})
-                </span>
-                {editing.refunds.length === 0 ? (
-                  <p className="text-xs text-slate-400 dark:text-slate-500 italic">None yet.</p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {editing.refunds.map((refund, i) => (
-                      <div
-                        key={i}
-                        className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 flex flex-wrap gap-x-3 gap-y-0.5"
-                      >
-                        <span className="font-semibold">
-                          {refund.amount.toFixed(2)} {refund.currency}
-                        </span>
-                        <span>{refund.reason}</span>
-                        <span className="text-slate-400 dark:text-slate-500">{new Date(refund.created_at).toLocaleString()}</span>
-                        <span className="text-slate-400 dark:text-slate-500 break-all">{refund.stripe_refund_id}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
                   Webhook events ({editing.webhook_events.length})
                 </span>
                 {editing.webhook_events.length === 0 ? (

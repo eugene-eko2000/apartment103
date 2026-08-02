@@ -104,16 +104,6 @@ async def charge_off_session(
     )
 
 
-async def create_refund(
-    *, payment_intent_id: str, amount: float, currency: Currency
-) -> stripe.Refund:
-    return await asyncio.to_thread(
-        stripe.Refund.create,
-        payment_intent=payment_intent_id,
-        amount=to_minor_units(amount, currency),
-    )
-
-
 def construct_webhook_event(payload: bytes, sig_header: str) -> stripe.Event:
     # Signature verification is local/CPU-bound (HMAC), no network call.
     return stripe.Webhook.construct_event(payload, sig_header, settings.stripe_webhook_secret)

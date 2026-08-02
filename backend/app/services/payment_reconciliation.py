@@ -14,23 +14,23 @@ from datetime import date
 
 import stripe
 
-from app.models.booking import Booking, BookingChargeReason, BookingRefund
+from app.models.booking import Booking, BookingChargeReason
 from app.services import stripe_service
-from app.services.cancellation import accrued_non_refundable_amount
+from app.services.charge_schedule import outstanding_amount
 
 logger = logging.getLogger(__name__)
 
 
 async def charge_outstanding_balance(booking: Booking, *, reason: BookingChargeReason, idempotency_key: str) -> None:
     """Charge booking.stripe_payment_method_id for whatever has newly
-    accrued as non-refundable. No-op if nothing is outstanding or no card is
-    on file. Failures are recorded on the booking (payment_status/
-    last_payment_error) rather than raised, so one guest's declined card
-    doesn't abort a pass over many bookings; the webhook for the same
-    PaymentIntent will also fire and may update the booking again, which is
-    fine — both paths agree on the same state.
+    become due under the booking's stored charge schedule. No-op if nothing
+    is outstanding or no card is on file. Failures are recorded on the
+    booking (payment_status/ last_payment_error) rather than raised, so one
+    guest's declined card doesn't abort a pass over many bookings; the
+    webhook for the same PaymentIntent will also fire and may update the
+    booking again, which is fine — both paths agree on the same state.
     """
-    outstanding = accrued_non_refundable_amount(booking, date.today()) - booking.amount_charged
+    outstanding = outstanding_amount(booking, date.today())
     if outstanding <= 0 or booking.stripe_payment_method_id is None:
         return
 
@@ -67,40 +67,15 @@ async def charge_outstanding_balance(booking: Booking, *, reason: BookingChargeR
 
 
 async def settle_cancellation(booking: Booking) -> None:
-    """Called right before marking a booking Cancelled. Compares
-    amount_charged to what's owed as of the cancellation moment: charges the
-    difference if under, refunds the difference if over (only possible if a
-    cancellation policy was edited after the booking was made, since the
-    accrual job never charges ahead of what's currently owed)."""
-    owed = accrued_non_refundable_amount(booking, date.today())
-    if booking.amount_charged < owed:
-        await charge_outstanding_balance(
-            booking,
-            reason="cancellation_settlement",
-            idempotency_key=f"cancellation_settlement:{booking.id}",
-        )
-        return
-
-    if booking.amount_charged > owed and booking.charges:
-        refund_amount = booking.amount_charged - owed
-        latest_charge = booking.charges[-1]
-        try:
-            refund = await stripe_service.create_refund(
-                payment_intent_id=latest_charge.stripe_payment_intent_id,
-                amount=refund_amount,
-                currency=booking.currency,
-            )
-        except stripe.StripeError as exc:
-            logger.warning("Stripe error refunding booking %s on cancellation: %s", booking.id, exc)
-            booking.last_payment_error = str(exc)
-            return
-        booking.refunds.append(
-            BookingRefund(
-                stripe_refund_id=refund.id,
-                amount=refund_amount,
-                currency=booking.currency,
-                reason="cancellation_settlement",
-            )
-        )
-        booking.amount_charged -= refund_amount
-        await booking.save()
+    """Called right before marking a booking Cancelled. Charges whatever is
+    still outstanding under the booking's charge schedule as of the
+    cancellation moment (a no-op if the accrual job has already kept up).
+    No refund path: a booking is expected to already be charged for
+    whatever it owes by the time it's cancelled, so cancellation is never
+    expected to need handing money back.
+    """
+    await charge_outstanding_balance(
+        booking,
+        reason="cancellation_settlement",
+        idempotency_key=f"cancellation_settlement:{booking.id}",
+    )

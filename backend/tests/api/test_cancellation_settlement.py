@@ -72,10 +72,11 @@ class TestCancellationSettlement:
         assert response.status_code == 200
         assert response.json()["status"] == "Cancelled"
 
-    async def test_cancel_refunds_overcharge(self, monkeypatch, client, guest, guest_headers):
-        # The accrual job never charges ahead of what's owed, so amount_charged
-        # can only exceed the owed amount if the booking's own snapshotted
-        # policy is edited after charging — simulate that directly.
+    async def test_cancel_does_not_charge_when_nothing_outstanding(self, monkeypatch, client, guest, guest_headers):
+        # A booking is expected to already be charged for whatever it owes
+        # by the time it's cancelled, so cancellation is a no-op charge-wise
+        # once amount_charged already covers what the schedule says is due —
+        # there's no refund path, only "charge the outstanding balance, if any".
         policy = await _flat_fee_policy(0.0)
         booking_id = await _create_booking(client, guest, policy, guest_headers, price=1000.0)
         booking = await Booking.get(PydanticObjectId(booking_id))
@@ -91,19 +92,15 @@ class TestCancellationSettlement:
             )
         )
         booking.payment_status = "fully_charged"
-        booking.cancellation_policy.rules = [CancellationRule(days_before_checkin=0, refund_percentage=0.4)]
         await booking.save()
 
-        async def fake_create_refund(*, payment_intent_id, amount, currency):
-            assert payment_intent_id == "pi_1"
-            assert amount == pytest.approx(400.0)
-            return SimpleNamespace(id="re_settle_1")
+        def fail_if_called(*args, **kwargs):
+            raise AssertionError("cancellation should not attempt to charge when nothing is outstanding")
 
-        monkeypatch.setattr(stripe_service, "create_refund", fake_create_refund)
+        monkeypatch.setattr(stripe_service, "charge_off_session", fail_if_called)
 
         response = await client.post(f"/bookings/{booking_id}/cancel", headers=guest_headers)
         assert response.status_code == 200
 
         booking = await Booking.get(PydanticObjectId(booking_id))
-        assert booking.amount_charged == pytest.approx(600.0)
-        assert len(booking.refunds) == 1
+        assert booking.amount_charged == pytest.approx(1000.0)

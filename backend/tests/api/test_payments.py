@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 from beanie import PydanticObjectId
 
-from app.models.booking import Booking, BookingCharge, BookingRefund
+from app.models.booking import Booking, BookingCharge
 from app.models.cancellation_policy import CancellationPolicy, CancellationRule
 from app.models.payment_event import PaymentEvent
 from app.services import stripe_service
@@ -172,63 +172,6 @@ class TestRetryPayment:
         assert response.status_code == 400
 
 
-class TestAdminRefund:
-    async def test_admin_can_refund_partial_amount(self, monkeypatch, client, guest, admin_headers, guest_headers):
-        policy = await _flat_fee_policy(0.5)
-        booking_id = await _create_booking(client, guest, policy, guest_headers, begin_offset=30, price=1000.0)
-        booking = await Booking.get(PydanticObjectId(booking_id))
-        booking.charges.append(
-            BookingCharge(
-                stripe_payment_intent_id="pi_1",
-                amount=500.0,
-                currency="CHF",
-                reason="initial_charge",
-                status="succeeded",
-            )
-        )
-        booking.amount_charged = 500.0
-        booking.payment_status = "partially_charged"
-        await booking.save()
-
-        async def fake_create_refund(*, payment_intent_id, amount, currency):
-            assert payment_intent_id == "pi_1"
-            assert amount == pytest.approx(200.0)
-            assert currency == "CHF"
-            return SimpleNamespace(id="re_1")
-
-        monkeypatch.setattr(stripe_service, "create_refund", fake_create_refund)
-
-        response = await client.post(
-            f"/admin/bookings/{booking_id}/payment/refund",
-            json={"amount": 200.0, "reason": "goodwill"},
-            headers=admin_headers,
-        )
-        assert response.status_code == 200
-        body = response.json()
-        assert body["amount_charged"] == pytest.approx(300.0)
-        assert len(body["refunds"]) == 1
-        assert body["payment_status"] == "partially_charged"
-
-    async def test_non_admin_forbidden(self, client, guest, cancellation_policy, guest_headers):
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers)
-        response = await client.post(
-            f"/admin/bookings/{booking_id}/payment/refund",
-            json={"amount": 10.0, "reason": "x"},
-            headers=guest_headers,
-        )
-        assert response.status_code == 403
-
-    async def test_amount_exceeding_charged_rejected(self, client, guest, admin_headers, guest_headers):
-        policy = await _flat_fee_policy(0.5)
-        booking_id = await _create_booking(client, guest, policy, guest_headers, begin_offset=30, price=1000.0)
-        response = await client.post(
-            f"/admin/bookings/{booking_id}/payment/refund",
-            json={"amount": 10.0, "reason": "x"},
-            headers=admin_headers,
-        )
-        assert response.status_code == 400
-
-
 class TestStripeWebhook:
     async def test_missing_signature_header_is_rejected(self, client):
         response = await client.post("/webhooks/stripe", content=b"{}")
@@ -345,109 +288,6 @@ class TestStripeWebhook:
         booking = await Booking.get(PydanticObjectId(booking_id))
         assert booking.payment_status == "card_verification_pending"
         assert booking.last_payment_error == "Card was declined"
-
-    async def test_charge_refunded_records_refund_and_updates_status(
-        self, monkeypatch, client, guest, cancellation_policy, guest_headers
-    ):
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers, price=1000.0)
-        booking = await Booking.get(PydanticObjectId(booking_id))
-        booking.charges.append(
-            BookingCharge(
-                stripe_payment_intent_id="pi_refund_1",
-                amount=1000.0,
-                currency="CHF",
-                reason="initial_charge",
-                status="succeeded",
-            )
-        )
-        booking.amount_charged = 1000.0
-        booking.payment_status = "fully_charged"
-        await booking.save()
-
-        event = SimpleNamespace(
-            id="evt_refund_1",
-            type="charge.refunded",
-            data=SimpleNamespace(
-                object={
-                    "id": "ch_1",
-                    "payment_intent": "pi_refund_1",
-                    "currency": "chf",
-                    "metadata": {"booking_id": booking_id},
-                    "refunds": {
-                        "data": [
-                            {
-                                "id": "re_dashboard_1",
-                                "status": "succeeded",
-                                "amount": 40000,
-                                "reason": "requested_by_customer",
-                            }
-                        ]
-                    },
-                }
-            ),
-        )
-        monkeypatch.setattr(stripe_service, "construct_webhook_event", lambda payload, sig: event)
-
-        response = await client.post("/webhooks/stripe", content=b"{}", headers={"stripe-signature": "sig"})
-        assert response.status_code == 200
-
-        booking = await Booking.get(PydanticObjectId(booking_id))
-        assert booking.amount_charged == pytest.approx(600.0)
-        assert booking.payment_status == "partially_charged"
-        assert len(booking.refunds) == 1
-        assert booking.refunds[0].stripe_refund_id == "re_dashboard_1"
-        assert len(booking.webhook_events) == 1
-        assert booking.webhook_events[0].event_type == "charge.refunded"
-        assert booking.webhook_events[0].data["id"] == "ch_1"
-
-    async def test_charge_refunded_skips_already_recorded_refund(
-        self, monkeypatch, client, guest, cancellation_policy, guest_headers
-    ):
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers, price=1000.0)
-        booking = await Booking.get(PydanticObjectId(booking_id))
-        booking.charges.append(
-            BookingCharge(
-                stripe_payment_intent_id="pi_refund_2",
-                amount=1000.0,
-                currency="CHF",
-                reason="initial_charge",
-                status="succeeded",
-            )
-        )
-        booking.refunds.append(
-            BookingRefund(stripe_refund_id="re_admin_1", amount=200.0, currency="CHF", reason="goodwill")
-        )
-        booking.amount_charged = 800.0
-        booking.payment_status = "partially_charged"
-        await booking.save()
-
-        # Same refund (already recorded synchronously by the admin refund
-        # endpoint) arrives via webhook — must not be double-counted.
-        event = SimpleNamespace(
-            id="evt_refund_2",
-            type="charge.refunded",
-            data=SimpleNamespace(
-                object={
-                    "id": "ch_2",
-                    "payment_intent": "pi_refund_2",
-                    "currency": "chf",
-                    "metadata": {"booking_id": booking_id},
-                    "refunds": {
-                        "data": [
-                            {"id": "re_admin_1", "status": "succeeded", "amount": 20000, "reason": "goodwill"}
-                        ]
-                    },
-                }
-            ),
-        )
-        monkeypatch.setattr(stripe_service, "construct_webhook_event", lambda payload, sig: event)
-
-        response = await client.post("/webhooks/stripe", content=b"{}", headers={"stripe-signature": "sig"})
-        assert response.status_code == 200
-
-        booking = await Booking.get(PydanticObjectId(booking_id))
-        assert booking.amount_charged == pytest.approx(800.0)
-        assert len(booking.refunds) == 1
 
     async def test_duplicate_event_is_not_double_counted(
         self, monkeypatch, client, guest, cancellation_policy, guest_headers
