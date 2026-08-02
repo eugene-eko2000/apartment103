@@ -165,6 +165,13 @@ export interface BookingRefund {
   created_at: string;
 }
 
+export interface BookingWebhookEvent {
+  stripe_event_id: string;
+  event_type: string;
+  data: Record<string, unknown>;
+  received_at: string;
+}
+
 export interface Booking {
   _id: string;
   guest: BookingGuestRef;
@@ -173,10 +180,13 @@ export interface Booking {
   date_ranges: BookingDateRange[];
   cancellation_policy: { name: string; rules: CancellationRule[] };
   status: BookingStatus;
+  stripe_payment_method_id?: string | null;
   payment_status: PaymentStatus;
   amount_charged: number;
   charges: BookingCharge[];
   refunds: BookingRefund[];
+  webhook_events: BookingWebhookEvent[];
+  last_payment_check_at?: string | null;
   last_payment_error?: string | null;
 }
 

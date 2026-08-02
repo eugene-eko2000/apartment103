@@ -11,6 +11,7 @@ import {
   type Booking,
   type BookingDateRange,
   type BookingInput,
+  type BookingWebhookEvent,
   type CancellationPolicy,
   type Currency,
   type Guest,
@@ -45,6 +46,46 @@ const emptyDateRange = (): BookingDateRange => ({ begin_date: "", end_date: "", 
 
 function emptyForm(guestId: string, policyId: string): BookingInput {
   return { guest_id: guestId, cancellation_policy_id: policyId, currency: "CHF", date_ranges: [] };
+}
+
+function ReadOnlyField({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div>
+      <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{label}</span>
+      <p className="text-sm text-slate-700 dark:text-slate-300 break-all">{value}</p>
+    </div>
+  );
+}
+
+function WebhookEventItem({ event }: { event: BookingWebhookEvent }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border border-slate-200 dark:border-slate-600 rounded-lg overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-700 text-left cursor-pointer"
+      >
+        <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
+          <span className="font-semibold">{event.event_type}</span>{" "}
+          <span className="text-slate-400 dark:text-slate-500">{new Date(event.received_at).toLocaleString()}</span>
+        </span>
+        <span className="text-slate-400 dark:text-slate-500 text-xs shrink-0">{open ? "▲ Collapse" : "▼ Expand"}</span>
+      </button>
+      {open && (
+        <div className="p-3 bg-white dark:bg-slate-800 space-y-2">
+          <ReadOnlyField label="Stripe event ID" value={event.stripe_event_id} />
+          <div>
+            <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Raw payload</span>
+            <pre className="text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2 overflow-x-auto max-h-64 overflow-y-auto text-slate-700 dark:text-slate-300">
+              {JSON.stringify(event.data, null, 2)}
+            </pre>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function BookingsPanel() {
@@ -201,7 +242,7 @@ export default function BookingsPanel() {
       />
 
       {showModal && editing && (
-        <Modal title="Edit booking" onClose={() => setShowModal(false)}>
+        <Modal title="Edit booking" onClose={() => setShowModal(false)} maxWidth="max-w-2xl">
           <form onSubmit={handleSubmit} className="space-y-4">
             <SelectField
               label="Guest"
@@ -245,6 +286,96 @@ export default function BookingsPanel() {
                 </>
               )}
             />
+
+            <div className="border-t border-slate-200 dark:border-slate-700 pt-4 space-y-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                Booking &amp; payment data
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                <ReadOnlyField label="Booking ID" value={editing._id} />
+                <ReadOnlyField label="Status" value={editing.status} />
+                <ReadOnlyField label="Payment status" value={PAYMENT_STATUS_LABELS[editing.payment_status]} />
+                <ReadOnlyField
+                  label="Amount charged"
+                  value={`${editing.amount_charged.toFixed(2)} / ${editing.date_ranges
+                    .reduce((sum, r) => sum + r.price, 0)
+                    .toFixed(2)} ${editing.currency}`}
+                />
+                <ReadOnlyField label="Stripe payment method" value={editing.stripe_payment_method_id ?? "—"} />
+                <ReadOnlyField
+                  label="Last payment check"
+                  value={editing.last_payment_check_at ? new Date(editing.last_payment_check_at).toLocaleString() : "—"}
+                />
+                <ReadOnlyField label="Last payment error" value={editing.last_payment_error ?? "—"} />
+              </div>
+
+              <div>
+                <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                  Charges ({editing.charges.length})
+                </span>
+                {editing.charges.length === 0 ? (
+                  <p className="text-xs text-slate-400 dark:text-slate-500 italic">None yet.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {editing.charges.map((charge, i) => (
+                      <div
+                        key={i}
+                        className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 flex flex-wrap gap-x-3 gap-y-0.5"
+                      >
+                        <span className="font-semibold">
+                          {charge.amount.toFixed(2)} {charge.currency}
+                        </span>
+                        <span>{charge.reason}</span>
+                        <span>{charge.status}</span>
+                        <span className="text-slate-400 dark:text-slate-500">{new Date(charge.created_at).toLocaleString()}</span>
+                        <span className="text-slate-400 dark:text-slate-500 break-all">{charge.stripe_payment_intent_id}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                  Refunds ({editing.refunds.length})
+                </span>
+                {editing.refunds.length === 0 ? (
+                  <p className="text-xs text-slate-400 dark:text-slate-500 italic">None yet.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {editing.refunds.map((refund, i) => (
+                      <div
+                        key={i}
+                        className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 flex flex-wrap gap-x-3 gap-y-0.5"
+                      >
+                        <span className="font-semibold">
+                          {refund.amount.toFixed(2)} {refund.currency}
+                        </span>
+                        <span>{refund.reason}</span>
+                        <span className="text-slate-400 dark:text-slate-500">{new Date(refund.created_at).toLocaleString()}</span>
+                        <span className="text-slate-400 dark:text-slate-500 break-all">{refund.stripe_refund_id}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                  Webhook events ({editing.webhook_events.length})
+                </span>
+                {editing.webhook_events.length === 0 ? (
+                  <p className="text-xs text-slate-400 dark:text-slate-500 italic">None yet.</p>
+                ) : (
+                  <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                    {editing.webhook_events.map((event) => (
+                      <WebhookEventItem key={event.stripe_event_id} event={event} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
             {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
             <SubmitButton pending={pending} label="Save changes" />
           </form>
