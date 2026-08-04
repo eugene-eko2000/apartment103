@@ -21,6 +21,14 @@ from app.services.charge_schedule import outstanding_amount
 logger = logging.getLogger(__name__)
 
 
+def _redact_payment_method_id(payment_method_id: str | None) -> str:
+    """Stripe payment_method ids (pm_...) are tokens, not raw card numbers —
+    but mask everything but the last 4 characters before logging anyway."""
+    if not payment_method_id:
+        return "<none>"
+    return f"...{payment_method_id[-4:]}" if len(payment_method_id) > 4 else "***"
+
+
 async def charge_outstanding_balance(booking: Booking, *, reason: BookingChargeReason, idempotency_key: str) -> None:
     """Charge booking.stripe_payment_method_id for whatever has newly
     become due under the booking's stored charge schedule. No-op if nothing
@@ -35,6 +43,17 @@ async def charge_outstanding_balance(booking: Booking, *, reason: BookingChargeR
         return
 
     customer_id = await stripe_service.get_or_create_customer(booking.guest)
+    logger.info(
+        "Reconciliation charge request: booking=%s reason=%s customer=%s payment_method=%s "
+        "amount=%s %s idempotency_key=%s",
+        booking.id,
+        reason,
+        customer_id,
+        _redact_payment_method_id(booking.stripe_payment_method_id),
+        outstanding,
+        booking.currency,
+        idempotency_key,
+    )
     try:
         await stripe_service.charge_off_session(
             customer_id=customer_id,
