@@ -148,7 +148,6 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const [verified, setVerified] = useState<VerifiedIdentity | null>(null);
   const [guestForm, setGuestForm] = useState<GuestInput | null>(null);
   const [guestStep, setGuestStep] = useState<GuestFlowStep>("form");
-  const [guestName, setGuestName] = useState("");
   const [pending, setPending] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [paymentIntent, setPaymentIntent] = useState<PaymentIntentResponse | null>(null);
@@ -807,7 +806,6 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     setGuestForm(null);
     setSelectedPlanId(null);
     setGuestStep("plan");
-    setGuestName("");
     setFormError(null);
     setPending(false);
     setPaymentIntent(null);
@@ -894,7 +892,6 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     try {
       if (verified.guestMode === "create" && verified.isAdminBooking) {
         const { guest, access_token, expires_in } = await createGuest(verified.authToken, guestForm);
-        setGuestName(guest.first_name);
         saveGuestSession({
           token: access_token,
           guestId: guest._id,
@@ -905,7 +902,6 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
         await submitBooking(guest._id, verified.authToken);
       } else if (verified.guestMode === "create") {
         const result = await registerGuestSelf(verified.authToken, guestForm);
-        setGuestName(result.guest.first_name);
         saveGuestSession({
           token: result.access_token,
           guestId: result.guest._id,
@@ -915,8 +911,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
         });
         await submitBooking(result.guest._id, result.access_token);
       } else if (verified.guestMode === "update" && verified.guestId) {
-        const guest = await updateGuest(verified.guestId, verified.authToken, guestForm);
-        setGuestName(guest.first_name);
+        await updateGuest(verified.guestId, verified.authToken, guestForm);
         await submitBooking(verified.guestId, verified.authToken);
       }
     } catch (err) {
@@ -1525,7 +1520,9 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
 
               {guestStep === "success" && (
                 <div className="text-center py-4 space-y-4">
-                  <p className="text-sm text-gray-700 dark:text-gray-300">{dict.modal.successMessage.replace("{name}", guestName)}</p>
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                    {dict.modal.successMessage.replace("{name}", guestForm?.first_name ?? "")}
+                  </p>
                   <button
                     type="button"
                     onClick={handleDone}

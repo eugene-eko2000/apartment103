@@ -1,9 +1,11 @@
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from typing import Literal
 
 from beanie import Document, Link
 from pydantic import BaseModel, Field
 
+from app.core.money import Money, to_decimal
 from app.models.cancellation_policy import CancellationRule
 from app.models.guest import Currency, Guest
 
@@ -31,7 +33,7 @@ BookingChargeScheduleStatus = Literal["pending", "done"]
 class BookingDateRange(BaseModel):
     begin_date: date
     end_date: date
-    price: float = Field(ge=0)
+    price: Money = Field(ge=0)
 
 
 class BookingCancellationPolicy(BaseModel):
@@ -48,7 +50,7 @@ class BookingCancellationPolicy(BaseModel):
 
 class BookingCharge(BaseModel):
     stripe_payment_intent_id: str
-    amount: float
+    amount: Money
     currency: Currency
     reason: BookingChargeReason
     status: BookingChargeStatus
@@ -64,7 +66,7 @@ class BookingChargeScheduleEntry(BaseModel):
     """
 
     charge_date: date
-    amount: float = Field(ge=0)
+    amount: Money = Field(ge=0)
     status: BookingChargeScheduleStatus = "pending"
 
 
@@ -107,15 +109,16 @@ class Booking(Document):
     # books again with a different card.
     stripe_payment_method_id: str | None = None
     payment_status: PaymentStatus = "card_verification_pending"
-    amount_charged: float = 0.0
+    amount_charged: Money = Decimal("0.00")
     charges: list[BookingCharge] = Field(default_factory=list)
     webhook_events: list[BookingWebhookEvent] = Field(default_factory=list)
     last_payment_check_at: datetime | None = None
     last_payment_error: str | None = None
 
     @property
-    def total_price(self) -> float:
-        return sum(date_range.price for date_range in self.date_ranges)
+    def total_price(self) -> Decimal:
+        total = sum((date_range.price for date_range in self.date_ranges), Decimal("0.00"))
+        return to_decimal(total)
 
     class Settings:
         name = "bookings"

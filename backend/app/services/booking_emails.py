@@ -25,6 +25,7 @@ from datetime import timedelta
 from beanie import Link
 
 from app.core.config import settings
+from app.core.money import to_decimal
 from app.core.notifications import EmailAttachment, send_html_email
 from app.models.booking import Booking, BookingCharge
 from app.models.guest import Guest
@@ -43,7 +44,7 @@ def _nightly_rates(booking: Booking) -> list[dict]:
     rows: list[dict] = []
     for date_range in sorted(booking.date_ranges, key=lambda r: r.begin_date):
         nights = (date_range.end_date - date_range.begin_date).days or 1
-        per_night = date_range.price / nights
+        per_night = to_decimal(date_range.price / nights)
         night = date_range.begin_date
         while night < date_range.end_date:
             rows.append({"date": night.isoformat(), "rate": per_night})

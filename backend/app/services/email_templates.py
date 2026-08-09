@@ -10,11 +10,13 @@ than in Python: translating or wording-tweaking an email never touches
 this module.
 """
 
+from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, Template
 
+from app.core.money import format_money
 from app.models.guest import Language
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
@@ -24,8 +26,8 @@ _SUPPORTED_LANGUAGES: tuple[Language, ...] = ("en", "de", "fr", "it")
 _DEFAULT_LANGUAGE: Language = "en"
 
 
-def _money(amount: float, currency: str) -> str:
-    return f"{amount:,.2f} {currency}"
+def _money(amount: Decimal, currency: str) -> str:
+    return format_money(amount, currency)
 
 
 def _percent(fraction: float) -> str:

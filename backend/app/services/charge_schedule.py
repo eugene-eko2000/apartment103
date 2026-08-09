@@ -11,14 +11,16 @@ money.
 """
 
 from datetime import date, timedelta
+from decimal import Decimal
 
+from app.core.money import to_decimal
 from app.models.booking import Booking, BookingChargeScheduleEntry
 from app.services.cancellation import applicable_refund_percentage
 
-# Float accumulation from repeated charges/refunds can leave a few hundredths
-# of a unit of drift; treat amount_charged as having "covered" a schedule
-# entry once it's within a cent of it.
-_STATUS_SYNC_EPSILON = 0.01
+# Rounding across repeated charges/refunds can leave a few hundredths of a
+# unit of drift; treat amount_charged as having "covered" a schedule entry
+# once it's within a cent of it.
+_STATUS_SYNC_EPSILON = Decimal("0.01")
 
 
 def build_charge_schedule(booking: Booking) -> list[BookingChargeScheduleEntry]:
@@ -46,10 +48,10 @@ def build_charge_schedule(booking: Booking) -> list[BookingChargeScheduleEntry]:
 
     schedule: list[BookingChargeScheduleEntry] = []
     due_date = booking.booking_date
-    previous_refund_percentage = 1.0
+    previous_refund_percentage = Decimal("1.00")
     for threshold in thresholds:
-        refund_percentage = applicable_refund_percentage(rules, threshold)
-        amount = total_price * (previous_refund_percentage - refund_percentage)
+        refund_percentage = to_decimal(applicable_refund_percentage(rules, threshold))
+        amount = to_decimal(total_price * (previous_refund_percentage - refund_percentage))
         if amount > 0:
             schedule.append(BookingChargeScheduleEntry(charge_date=due_date, amount=amount))
         due_date = check_in - timedelta(days=threshold - 1)
@@ -57,17 +59,18 @@ def build_charge_schedule(booking: Booking) -> list[BookingChargeScheduleEntry]:
     return schedule
 
 
-def scheduled_amount_due(schedule: list[BookingChargeScheduleEntry], as_of: date) -> float:
+def scheduled_amount_due(schedule: list[BookingChargeScheduleEntry], as_of: date) -> Decimal:
     """Cumulative amount the stored schedule says should be captured by
     `as_of`, regardless of each entry's current status."""
-    return sum(entry.amount for entry in schedule if entry.charge_date <= as_of)
+    total = sum((entry.amount for entry in schedule if entry.charge_date <= as_of), Decimal("0.00"))
+    return to_decimal(total)
 
 
-def outstanding_amount(booking: Booking, as_of: date) -> float:
+def outstanding_amount(booking: Booking, as_of: date) -> Decimal:
     """What's left to charge as of `as_of`: schedule-due minus what's
     already been captured. The single formula every payment/reconciliation
     path uses to decide how much (if anything) still needs charging."""
-    return scheduled_amount_due(booking.charge_schedule, as_of) - booking.amount_charged
+    return to_decimal(scheduled_amount_due(booking.charge_schedule, as_of) - to_decimal(booking.amount_charged))
 
 
 def sync_charge_schedule_status(booking: Booking) -> None:
@@ -77,7 +80,7 @@ def sync_charge_schedule_status(booking: Booking) -> None:
     actually been captured, rather than only the specific entries a given
     charge/refund happened to target.
     """
-    cumulative = 0.0
+    cumulative = Decimal("0.00")
     for entry in sorted(booking.charge_schedule, key=lambda entry: entry.charge_date):
         cumulative += entry.amount
         entry.status = "done" if booking.amount_charged >= cumulative - _STATUS_SYNC_EPSILON else "pending"

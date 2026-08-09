@@ -1,5 +1,6 @@
 import logging
 from datetime import date, datetime, timezone
+from decimal import Decimal
 
 import stripe
 from beanie import PydanticObjectId
@@ -22,9 +23,9 @@ router = APIRouter(tags=["payments"])
 webhook_router = APIRouter(tags=["payments"])
 
 # A booking is "fully charged" once amount_charged is within a cent of
-# total_price — float accumulation from repeated accrual charges can leave a
-# few hundredths of a unit of drift that should still count as done.
-_FULLY_CHARGED_EPSILON = 0.01
+# total_price — rounding across repeated accrual charges can leave a few
+# hundredths of a unit of drift that should still count as done.
+_FULLY_CHARGED_EPSILON = Decimal("0.01")
 
 
 async def _get_booking_or_404(booking_id: PydanticObjectId) -> Booking:
@@ -69,7 +70,7 @@ async def create_payment_intent(
         return PaymentIntentResponse(
             mode="setup",
             client_secret=intent.client_secret,
-            amount=0.0,
+            amount=Decimal("0.00"),
             total_price=booking.total_price,
             currency=booking.currency,
         )

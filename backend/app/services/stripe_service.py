@@ -9,10 +9,12 @@ threading, idempotency keys) stay in one place.
 """
 
 import asyncio
+from decimal import Decimal
 
 import stripe
 
 from app.core.config import settings
+from app.core.money import to_decimal
 from app.models.guest import Currency, Guest
 
 stripe.api_key = settings.stripe_secret_key
@@ -20,12 +22,12 @@ stripe.api_key = settings.stripe_secret_key
 # EUR/CHF/USD/GBP — the only currencies this app supports — all use 2-decimal
 # minor units. If a zero-decimal currency (e.g. JPY) is ever added, this needs
 # a per-currency lookup instead of a flat *100.
-def to_minor_units(amount: float, currency: Currency) -> int:
-    return round(amount * 100)
+def to_minor_units(amount: Decimal, currency: Currency) -> int:
+    return int(to_decimal(amount) * 100)
 
 
-def from_minor_units(amount: int) -> float:
-    return amount / 100
+def from_minor_units(amount: int) -> Decimal:
+    return to_decimal(Decimal(amount) / Decimal(100))
 
 
 async def get_or_create_customer(guest: Guest) -> str:
@@ -55,7 +57,7 @@ async def create_setup_intent(*, customer_id: str, metadata: dict[str, str]) -> 
 async def create_on_session_payment_intent(
     *,
     customer_id: str,
-    amount: float,
+    amount: Decimal,
     currency: Currency,
     metadata: dict[str, str],
 ) -> stripe.PaymentIntent:
@@ -83,7 +85,7 @@ async def charge_off_session(
     *,
     customer_id: str,
     payment_method_id: str,
-    amount: float,
+    amount: Decimal,
     currency: Currency,
     metadata: dict[str, str],
     idempotency_key: str,

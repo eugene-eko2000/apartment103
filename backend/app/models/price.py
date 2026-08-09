@@ -3,13 +3,14 @@ from datetime import date
 from beanie import Document
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.money import Money
 from app.models.guest import Currency
 
 
 class DateRangeRate(BaseModel):
     begin_date: date
     end_date: date
-    daily_rate: float = Field(ge=0)
+    daily_rate: Money = Field(ge=0)
     min_stay_days: int = Field(default=3, ge=1)
 
 

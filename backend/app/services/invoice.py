@@ -9,6 +9,7 @@ the PDF is just a formatted view of it for the guest's inbox.
 from fpdf import FPDF
 
 from app.core.config import settings
+from app.core.money import format_money
 from app.models.booking import Booking, BookingCharge
 from app.models.guest import Guest
 
@@ -68,7 +69,7 @@ def build_charge_invoice_pdf(*, booking: Booking, guest: Guest, charge: BookingC
     pdf.cell(50, 8, "Amount", border=1, new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", "", 10)
     pdf.cell(130, 8, _charge_description(charge), border=1)
-    pdf.cell(50, 8, f"{charge.amount:,.2f} {charge.currency}", border=1, new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(50, 8, format_money(charge.amount, charge.currency), border=1, new_x="LMARGIN", new_y="NEXT")
 
     pdf.ln(6)
     pdf.set_font("Helvetica", "", 9)
