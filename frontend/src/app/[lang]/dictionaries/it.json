@@ -91,6 +91,7 @@
     "cancel": "Annulla",
     "back": "Indietro",
     "noCharge": "Nessun addebito per ora — potrai rivedere tutto prima di confermare",
+    "resumePendingBookingPrompt": "Hai una prenotazione in corso. Vuoi riprenderla per completare il pagamento? Scegliendo Annulla verrà eliminata.",
     "modal": {
       "close": "Chiudi",
       "identifierTitle": "Inserisci i tuoi dati di contatto",
@@ -146,7 +147,7 @@
         "payTitle": "Conferma il pagamento",
         "chargeSummary": "Ti verrà addebitato {amount} ora — il {percent}% del totale {total} — in base alla tua politica di cancellazione.",
         "payButton": "Paga ora",
-        "verifyButton": "Verifica carta",
+        "verifyButton": "Prenota",
         "processing": "Elaborazione…",
         "cardholderNameLabel": "Nome del titolare",
         "cardholderNamePlaceholder": "Nome sulla carta",

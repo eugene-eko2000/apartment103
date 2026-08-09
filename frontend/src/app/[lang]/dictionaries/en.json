@@ -91,6 +91,7 @@
     "cancel": "Cancel",
     "back": "Back",
     "noCharge": "No charge yet — you'll review before confirming",
+    "resumePendingBookingPrompt": "You have a booking in progress. Resume it to complete payment? Choosing Cancel will delete it.",
     "modal": {
       "close": "Close",
       "identifierTitle": "Enter your contact data",
@@ -146,7 +147,7 @@
         "payTitle": "Confirm payment",
         "chargeSummary": "You'll be charged {amount} now — {percent}% of the total {total} — based on your cancellation policy.",
         "payButton": "Pay now",
-        "verifyButton": "Verify card",
+        "verifyButton": "Book",
         "processing": "Processing…",
         "cardholderNameLabel": "Cardholder name",
         "cardholderNamePlaceholder": "Name on card",

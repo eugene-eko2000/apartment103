@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from app.models.cancellation_policy import CancellationRule
 from app.models.guest import Currency, Guest
 
-BookingStatus = Literal["Active", "Cancelled"]
+BookingStatus = Literal["Pending", "Active", "Cancelled"]
 
 # card_verification_pending: no PaymentIntent/SetupIntent confirmed yet.
 # card_verified: SetupIntent confirmed, nothing charged (free-cancellation booking).
@@ -89,7 +89,16 @@ class Booking(Document):
     date_ranges: list[BookingDateRange] = Field(default_factory=list)
     cancellation_policy: BookingCancellationPolicy
     charge_schedule: list[BookingChargeScheduleEntry] = Field(default_factory=list)
-    status: BookingStatus = "Active"
+    # A booking starts Pending (stored, but payment neither charged nor
+    # verified) and only becomes Active once the first Stripe
+    # setup/payment confirmation lands via webhook — see
+    # app.api.routes.payments._apply_setup_succeeded /
+    # _apply_successful_charge. Pending bookings deliberately don't block
+    # the calendar (app.api.routes.bookings.list_public_booked_date_ranges
+    # only returns Active ones), so two guests can both be mid-checkout for
+    # the same dates; app.services.availability resolves that race by
+    # rejecting whichever one pays second.
+    status: BookingStatus = "Pending"
 
     # Stripe/payment state. stripe_payment_method_id is the card saved for
     # this specific booking's off-session accrual charges — deliberately not

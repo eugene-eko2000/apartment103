@@ -138,7 +138,7 @@ export interface BookingGuestRef {
   phone_number: string;
 }
 
-export type BookingStatus = "Active" | "Cancelled";
+export type BookingStatus = "Pending" | "Active" | "Cancelled";
 
 export type PaymentStatus =
   | "card_verification_pending"

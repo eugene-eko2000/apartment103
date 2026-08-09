@@ -42,6 +42,10 @@ async def _get_cancellation_policy_or_404(policy_id: PydanticObjectId) -> Cancel
     return policy
 
 
+async def _get_pending_booking_for_guest(guest_id: PydanticObjectId) -> Booking | None:
+    return await Booking.find_one({"guest.$id": guest_id, "status": "Pending"})
+
+
 def _snapshot_cancellation_policy(policy: CancellationPolicy) -> BookingCancellationPolicy:
     return BookingCancellationPolicy(name=policy.name, rules=policy.rules)
 
@@ -62,6 +66,14 @@ async def create_booking(
     if not principal.is_admin and payload.guest_id != principal.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Guests may only book for themselves")
     guest = await _get_guest_or_404(payload.guest_id)
+    # Only one Pending booking per guest at a time — a returning guest with
+    # one already stored is meant to resume straight into paying for it
+    # (see the frontend's post-login lookup) rather than start another.
+    if await _get_pending_booking_for_guest(guest.id) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You already have a pending booking. Complete or cancel it before starting a new one.",
+        )
     cancellation_policy = await _get_cancellation_policy_or_404(payload.cancellation_policy_id)
     booking = Booking(
         guest=guest,
@@ -141,4 +153,13 @@ async def delete_booking(
     if booking is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
     _ensure_can_access_booking(booking=booking, principal=principal)
+    # A guest can only outright delete a still-Pending booking (e.g.
+    # cancelling out of checkout before paying) — an Active/Cancelled one
+    # has payment/audit history and must go through /cancel instead. Admins
+    # keep unrestricted delete for cleanup.
+    if not principal.is_admin and booking.status != "Pending":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only a pending booking can be deleted directly; cancel it instead.",
+        )
     await booking.delete()

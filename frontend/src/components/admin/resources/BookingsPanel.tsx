@@ -42,6 +42,12 @@ const PAYMENT_STATUS_CLASSES: Record<Booking["payment_status"], string> = {
   failed: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
 };
 
+const BOOKING_STATUS_CLASSES: Record<Booking["status"], string> = {
+  Pending: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+  Active: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
+  Cancelled: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+};
+
 const emptyDateRange = (): BookingDateRange => ({ begin_date: "", end_date: "", price: 0 });
 
 function emptyForm(guestId: string, policyId: string): BookingInput {
@@ -213,11 +219,7 @@ export default function BookingsPanel() {
       label: "Status",
       render: (b) => (
         <span
-          className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
-            b.status === "Cancelled"
-              ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
-              : "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
-          }`}
+          className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${BOOKING_STATUS_CLASSES[b.status]}`}
         >
           {b.status}
         </span>

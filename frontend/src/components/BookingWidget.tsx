@@ -15,12 +15,15 @@ import {
   createBooking,
   createGuest,
   createPaymentIntent,
+  deleteBooking,
   getGuest,
+  listBookings,
   listPublicBookedDateRanges,
   listPublicClosedDateRanges,
   listPublicPlans,
   listPublicPrices,
   registerGuestSelf,
+  updateBooking,
   updateGuest,
   verifyToken,
   type Currency,
@@ -98,6 +101,7 @@ export interface BookingDict {
   cancel: string;
   back: string;
   noCharge: string;
+  resumePendingBookingPrompt: string;
   total: string;
   modal: BookingModalDict;
 }
@@ -148,6 +152,10 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const [pending, setPending] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [paymentIntent, setPaymentIntent] = useState<PaymentIntentResponse | null>(null);
+  // Set once the booking has been created server-side; a later submit (e.g.
+  // after using Back from the payment step) updates this booking in place
+  // instead of creating a duplicate.
+  const [bookingId, setBookingId] = useState<string | null>(null);
   // True while a stored guest session's bearer token is being validated
   // against the API in response to a Book click.
   const [checkingSession, setCheckingSession] = useState(false);
@@ -556,7 +564,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   // the guest actually saw on this fresh page anyway, so skipping the
   // animation and opening straight into the natural extended layout is both
   // safer and correct.
-  const handleVerified = (identity: VerifiedIdentity, animate = true) => {
+  const handleVerified = async (identity: VerifiedIdentity, animate = true) => {
     const preferredLanguage = identity.guestForm.preferred_language;
     if (preferredLanguage && preferredLanguage !== lang && range?.from && range?.to) {
       // The guest's saved language differs from the page they're on.
@@ -586,8 +594,6 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     if (animate) captureRect();
     setVerified(identity);
     setGuestForm(identity.guestForm);
-    setSelectedPlanId(plans[0]?._id ?? null);
-    setGuestStep("plan");
     setFormError(null);
     setIdentityModalOpen(false);
     saveGuestSession({
@@ -597,6 +603,100 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
       isAdminBooking: identity.isAdminBooking,
       expiresAt: identity.expiresAt,
     });
+
+    // Not for an admin booking on a guest's behalf: identity.authToken is
+    // then the admin's own (sees every booking in the system, not just this
+    // guest's), and the admin is starting a fresh booking for whichever
+    // guest they just picked, not resuming their own checkout.
+    if (!identity.isAdminBooking && (await resumePendingBooking(identity))) return;
+    setSelectedPlanId(plans[0]?._id ?? null);
+    setGuestStep("plan");
+  };
+
+  // Only one Pending booking is allowed per guest at a time (enforced
+  // server-side — see app.api.routes.bookings.create_booking), so a guest
+  // who's already partway through checkout is meant to finish (or cancel)
+  // that one rather than start another. Called right after a guest's
+  // identity resolves (fresh OTP verify or a resumed session): if they have
+  // a Pending booking, jump straight into its payment step instead of the
+  // usual plan/details steps. Returns whether it resumed.
+  const resumePendingBooking = async (identity: VerifiedIdentity): Promise<boolean> => {
+    const bookings = await listBookings(identity.authToken);
+    const pendingBooking = bookings.find((b) => b.status === "Pending");
+    if (!pendingBooking) return false;
+
+    // Let the guest choose rather than silently dropping them into checkout
+    // for a booking they may not even remember starting. Declining deletes
+    // it outright — only one Pending booking is allowed per guest at a
+    // time, so keeping it around unconfirmed would just block a fresh one.
+    if (!window.confirm(dict.resumePendingBookingPrompt)) {
+      await deleteBooking(pendingBooking._id, identity.authToken).catch(() => {});
+      return false;
+    }
+
+    try {
+      // Fetched fresh here rather than trusting the `plans` state: this can
+      // run from the silent mount-time auto-resume effect below, whose
+      // closure was formed before that effect's own listPublicPlans() call
+      // had a chance to land, so reading the state var there would always
+      // see the pre-fetch empty array.
+      const [intent, availablePlans] = await Promise.all([
+        createPaymentIntent(pendingBooking._id, identity.authToken),
+        listPublicPlans().catch(() => plans),
+      ]);
+      const beginDates = pendingBooking.date_ranges.map((r) => parse(r.begin_date, "yyyy-MM-dd", new Date()));
+      const endDates = pendingBooking.date_ranges.map((r) => parse(r.end_date, "yyyy-MM-dd", new Date()));
+      setRange({
+        from: beginDates.reduce((min, d) => (d < min ? d : min)),
+        to: endDates.reduce((max, d) => (d > max ? d : max)),
+      });
+      setBookingId(pendingBooking._id);
+      setPaymentIntent(intent);
+      setPlans(availablePlans);
+      // Bookings don't store a plan id, only a snapshot of the cancellation
+      // policy they were made under — match it back to a current plan so
+      // the rate shows as selected if the guest goes Back to the plan step,
+      // and so the header price can resolve instead of spinning forever
+      // with no plan selected.
+      const matchedPlan = availablePlans.find(
+        (p) => p.cancellation_policy.name === pendingBooking.cancellation_policy.name
+      );
+      setSelectedPlanId(matchedPlan?._id ?? null);
+      setGuestStep("payment");
+      return true;
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        // Another guest's payment claimed these dates while this one sat
+        // Pending — the backend has already deleted it, so there's nothing
+        // left to resume into. Fall through to a fresh booking flow.
+        window.alert(err.message);
+        return false;
+      }
+      throw err;
+    }
+  };
+
+  // Shared by resumeFromSession and the mount-time pending-booking check
+  // below: confirms a stored session's bearer token is still accepted
+  // server-side and resolves it to a full guest profile. Returns null if
+  // the token's rejected/expired, or if verification was completed last
+  // time but registration was abandoned before a guest profile existed —
+  // callers fall back to a fresh OTP flow in that case, which re-resolves
+  // subject_type/guestId and pre-fills correctly if a guest exists by now.
+  const resolveSessionIdentity = async (
+    session: NonNullable<ReturnType<typeof readGuestSession>>
+  ): Promise<VerifiedIdentity | null> => {
+    await verifyToken(session.token);
+    if (!session.guestId) return null;
+    const guest = await getGuest(session.guestId, session.token);
+    return {
+      authToken: session.token,
+      expiresAt: session.expiresAt,
+      guestId: guest._id,
+      guestMode: "update",
+      isAdminBooking: false,
+      guestForm: guestToForm(guest, lang),
+    };
   };
 
   // Shared by handleBookClick: validates a stored guest session against the
@@ -607,29 +707,13 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     if (!session) return false;
     setCheckingSession(true);
     try {
-      // Confirm the stored bearer token is still accepted server-side
-      // before resuming straight into the guest-details step with it.
-      await verifyToken(session.token);
-      if (session.guestId) {
-        const guest = await getGuest(session.guestId, session.token);
-        handleVerified({
-          authToken: session.token,
-          expiresAt: session.expiresAt,
-          guestId: guest._id,
-          guestMode: "update",
-          isAdminBooking: false,
-          guestForm: guestToForm(guest, lang),
-        });
-        return true;
+      const identity = await resolveSessionIdentity(session);
+      if (!identity) {
+        clearGuestSession();
+        return false;
       }
-      // No guest profile was created last time (registration was verified
-      // but abandoned before submitting). A guest may now exist for this
-      // identity in the meantime, so don't blindly resume into a blank
-      // form under stale "create" assumptions — fall through to a fresh
-      // OTP verification, which re-resolves subject_type/guestId and
-      // pre-fills correctly if a matching guest is found.
-      clearGuestSession();
-      return false;
+      handleVerified(identity);
+      return true;
     } catch {
       // Token rejected or expired server-side — fall back to OTP below.
       clearGuestSession();
@@ -638,6 +722,34 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
       setCheckingSession(false);
     }
   };
+
+  // A guest who's already logged in (a stored session, from a previous
+  // visit) and has a Pending booking should land straight on its payment
+  // step the instant the page loads — not only once they pick dates and
+  // click Book, which is the click-triggered case resumeFromSession (via
+  // handleBookClick) covers. Silent: a missing/expired session, an
+  // admin-booking session (see the isAdminBooking check inside
+  // handleVerified above — this mirrors it), or simply no pending booking
+  // all leave the widget in its normal idle state.
+  useEffect(() => {
+    if (window.sessionStorage.getItem(LOCALE_SWITCH_RESUME_KEY)) return; // handled below instead
+    const session = readGuestSession();
+    if (!session || session.isAdminBooking) return;
+    (async () => {
+      try {
+        const identity = await resolveSessionIdentity(session);
+        if (!identity) return;
+        if (await resumePendingBooking(identity)) {
+          setVerified(identity);
+          setGuestForm(identity.guestForm);
+        }
+      } catch {
+        // Token rejected/expired — resumeFromSession will clear it and
+        // fall back to OTP once the guest actually tries to book.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Restores the date/guest-count selection and already-verified identity
   // that handleVerified stashed away just before switching to the guest's
@@ -699,6 +811,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     setFormError(null);
     setPending(false);
     setPaymentIntent(null);
+    setBookingId(null);
   };
 
   const handleDone = () => {
@@ -706,6 +819,19 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     setRange(undefined);
     setAdults(2);
     setChildren([]);
+  };
+
+  // Used by every guest-facing Cancel action (as opposed to resetBookingFlow
+  // alone, which also backs the post-success "Done" and dates-taken-conflict
+  // paths, where the booking is either legitimate or already gone
+  // server-side and must NOT be deleted here). Deletion is fire-and-forget:
+  // the UI resets immediately, and a booking that's somehow already gone
+  // (e.g. a stale double-click) is simply ignored.
+  const cancelBookingFlow = () => {
+    if (bookingId && verified) {
+      deleteBooking(bookingId, verified.authToken).catch(() => {});
+    }
+    resetBookingFlow();
   };
 
   const updateAddress = (field: keyof GuestInput["residence_address"], value: string) => {
@@ -721,7 +847,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     setGuestStep("submitting");
     try {
       const priceInBaseCurrency = nights * matchedRate.dailyRate * selectedPlan.price_ratio;
-      const booking = await createBooking(token, {
+      const bookingInput = {
         guest_id: finalGuestId,
         cancellation_policy_id: selectedPlan.cancellation_policy.id,
         currency,
@@ -732,11 +858,29 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
             price: convertCurrency(priceInBaseCurrency, matchedRate.currency, currency),
           },
         ],
-      });
+      };
+      // Idempotent: a booking already created earlier in this flow (e.g. the
+      // guest used Back from the payment step) is updated in place instead
+      // of creating a duplicate.
+      const booking = bookingId
+        ? await updateBooking(bookingId, token, bookingInput)
+        : await createBooking(token, bookingInput);
+      setBookingId(booking._id);
       const intent = await createPaymentIntent(booking._id, token);
       setPaymentIntent(intent);
       setGuestStep("payment");
     } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        // The dates were taken by another guest's payment between this
+        // booking being stored (Pending) and payment being attempted — the
+        // backend has already deleted the now-invalid Pending booking, so
+        // there's nothing left to retry into; just tell the guest and close
+        // the widget instead of offering a "Try again" that would 404.
+        window.alert(err.message);
+        fetchAvailability();
+        handleDone();
+        return;
+      }
       setFormError(err instanceof ApiError ? err.message : String(err));
       setGuestStep("error");
     }
@@ -965,6 +1109,24 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     </div>
   );
 
+  /* ── Checkin / checkout / adults / children, display-only summary
+     shown across every step of the extended (post rate-selection) flow ── */
+  const bookingDataSummary = range?.from && (
+    <div className="flex flex-nowrap items-start gap-3 overflow-x-auto pb-0.5">
+      <div className="flex items-start gap-2 shrink-0">
+        <StaticField label={dict.checkIn} value={checkInText} />
+        <div className="flex flex-col items-center shrink-0">
+          <span className="invisible text-xs">&nbsp;</span>
+          <span className="text-gray-300 dark:text-gray-600 text-lg leading-5 select-none">→</span>
+        </div>
+        <StaticField label={dict.checkOut} value={checkOutText} />
+      </div>
+
+      <StaticField className="ml-6 sm:ml-8" label={dict.adults} value={String(adults)} />
+      <StaticField label={dict.children} value={String(children.length)} />
+    </div>
+  );
+
   return (
     <>
       {/* Only a desktop concept — on mobile extended mode is inline page
@@ -1119,6 +1281,13 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
             </>
           ) : (
             <>
+              {bookingDataSummary && (
+                <>
+                  {bookingDataSummary}
+                  <div className="border-t border-gray-100 dark:border-gray-700 my-5" />
+                </>
+              )}
+
               {guestStep === "plan" && verified && range?.from && (
                 <div className="space-y-5">
                   <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
@@ -1215,7 +1384,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                   <div className="flex gap-3">
                     <button
                       type="button"
-                      onClick={resetBookingFlow}
+                      onClick={cancelBookingFlow}
                       className="flex-1 text-gray-600 dark:text-gray-300 font-semibold py-4 rounded-xl text-base transition-all border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-[0.98] cursor-pointer"
                     >
                       {dict.cancel}
@@ -1235,56 +1404,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
 
               {guestStep === "form" && guestForm && verified && (
                 <form onSubmit={handleGuestFormSubmit} className="space-y-5">
-                  {/* ── Checkin / checkout / adults / children, one row ── */}
-                  <div className="flex flex-wrap items-end gap-3">
-                    <section ref={dateRef} className="relative flex items-end gap-2">
-                      <DateField
-                        label={dict.checkIn}
-                        value={checkInText}
-                        onClick={toggleCalendar}
-                        active={calendarOpen}
-                        filled={!!range?.from}
-                        openCalendarLabel={dict.openCalendar}
-                      />
-                      <span className="pb-[11px] text-gray-300 dark:text-gray-600 text-lg select-none">→</span>
-                      <DateField
-                        label={dict.checkOut}
-                        value={checkOutText}
-                        onClick={toggleCalendar}
-                        active={calendarOpen}
-                        filled={!!range?.to}
-                        openCalendarLabel={dict.openCalendar}
-                      />
-                    </section>
-
-                    <div className="min-w-[92px]">
-                      <label className="block text-xs font-medium text-gray-400 dark:text-gray-500 mb-1">{dict.adults}</label>
-                      <Counter
-                        value={adults}
-                        min={1}
-                        max={5}
-                        onDecrement={() => setAdults(adults - 1)}
-                        onIncrement={() => setAdults(adults + 1)}
-                      />
-                    </div>
-
-                    <div className="min-w-[92px]">
-                      <label className="block text-xs font-medium text-gray-400 dark:text-gray-500 mb-1">{dict.children}</label>
-                      <Counter
-                        value={children.length}
-                        min={0}
-                        max={4}
-                        onDecrement={removeChild}
-                        onIncrement={addChild}
-                      />
-                    </div>
-
-                    <div className="w-full">{dateAndGuestCalendar}</div>
-                  </div>
-
                   {childAgesBlock}
-
-                  <div className="border-t border-gray-100 dark:border-gray-700" />
 
                   {/* ── Guest details ─────────────────────────────── */}
                   <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
@@ -1371,12 +1491,12 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                       className="flex-1 text-white font-semibold py-4 rounded-xl text-base transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                       style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
                     >
-                      {dict.bookNow}
+                      {dict.modal.next}
                     </button>
                   </div>
                   <button
                     type="button"
-                    onClick={resetBookingFlow}
+                    onClick={cancelBookingFlow}
                     className="block w-full text-center text-xs text-gray-400 dark:text-gray-500 hover:text-teal-700 dark:hover:text-teal-400 cursor-pointer"
                   >
                     {dict.cancel}
@@ -1396,6 +1516,10 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                   guestName={`${guestForm.first_name} ${guestForm.family_name}`.trim()}
                   guestEmail={guestForm.email}
                   onSuccess={() => setGuestStep("success")}
+                  onBack={() => setGuestStep("form")}
+                  backLabel={dict.back}
+                  onCancel={cancelBookingFlow}
+                  cancelLabel={dict.cancel}
                 />
               )}
 
@@ -1426,7 +1550,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                   </button>
                   <button
                     type="button"
-                    onClick={resetBookingFlow}
+                    onClick={cancelBookingFlow}
                     className="block w-full text-center text-xs text-gray-400 dark:text-gray-500 hover:text-teal-700 dark:hover:text-teal-400 cursor-pointer"
                   >
                     {dict.cancel}
@@ -1493,6 +1617,24 @@ function DateField({
           <CalendarIcon />
         </span>
       </button>
+    </div>
+  );
+}
+
+/* ── StaticField (plain-text display value, not interactive) ── */
+function StaticField({
+  label,
+  value,
+  className = "",
+}: {
+  label: string;
+  value: string;
+  className?: string;
+}) {
+  return (
+    <div className={`shrink-0 ${className}`}>
+      <p className="text-xs font-medium text-gray-400 dark:text-gray-500 whitespace-nowrap">{label}</p>
+      <p className="text-sm font-medium text-gray-800 dark:text-gray-100 whitespace-nowrap">{value}</p>
     </div>
   );
 }

@@ -91,6 +91,7 @@
     "cancel": "Abbrechen",
     "back": "Zurück",
     "noCharge": "Noch keine Abbuchung — Sie prüfen alles vor der Bestätigung",
+    "resumePendingBookingPrompt": "Sie haben eine laufende Buchung. Möchten Sie sie fortsetzen, um die Zahlung abzuschließen? Bei „Abbrechen“ wird sie gelöscht.",
     "modal": {
       "close": "Schließen",
       "identifierTitle": "Geben Sie Ihre Kontaktdaten ein",
@@ -146,7 +147,7 @@
         "payTitle": "Zahlung bestätigen",
         "chargeSummary": "Ihnen werden jetzt {amount} berechnet — {percent} % des Gesamtbetrags von {total} — gemäß Ihrer Stornierungsbedingungen.",
         "payButton": "Jetzt bezahlen",
-        "verifyButton": "Karte verifizieren",
+        "verifyButton": "Buchen",
         "processing": "Wird verarbeitet…",
         "cardholderNameLabel": "Name des Karteninhabers",
         "cardholderNamePlaceholder": "Name auf der Karte",

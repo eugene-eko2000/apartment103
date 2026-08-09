@@ -48,6 +48,7 @@ class TestReconcileBookingPayments:
         booking = await Booking.get(PydanticObjectId(booking_id))
         booking.stripe_payment_method_id = "pm_test"
         booking.payment_status = "card_verified"
+        booking.status = "Active"
         await booking.save()
 
         calls = []
@@ -82,6 +83,9 @@ class TestReconcileBookingPayments:
     async def test_skips_booking_without_saved_card(self, monkeypatch, client, guest, guest_headers):
         policy = await _flat_fee_policy(0.5)
         booking_id = await _create_booking(client, guest, policy, guest_headers, price=1000.0)
+        booking = await Booking.get(PydanticObjectId(booking_id))
+        booking.status = "Active"
+        await booking.save()
 
         def fail_if_called(*args, **kwargs):
             raise AssertionError("should not attempt to charge a booking with no saved card")
@@ -100,6 +104,7 @@ class TestReconcileBookingPayments:
         booking.stripe_payment_method_id = "pm_test"
         booking.amount_charged = 500.0  # already equals the accrued 50% for this flat policy
         booking.payment_status = "partially_charged"
+        booking.status = "Active"
         await booking.save()
 
         def fail_if_called(*args, **kwargs):
@@ -115,6 +120,7 @@ class TestReconcileBookingPayments:
         booking = await Booking.get(PydanticObjectId(booking_id))
         booking.stripe_payment_method_id = "pm_test"
         booking.payment_status = "card_verified"
+        booking.status = "Active"
         await booking.save()
 
         async def fake_get_or_create_customer(guest_arg):

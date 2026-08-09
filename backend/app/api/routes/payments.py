@@ -11,6 +11,7 @@ from app.models.booking import Booking, BookingCharge, BookingWebhookEvent
 from app.models.payment_event import PaymentEvent
 from app.schemas.payment import PaymentIntentResponse
 from app.services import booking_emails, stripe_service
+from app.services.availability import find_overlapping_ranges
 from app.services.charge_schedule import outstanding_amount, sync_charge_schedule_status
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,19 @@ async def create_payment_intent(
     if booking.payment_status != "card_verification_pending":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Payment has already been set up for this booking"
+        )
+
+    # A Pending booking doesn't block the calendar, so another guest may have
+    # since paid for (and gone Active on) an overlapping range. Catch that
+    # here, right before money moves, rather than letting it surface only
+    # once the Stripe confirmation itself fails.
+    overlapping = await find_overlapping_ranges(booking)
+    if overlapping:
+        await booking.delete()
+        dates = ", ".join(f"{r.begin_date.isoformat()} to {r.end_date.isoformat()}" for r in overlapping)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Another booking was made for dates {dates}. Please book different dates.",
         )
 
     # fetch_links=True in _get_booking_or_404 resolves booking.guest to a
@@ -113,9 +127,13 @@ async def retry_payment(
 # they belong to. Anything else is still logged (see stripe_webhook below)
 # but doesn't change payment_status/charges.
 #
+# Both success paths below also flip booking.status from "Pending" to
+# "Active" — that's the moment a booking starts blocking the public
+# calendar (see app.api.routes.bookings.list_public_booked_date_ranges).
+#
 # Verification (SetupIntent path, free-cancellation bookings):
-#   setup_intent.succeeded    -> payment_status = "card_verified", store the
-#                                saved payment_method.
+#   setup_intent.succeeded    -> payment_status = "card_verified", status =
+#                                "Active", store the saved payment_method.
 #   setup_intent.setup_failed -> record last_payment_error; payment_status is
 #                                left as "card_verification_pending" since
 #                                nothing was charged and the guest can just
@@ -142,6 +160,7 @@ async def _send_email_safely(coro) -> None:
 async def _apply_setup_succeeded(booking: Booking, setup_intent: dict) -> None:
     booking.stripe_payment_method_id = setup_intent["payment_method"]
     booking.payment_status = "card_verified"
+    booking.status = "Active"
     await booking.save()
     await _send_email_safely(booking_emails.send_booking_confirmation_email(booking))
 
@@ -170,6 +189,7 @@ async def _apply_successful_charge(booking: Booking, payment_intent: dict) -> No
     )
     booking.amount_charged += amount
     booking.last_payment_error = None
+    booking.status = "Active"
     booking.payment_status = (
         "fully_charged"
         if booking.amount_charged >= booking.total_price - _FULLY_CHARGED_EPSILON

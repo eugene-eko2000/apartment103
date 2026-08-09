@@ -29,6 +29,10 @@ export default function PaymentStep({
   guestName,
   guestEmail,
   onSuccess,
+  onBack,
+  backLabel,
+  onCancel,
+  cancelLabel,
 }: {
   intent: PaymentIntentResponse;
   dict: PaymentStepDict;
@@ -36,10 +40,24 @@ export default function PaymentStep({
   guestName: string;
   guestEmail: string;
   onSuccess: () => void;
+  onBack: () => void;
+  backLabel: string;
+  onCancel: () => void;
+  cancelLabel: string;
 }) {
   return (
     <Elements stripe={getStripe()} options={{ locale: lang }}>
-      <PaymentForm intent={intent} dict={dict} guestName={guestName} guestEmail={guestEmail} onSuccess={onSuccess} />
+      <PaymentForm
+        intent={intent}
+        dict={dict}
+        guestName={guestName}
+        guestEmail={guestEmail}
+        onSuccess={onSuccess}
+        onBack={onBack}
+        backLabel={backLabel}
+        onCancel={onCancel}
+        cancelLabel={cancelLabel}
+      />
     </Elements>
   );
 }
@@ -50,12 +68,20 @@ function PaymentForm({
   guestName,
   guestEmail,
   onSuccess,
+  onBack,
+  backLabel,
+  onCancel,
+  cancelLabel,
 }: {
   intent: PaymentIntentResponse;
   dict: PaymentStepDict;
   guestName: string;
   guestEmail: string;
   onSuccess: () => void;
+  onBack: () => void;
+  backLabel: string;
+  onCancel: () => void;
+  cancelLabel: string;
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -91,6 +117,8 @@ function PaymentForm({
 
   const cardElementOptions: StripeCardElementOptions = {
     hidePostalCode: true,
+    disabled: submitting,
+    disableLink: true,
     style: {
       base: {
         fontSize: "14px",
@@ -144,14 +172,32 @@ function PaymentForm({
       </div>
 
       {errorMessage && <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>}
+      <div className="flex gap-3">
+        <button
+          type="button"
+          disabled={submitting}
+          onClick={onBack}
+          className="flex-1 text-gray-600 dark:text-gray-300 font-semibold py-4 rounded-xl text-base transition-all border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+        >
+          {backLabel}
+        </button>
+        <button
+          type="button"
+          disabled={!stripe || !elements || submitting || !cardComplete || !cardholderName.trim()}
+          onClick={handleSubmit}
+          className="flex-1 text-white font-semibold py-4 rounded-xl text-base transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
+        >
+          {submitting ? dict.processing : intent.mode === "setup" ? dict.verifyButton : dict.payButton}
+        </button>
+      </div>
       <button
         type="button"
-        disabled={!stripe || !elements || submitting || !cardComplete || !cardholderName.trim()}
-        onClick={handleSubmit}
-        className="w-full text-white font-semibold py-4 rounded-xl text-base transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-        style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
+        disabled={submitting}
+        onClick={onCancel}
+        className="block w-full text-center text-xs text-gray-400 dark:text-gray-500 hover:text-teal-700 dark:hover:text-teal-400 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
       >
-        {submitting ? dict.processing : intent.mode === "setup" ? dict.verifyButton : dict.payButton}
+        {cancelLabel}
       </button>
     </div>
   );

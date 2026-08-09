@@ -1,4 +1,7 @@
 import pytest
+from beanie import PydanticObjectId
+
+from app.models.booking import Booking
 
 pytestmark = pytest.mark.anyio
 
@@ -29,6 +32,7 @@ class TestCreateBooking:
         body = response.json()
         assert body["currency"] == "CHF"
         assert body["cancellation_policy"]["name"] == cancellation_policy.name
+        assert body["status"] == "Pending"
 
     async def test_guest_can_create_booking_for_self(
         self, client, guest, cancellation_policy, guest_headers
@@ -72,16 +76,71 @@ class TestCreateBooking:
         )
         assert response.status_code == 401
 
+    async def test_rejects_second_pending_booking_for_same_guest(
+        self, client, guest, cancellation_policy, guest_headers
+    ):
+        first = await client.post(
+            "/bookings",
+            json=_booking_payload(guest.id, cancellation_policy.id),
+            headers=guest_headers,
+        )
+        assert first.status_code == 201
+
+        second = await client.post(
+            "/bookings",
+            json=_booking_payload(guest.id, cancellation_policy.id),
+            headers=guest_headers,
+        )
+        assert second.status_code == 409
+
+    async def test_allows_new_pending_booking_once_previous_is_cancelled(
+        self, client, guest, cancellation_policy, guest_headers
+    ):
+        first = await client.post(
+            "/bookings",
+            json=_booking_payload(guest.id, cancellation_policy.id),
+            headers=guest_headers,
+        )
+        booking_id = first.json()["_id"]
+        await client.post(f"/bookings/{booking_id}/cancel", headers=guest_headers)
+
+        second = await client.post(
+            "/bookings",
+            json=_booking_payload(guest.id, cancellation_policy.id),
+            headers=guest_headers,
+        )
+        assert second.status_code == 201
+
 
 class TestListPublicBookedDateRanges:
-    async def test_lists_date_ranges_without_authentication(
+    async def test_excludes_pending_bookings(
         self, client, guest, cancellation_policy, admin_headers
     ):
+        # A booking that's stored but not yet paid/verified (Pending) must
+        # not block the calendar, so a second guest can still reach checkout
+        # for the same dates — see app.services.availability for how that
+        # race is then resolved.
         await client.post(
             "/bookings",
             json=_booking_payload(guest.id, cancellation_policy.id),
             headers=admin_headers,
         )
+
+        response = await client.get("/bookings/public/date-ranges")
+        assert response.status_code == 200
+        assert response.json() == []
+
+    async def test_lists_date_ranges_for_active_bookings(
+        self, client, guest, cancellation_policy, admin_headers
+    ):
+        create_response = await client.post(
+            "/bookings",
+            json=_booking_payload(guest.id, cancellation_policy.id),
+            headers=admin_headers,
+        )
+        booking = await Booking.get(PydanticObjectId(create_response.json()["_id"]))
+        booking.status = "Active"
+        await booking.save()
 
         response = await client.get("/bookings/public/date-ranges")
         assert response.status_code == 200
@@ -362,3 +421,35 @@ class TestDeleteBooking:
     async def test_returns_404_for_unknown_id(self, client, admin_headers):
         response = await client.delete("/bookings/000000000000000000000000", headers=admin_headers)
         assert response.status_code == 404
+
+    async def test_guest_cannot_delete_active_booking_directly(
+        self, client, guest, cancellation_policy, guest_headers
+    ):
+        create_response = await client.post(
+            "/bookings",
+            json=_booking_payload(guest.id, cancellation_policy.id),
+            headers=guest_headers,
+        )
+        booking_id = create_response.json()["_id"]
+        booking = await Booking.get(PydanticObjectId(booking_id))
+        booking.status = "Active"
+        await booking.save()
+
+        response = await client.delete(f"/bookings/{booking_id}", headers=guest_headers)
+        assert response.status_code == 400
+
+    async def test_admin_can_delete_active_booking(
+        self, client, guest, cancellation_policy, admin_headers
+    ):
+        create_response = await client.post(
+            "/bookings",
+            json=_booking_payload(guest.id, cancellation_policy.id),
+            headers=admin_headers,
+        )
+        booking_id = create_response.json()["_id"]
+        booking = await Booking.get(PydanticObjectId(booking_id))
+        booking.status = "Active"
+        await booking.save()
+
+        response = await client.delete(f"/bookings/{booking_id}", headers=admin_headers)
+        assert response.status_code == 204

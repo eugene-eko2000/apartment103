@@ -121,6 +121,47 @@ class TestCreatePaymentIntent:
         )
         assert response.status_code == 404
 
+    async def test_rejects_and_deletes_booking_colliding_with_active_booking(
+        self, client, guest, other_guest, cancellation_policy, guest_headers, other_guest_headers
+    ):
+        # An Active booking already occupies these dates (e.g. another guest
+        # paid first); this Pending one was allowed to be stored (Pending
+        # bookings don't block the calendar) but must be rejected, and
+        # removed, the moment it tries to actually pay.
+        occupying_id = await _create_booking(client, other_guest, cancellation_policy, other_guest_headers)
+        occupying = await Booking.get(PydanticObjectId(occupying_id))
+        occupying.status = "Active"
+        await occupying.save()
+
+        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers)
+
+        response = await client.post(f"/bookings/{booking_id}/payment/intent", headers=guest_headers)
+        assert response.status_code == 409
+        assert _future(200) in response.json()["detail"]
+
+        follow_up = await client.get(f"/bookings/{booking_id}", headers=guest_headers)
+        assert follow_up.status_code == 404
+
+    async def test_ignores_other_pending_bookings_for_the_same_dates(
+        self, monkeypatch, client, guest, other_guest, cancellation_policy, guest_headers, other_guest_headers
+    ):
+        # Another guest also has a Pending (unpaid) booking for the same
+        # dates — that alone must not block this guest from paying; only an
+        # Active booking should.
+        await _create_booking(client, other_guest, cancellation_policy, other_guest_headers)
+        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers)
+
+        async def fake_get_or_create_customer(guest_arg):
+            return "cus_test"
+
+        async def fake_create_setup_intent(*, customer_id, metadata):
+            return SimpleNamespace(client_secret="seti_secret_test")
+
+        monkeypatch.setattr(stripe_service, "get_or_create_customer", fake_get_or_create_customer)
+        monkeypatch.setattr(stripe_service, "create_setup_intent", fake_create_setup_intent)
+        response = await client.post(f"/bookings/{booking_id}/payment/intent", headers=guest_headers)
+        assert response.status_code == 200
+
 
 class TestRetryPayment:
     async def test_retries_when_requires_action(self, monkeypatch, client, guest, guest_headers):
@@ -204,6 +245,7 @@ class TestStripeWebhook:
         booking = await Booking.get(PydanticObjectId(booking_id))
         assert booking.payment_status == "card_verified"
         assert booking.stripe_payment_method_id == "pm_abc"
+        assert booking.status == "Active"
 
     async def test_payment_intent_succeeded_records_charge(
         self, monkeypatch, client, guest, cancellation_policy, guest_headers
@@ -230,6 +272,7 @@ class TestStripeWebhook:
         booking = await Booking.get(PydanticObjectId(booking_id))
         assert booking.amount_charged == pytest.approx(1000.0)
         assert booking.payment_status == "fully_charged"
+        assert booking.status == "Active"
         assert booking.stripe_payment_method_id == "pm_xyz"
         assert len(booking.charges) == 1
         assert booking.charges[0].stripe_payment_intent_id == "pi_1"
