@@ -169,6 +169,7 @@
     "login": "Connexion",
     "accountMenu": "Menu du compte",
     "myBookings": "Mes réservations",
+    "profile": "Profil",
     "logout": "Déconnexion",
     "loginModal": {
       "close": "Fermer",
@@ -202,6 +203,28 @@
       "chargeNotice": "Vous serez facturé {amount} du prix total.",
       "confirmCancel": "Annuler la réservation",
       "keepBooking": "Ne pas annuler"
+    },
+    "profileModal": {
+      "close": "Fermer",
+      "title": "Mon profil",
+      "loading": "Chargement de votre profil…",
+      "loggedOut": "Veuillez vous connecter pour voir votre profil.",
+      "noProfile": "Terminez une réservation pour créer votre profil.",
+      "firstName": "Prénom",
+      "familyName": "Nom",
+      "email": "E-mail",
+      "phoneNumber": "Numéro de téléphone",
+      "streetAddress": "Adresse",
+      "zip": "Code postal",
+      "city": "Ville",
+      "stateOptional": "État / Région (facultatif)",
+      "country": "Pays",
+      "preferredLanguage": "Langue préférée",
+      "preferredCurrency": "Devise préférée",
+      "noPreference": "Aucune préférence",
+      "save": "Enregistrer les modifications",
+      "saving": "Enregistrement…",
+      "saved": "Votre profil a été mis à jour."
     }
   },
   "amenities": {
@@ -234,19 +257,73 @@
     "description": "Ce vaste appartement comprend un salon, deux chambres séparées et une salle de bains avec baignoire et articles de toilette gratuits. La cuisine entièrement équipée dispose d'un réfrigérateur, d'un lave-vaisselle, d'ustensiles de cuisine et d'un four à micro-ondes. Doté d'un balcon avec vue sur le lac, cet appartement propose également une bouilloire thé/café et une TV à écran plat. Le logement propose 5 lits.",
     "kitchen": {
       "title": "Dans votre cuisine privée",
-      "items": ["Réfrigérateur", "Machine à café", "Four à micro-ondes", "Ustensiles de cuisine", "Bouilloire électrique", "Lave-vaisselle", "Sèche-linge", "Grille-pain", "Table à manger"]
+      "items": [
+        "Réfrigérateur",
+        "Machine à café",
+        "Four à micro-ondes",
+        "Ustensiles de cuisine",
+        "Bouilloire électrique",
+        "Lave-vaisselle",
+        "Sèche-linge",
+        "Grille-pain",
+        "Table à manger"
+      ]
     },
     "bathroom": {
       "title": "Dans votre salle de bains privée",
-      "items": ["Baignoire", "Articles de toilette gratuits", "Douche", "Toilettes", "Serviettes", "Sèche-cheveux", "Papier toilette"]
+      "items": [
+        "Baignoire",
+        "Articles de toilette gratuits",
+        "Douche",
+        "Toilettes",
+        "Serviettes",
+        "Sèche-cheveux",
+        "Papier toilette"
+      ]
     },
     "view": {
       "title": "Vue",
-      "items": ["Vue sur le lac", "Vue sur le jardin", "Vue sur la montagne"]
+      "items": [
+        "Vue sur le lac",
+        "Vue sur le jardin",
+        "Vue sur la montagne"
+      ]
     },
     "facilities": {
       "title": "Équipements de l'appartement",
-      "items": ["Balcon", "Cuisine", "Canapé", "Parquet ou sol en bois", "Linge de maison", "Bureau", "Coin salon", "TV", "Réfrigérateur", "Facilités de repassage", "Machine à café", "Bouilloire thé/café", "Fer à repasser", "Radio", "Four à micro-ondes", "Chauffage", "TV à écran plat", "Ustensiles de cuisine", "Ventilateur", "Lecteur DVD", "Bouilloire électrique", "Coin repas extérieur", "Lave-vaisselle", "Réveil", "Sèche-linge", "Armoire ou penderie", "Grille-pain", "Coin repas", "Table à manger", "Appartement privé dans l'immeuble", "Canapé-lit"]
+      "items": [
+        "Balcon",
+        "Cuisine",
+        "Canapé",
+        "Parquet ou sol en bois",
+        "Linge de maison",
+        "Bureau",
+        "Coin salon",
+        "TV",
+        "Réfrigérateur",
+        "Facilités de repassage",
+        "Machine à café",
+        "Bouilloire thé/café",
+        "Fer à repasser",
+        "Radio",
+        "Four à micro-ondes",
+        "Chauffage",
+        "TV à écran plat",
+        "Ustensiles de cuisine",
+        "Ventilateur",
+        "Lecteur DVD",
+        "Bouilloire électrique",
+        "Coin repas extérieur",
+        "Lave-vaisselle",
+        "Réveil",
+        "Sèche-linge",
+        "Armoire ou penderie",
+        "Grille-pain",
+        "Coin repas",
+        "Table à manger",
+        "Appartement privé dans l'immeuble",
+        "Canapé-lit"
+      ]
     },
     "smoking": {
       "title": "Fumeur",

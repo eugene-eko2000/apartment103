@@ -7,6 +7,7 @@ import { CurrencyProvider } from "@/lib/currency-context";
 import { CookieConsentProvider } from "@/lib/cookie-consent-context";
 import { ThemeProvider, THEME_INIT_SCRIPT } from "@/lib/theme-context";
 import CookieConsentBanner from "@/components/CookieConsentBanner";
+import GuestPreferenceSync from "@/components/GuestPreferenceSync";
 import { getDictionary, hasLocale } from "./dictionaries";
 
 const geistSans = Geist({
@@ -63,7 +64,10 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col">
         <ThemeProvider>
           <CookieConsentProvider>
-            <CurrencyProvider>{children}</CurrencyProvider>
+            <CurrencyProvider>
+              <GuestPreferenceSync />
+              {children}
+            </CurrencyProvider>
             <CookieConsentBanner dict={dict.cookieConsent} />
           </CookieConsentProvider>
         </ThemeProvider>

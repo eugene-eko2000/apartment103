@@ -110,7 +110,7 @@ export interface BookingDict {
 export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang: Locale }) {
   const today = new Date();
   const dateFnsLocale = DATE_FNS_LOCALES[lang];
-  const { currency } = useCurrency();
+  const { currency, setCurrency } = useCurrency();
   const switchLocale = useLocaleSwitch();
   const [range, setRange] = useState<DateRange | undefined>();
   const [hoverDate, setHoverDate] = useState<Date | undefined>(undefined);
@@ -569,22 +569,25 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   // safer and correct.
   const handleVerified = async (identity: VerifiedIdentity, animate = true) => {
     const preferredLanguage = identity.guestForm.preferred_language;
-    if (preferredLanguage && preferredLanguage !== lang && range?.from && range?.to) {
-      // The guest's saved language differs from the page they're on.
-      // switchLocale navigates to a new locale route, which remounts this
-      // whole widget — so rather than opening the extended guest-details
-      // view here and having it immediately collapse away underneath the
-      // navigation (then reopen on the new page once resumed), stash the
-      // already-verified identity plus the date/guest-count selection and
-      // switch first. The mount effect below restores everything and opens
-      // the widget once, directly on the correct locale — a single
-      // transition instead of open → close → reopen.
+    if (preferredLanguage && preferredLanguage !== lang) {
+      // The guest's saved language differs from the page they're on — their
+      // profile is authoritative, so always switch, whether or not dates are
+      // selected yet. switchLocale navigates to a new locale route, which
+      // remounts this whole widget — so rather than opening the extended
+      // guest-details view here and having it immediately collapse away
+      // underneath the navigation (then reopen on the new page once
+      // resumed), stash the already-verified identity plus the date/guest-
+      // count selection and switch first. The mount effect below restores
+      // everything and opens the widget once, directly on the correct
+      // locale — a single transition instead of open → close → reopen.
+      // checkIn/checkOut are omitted when no dates are selected yet — the
+      // resume effect leaves the range empty in that case.
       window.sessionStorage.setItem(
         LOCALE_SWITCH_RESUME_KEY,
         JSON.stringify({
           identity,
-          checkIn: format(range.from, "yyyy-MM-dd"),
-          checkOut: format(range.to, "yyyy-MM-dd"),
+          checkIn: range?.from ? format(range.from, "yyyy-MM-dd") : null,
+          checkOut: range?.to ? format(range.to, "yyyy-MM-dd") : null,
           adults,
           children: children.map((c) => c.age),
         })
@@ -767,15 +770,17 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     try {
       const resume = JSON.parse(raw) as {
         identity: VerifiedIdentity;
-        checkIn: string;
-        checkOut: string;
+        checkIn: string | null;
+        checkOut: string | null;
         adults: number;
         children: (number | null)[];
       };
-      setRange({
-        from: parse(resume.checkIn, "yyyy-MM-dd", new Date()),
-        to: parse(resume.checkOut, "yyyy-MM-dd", new Date()),
-      });
+      if (resume.checkIn && resume.checkOut) {
+        setRange({
+          from: parse(resume.checkIn, "yyyy-MM-dd", new Date()),
+          to: parse(resume.checkOut, "yyyy-MM-dd", new Date()),
+        });
+      }
       setAdults(resume.adults);
       setChildren(resume.children.map((age) => ({ age })));
       handleVerified(resume.identity, false);
@@ -913,9 +918,20 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
           isAdminBooking: false,
           expiresAt: Date.now() + result.expires_in * 1000,
         });
+        // Reflects a currency change from this step immediately (e.g. in the
+        // price shown on the payment step that follows). Language isn't
+        // switched here — that navigates away from the page mid-checkout,
+        // right as booking/payment creation is starting — it's applied on
+        // the guest's next visit or login instead (see handleVerified).
+        if (guestForm.preferred_currency && guestForm.preferred_currency !== currency) {
+          setCurrency(guestForm.preferred_currency);
+        }
         await submitBooking(result.guest._id, result.access_token);
       } else if (verified.guestMode === "update" && verified.guestId) {
         await updateGuest(verified.guestId, verified.authToken, guestForm);
+        if (guestForm.preferred_currency && guestForm.preferred_currency !== currency) {
+          setCurrency(guestForm.preferred_currency);
+        }
         await submitBooking(verified.guestId, verified.authToken);
       }
     } catch (err) {

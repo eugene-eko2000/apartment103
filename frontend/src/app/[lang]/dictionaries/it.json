@@ -169,6 +169,7 @@
     "login": "Accedi",
     "accountMenu": "Menu account",
     "myBookings": "Le mie prenotazioni",
+    "profile": "Profilo",
     "logout": "Esci",
     "loginModal": {
       "close": "Chiudi",
@@ -202,6 +203,28 @@
       "chargeNotice": "Ti verrà addebitato {amount} del prezzo totale.",
       "confirmCancel": "Cancella prenotazione",
       "keepBooking": "Non cancellare"
+    },
+    "profileModal": {
+      "close": "Chiudi",
+      "title": "Il mio profilo",
+      "loading": "Caricamento del tuo profilo…",
+      "loggedOut": "Accedi per vedere il tuo profilo.",
+      "noProfile": "Completa una prenotazione per creare il tuo profilo.",
+      "firstName": "Nome",
+      "familyName": "Cognome",
+      "email": "Email",
+      "phoneNumber": "Numero di telefono",
+      "streetAddress": "Indirizzo",
+      "zip": "CAP",
+      "city": "Città",
+      "stateOptional": "Stato / Regione (facoltativo)",
+      "country": "Paese",
+      "preferredLanguage": "Lingua preferita",
+      "preferredCurrency": "Valuta preferita",
+      "noPreference": "Nessuna preferenza",
+      "save": "Salva modifiche",
+      "saving": "Salvataggio…",
+      "saved": "Il tuo profilo è stato aggiornato."
     }
   },
   "amenities": {
@@ -234,19 +257,73 @@
     "description": "Questo spazioso appartamento è composto da 1 soggiorno, 2 camere da letto separate e 1 bagno con vasca e set di cortesia gratuito. La cucina completamente attrezzata dispone di frigorifero, lavastoviglie, utensili da cucina e microonde. Dotato di un balcone con vista lago, l'appartamento offre anche una macchina per tè e caffè e una TV a schermo piatto. L'unità offre 5 posti letto.",
     "kitchen": {
       "title": "Nella tua cucina privata",
-      "items": ["Frigorifero", "Macchina da caffè", "Microonde", "Utensili da cucina", "Bollitore elettrico", "Lavastoviglie", "Asciugatrice", "Tostapane", "Tavolo da pranzo"]
+      "items": [
+        "Frigorifero",
+        "Macchina da caffè",
+        "Microonde",
+        "Utensili da cucina",
+        "Bollitore elettrico",
+        "Lavastoviglie",
+        "Asciugatrice",
+        "Tostapane",
+        "Tavolo da pranzo"
+      ]
     },
     "bathroom": {
       "title": "Nel tuo bagno privato",
-      "items": ["Vasca da bagno", "Set di cortesia gratuito", "Doccia", "WC", "Asciugamani", "Asciugacapelli", "Carta igienica"]
+      "items": [
+        "Vasca da bagno",
+        "Set di cortesia gratuito",
+        "Doccia",
+        "WC",
+        "Asciugamani",
+        "Asciugacapelli",
+        "Carta igienica"
+      ]
     },
     "view": {
       "title": "Vista",
-      "items": ["Vista lago", "Vista giardino", "Vista montagna"]
+      "items": [
+        "Vista lago",
+        "Vista giardino",
+        "Vista montagna"
+      ]
     },
     "facilities": {
       "title": "Servizi dell'appartamento",
-      "items": ["Balcone", "Cucina", "Divano", "Pavimento in legno o parquet", "Biancheria", "Scrivania", "Area soggiorno", "TV", "Frigorifero", "Servizio stireria", "Macchina da caffè", "Macchina per tè/caffè", "Ferro da stiro", "Radio", "Microonde", "Riscaldamento", "TV a schermo piatto", "Utensili da cucina", "Ventilatore", "Lettore DVD", "Bollitore elettrico", "Area pranzo esterna", "Lavastoviglie", "Sveglia", "Asciugatrice", "Armadio", "Tostapane", "Zona pranzo", "Tavolo da pranzo", "Appartamento privato nell'edificio", "Divano letto"]
+      "items": [
+        "Balcone",
+        "Cucina",
+        "Divano",
+        "Pavimento in legno o parquet",
+        "Biancheria",
+        "Scrivania",
+        "Area soggiorno",
+        "TV",
+        "Frigorifero",
+        "Servizio stireria",
+        "Macchina da caffè",
+        "Macchina per tè/caffè",
+        "Ferro da stiro",
+        "Radio",
+        "Microonde",
+        "Riscaldamento",
+        "TV a schermo piatto",
+        "Utensili da cucina",
+        "Ventilatore",
+        "Lettore DVD",
+        "Bollitore elettrico",
+        "Area pranzo esterna",
+        "Lavastoviglie",
+        "Sveglia",
+        "Asciugatrice",
+        "Armadio",
+        "Tostapane",
+        "Zona pranzo",
+        "Tavolo da pranzo",
+        "Appartamento privato nell'edificio",
+        "Divano letto"
+      ]
     },
     "smoking": {
       "title": "Fumo",

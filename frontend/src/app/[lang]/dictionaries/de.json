@@ -169,6 +169,7 @@
     "login": "Anmelden",
     "accountMenu": "Kontomenü",
     "myBookings": "Meine Buchungen",
+    "profile": "Profil",
     "logout": "Abmelden",
     "loginModal": {
       "close": "Schließen",
@@ -202,6 +203,28 @@
       "chargeNotice": "Ihnen werden {amount} des Gesamtpreises berechnet.",
       "confirmCancel": "Buchung stornieren",
       "keepBooking": "Nicht stornieren"
+    },
+    "profileModal": {
+      "close": "Schließen",
+      "title": "Mein Profil",
+      "loading": "Ihr Profil wird geladen…",
+      "loggedOut": "Bitte melden Sie sich an, um Ihr Profil zu sehen.",
+      "noProfile": "Schließen Sie eine Buchung ab, um Ihr Profil zu erstellen.",
+      "firstName": "Vorname",
+      "familyName": "Nachname",
+      "email": "E-Mail",
+      "phoneNumber": "Telefonnummer",
+      "streetAddress": "Straße und Hausnummer",
+      "zip": "Postleitzahl",
+      "city": "Ort",
+      "stateOptional": "Bundesland / Kanton (optional)",
+      "country": "Land",
+      "preferredLanguage": "Bevorzugte Sprache",
+      "preferredCurrency": "Bevorzugte Währung",
+      "noPreference": "Keine Angabe",
+      "save": "Änderungen speichern",
+      "saving": "Wird gespeichert…",
+      "saved": "Ihr Profil wurde aktualisiert."
     }
   },
   "amenities": {
@@ -234,19 +257,73 @@
     "description": "Diese geräumige Wohnung besteht aus einem Wohnzimmer, zwei separaten Schlafzimmern und einem Badezimmer mit Badewanne und kostenlosen Pflegeprodukten. Die voll ausgestattete Küche verfügt über einen Kühlschrank, einen Geschirrspüler, Kochutensilien und eine Mikrowelle. Die Wohnung bietet einen Balkon mit Seeblick sowie eine Tee- und Kaffeemaschine und einen Flachbild-TV. Die Unterkunft bietet 5 Betten.",
     "kitchen": {
       "title": "In Ihrer eigenen Küche",
-      "items": ["Kühlschrank", "Kaffeemaschine", "Mikrowelle", "Kochutensilien", "Wasserkocher", "Geschirrspüler", "Wäschetrockner", "Toaster", "Esstisch"]
+      "items": [
+        "Kühlschrank",
+        "Kaffeemaschine",
+        "Mikrowelle",
+        "Kochutensilien",
+        "Wasserkocher",
+        "Geschirrspüler",
+        "Wäschetrockner",
+        "Toaster",
+        "Esstisch"
+      ]
     },
     "bathroom": {
       "title": "In Ihrem eigenen Badezimmer",
-      "items": ["Badewanne", "Kostenlose Pflegeprodukte", "Dusche", "Toilette", "Handtücher", "Haartrockner", "Toilettenpapier"]
+      "items": [
+        "Badewanne",
+        "Kostenlose Pflegeprodukte",
+        "Dusche",
+        "Toilette",
+        "Handtücher",
+        "Haartrockner",
+        "Toilettenpapier"
+      ]
     },
     "view": {
       "title": "Aussicht",
-      "items": ["Seeblick", "Gartenblick", "Bergblick"]
+      "items": [
+        "Seeblick",
+        "Gartenblick",
+        "Bergblick"
+      ]
     },
     "facilities": {
       "title": "Ausstattung der Wohnung",
-      "items": ["Balkon", "Küche", "Sofa", "Holz- oder Parkettboden", "Bettwäsche", "Schreibtisch", "Sitzecke", "TV", "Kühlschrank", "Bügelmöglichkeiten", "Kaffeemaschine", "Tee-/Kaffeemaschine", "Bügeleisen", "Radio", "Mikrowelle", "Heizung", "Flachbild-TV", "Kochutensilien", "Ventilator", "DVD-Player", "Wasserkocher", "Essbereich im Freien", "Geschirrspüler", "Wecker", "Wäschetrockner", "Kleiderschrank", "Toaster", "Essbereich", "Esstisch", "Privatwohnung im Gebäude", "Schlafsofa"]
+      "items": [
+        "Balkon",
+        "Küche",
+        "Sofa",
+        "Holz- oder Parkettboden",
+        "Bettwäsche",
+        "Schreibtisch",
+        "Sitzecke",
+        "TV",
+        "Kühlschrank",
+        "Bügelmöglichkeiten",
+        "Kaffeemaschine",
+        "Tee-/Kaffeemaschine",
+        "Bügeleisen",
+        "Radio",
+        "Mikrowelle",
+        "Heizung",
+        "Flachbild-TV",
+        "Kochutensilien",
+        "Ventilator",
+        "DVD-Player",
+        "Wasserkocher",
+        "Essbereich im Freien",
+        "Geschirrspüler",
+        "Wecker",
+        "Wäschetrockner",
+        "Kleiderschrank",
+        "Toaster",
+        "Essbereich",
+        "Esstisch",
+        "Privatwohnung im Gebäude",
+        "Schlafsofa"
+      ]
     },
     "smoking": {
       "title": "Rauchen",

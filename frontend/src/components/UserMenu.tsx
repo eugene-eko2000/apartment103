@@ -4,14 +4,17 @@ import { useEffect, useRef, useState } from "react";
 import { clearGuestSession, onGuestSessionChange, readGuestSession } from "@/lib/guest-auth";
 import LoginModal, { type LoginModalDict } from "@/components/LoginModal";
 import MyBookingsModal, { type MyBookingsDict } from "@/components/MyBookingsModal";
+import ProfileModal, { type ProfileModalDict } from "@/components/ProfileModal";
 
 export interface UserMenuDict {
   login: string;
   accountMenu: string;
   myBookings: string;
+  profile: string;
   logout: string;
   loginModal: LoginModalDict;
   myBookingsModal: MyBookingsDict;
+  profileModal: ProfileModalDict;
 }
 
 export default function UserMenu({ dict }: { dict: UserMenuDict }) {
@@ -20,6 +23,7 @@ export default function UserMenu({ dict }: { dict: UserMenuDict }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [myBookingsOpen, setMyBookingsOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -88,6 +92,16 @@ export default function UserMenu({ dict }: { dict: UserMenuDict }) {
               type="button"
               onClick={() => {
                 setMenuOpen(false);
+                setProfileOpen(true);
+              }}
+              className="w-full text-left px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+            >
+              {dict.profile}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMenuOpen(false);
                 setMyBookingsOpen(true);
               }}
               className="w-full text-left px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
@@ -111,6 +125,7 @@ export default function UserMenu({ dict }: { dict: UserMenuDict }) {
       {myBookingsOpen && (
         <MyBookingsModal dict={dict.myBookingsModal} onClose={() => setMyBookingsOpen(false)} />
       )}
+      {profileOpen && <ProfileModal dict={dict.profileModal} onClose={() => setProfileOpen(false)} />}
     </div>
   );
 }
