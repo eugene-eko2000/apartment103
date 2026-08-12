@@ -43,6 +43,7 @@ export interface BookingModalDict {
   submitting: string;
   successTitle: string;
   successMessage: string;
+  emailNotice: string;
   done: string;
   errorTitle: string;
   tryAgain: string;

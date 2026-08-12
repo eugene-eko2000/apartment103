@@ -1525,6 +1525,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                   <p className="text-sm text-gray-700 dark:text-gray-300">
                     {dict.modal.successMessage.replace("{name}", guestForm?.first_name ?? "")}
                   </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{dict.modal.emailNotice}</p>
                   <button
                     type="button"
                     onClick={handleDone}

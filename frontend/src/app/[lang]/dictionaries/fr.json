@@ -129,6 +129,7 @@
       "submitting": "Envoi en cours…",
       "successTitle": "Réservation confirmée !",
       "successMessage": "Merci, {name}. Votre séjour est réservé, nous avons hâte de vous accueillir.",
+      "emailNotice": "Une confirmation de réservation vous a été envoyée par email.",
       "done": "Terminé",
       "errorTitle": "Une erreur est survenue",
       "tryAgain": "Réessayer",

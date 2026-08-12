@@ -129,6 +129,7 @@
       "submitting": "Wird gesendet…",
       "successTitle": "Buchung bestätigt!",
       "successMessage": "Vielen Dank, {name}. Wir haben Ihren Aufenthalt reserviert und freuen uns auf Sie.",
+      "emailNotice": "Eine Buchungsbestätigung wurde an Ihre E-Mail-Adresse gesendet.",
       "done": "Fertig",
       "errorTitle": "Etwas ist schiefgelaufen",
       "tryAgain": "Erneut versuchen",

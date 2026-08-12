@@ -129,6 +129,7 @@
       "submitting": "Submitting…",
       "successTitle": "Booking confirmed!",
       "successMessage": "Thank you, {name}. We've reserved your stay and look forward to welcoming you.",
+      "emailNotice": "A booking confirmation has been sent to your email.",
       "done": "Done",
       "errorTitle": "Something went wrong",
       "tryAgain": "Try again",
