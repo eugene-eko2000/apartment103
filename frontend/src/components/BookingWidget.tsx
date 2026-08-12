@@ -923,8 +923,8 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   };
 
   const childAgesBlock = children.length > 0 && (
-    <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-xl border border-amber-100 dark:border-amber-900">
-      <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-3">
+    <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-xl border border-green-100 dark:border-green-800">
+      <p className="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wider mb-3">
         {dict.childrenAges}
       </p>
       <div className="flex flex-wrap gap-3">
@@ -939,10 +939,10 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
               onChange={(e) =>
                 updateChildAge(i, e.target.value === "" ? null : Number(e.target.value))
               }
-              className={`text-sm border rounded-lg px-2 py-1.5 bg-white dark:bg-gray-800 focus:outline-none focus:ring-1 focus:ring-teal-300 cursor-pointer ${
+              className={`text-sm border rounded-lg px-2 py-1.5 bg-white dark:bg-green-950/40 focus:outline-none focus:ring-1 focus:ring-green-300 cursor-pointer ${
                 child.age === null
-                  ? "border-red-300 dark:border-red-700 text-gray-400 focus:border-red-400"
-                  : "border-amber-200 dark:border-amber-800 text-gray-700 dark:text-gray-300 focus:border-teal-500"
+                  ? "border-green-300 dark:border-green-600 text-gray-400 dark:focus:border-green-500 focus:border-green-400"
+                  : "border-green-200 dark:border-green-800 text-gray-700 dark:text-gray-300 focus:border-green-500"
               }`}
             >
               <option value="" disabled>{dict.selectAge}</option>
