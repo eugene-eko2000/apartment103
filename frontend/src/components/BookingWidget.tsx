@@ -37,6 +37,7 @@ import { findDailyRate, findLowestDailyRate, findMinStay } from "@/lib/pricing";
 import { useLocaleSwitch } from "@/lib/use-locale-switch";
 import BookingModal, { guestToForm, type BookingModalDict, type VerifiedIdentity } from "@/components/BookingModal";
 import { CancellationTimeline, refundHighlightColor } from "@/components/CancellationTimeline";
+import { cheapestPerCancellationFee } from "@/lib/refund";
 import PaymentStep from "@/components/PaymentStep";
 import { PhoneInput } from "@/components/PhoneInput";
 import { clearGuestSession, readGuestSession, saveGuestSession } from "@/lib/guest-auth";
@@ -510,6 +511,9 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     ? findDailyRate(prices, format(range.from, "yyyy-MM-dd"))
     : findLowestDailyRate(prices, format(today, "yyyy-MM-dd"));
   const selectedPlan = plans.find((p) => p._id === selectedPlanId) ?? null;
+  const visiblePlans = range?.from
+    ? cheapestPerCancellationFee(plans, differenceInCalendarDays(range.from, today))
+    : plans;
   const cheapestPlanRatio = plans.length > 0 ? Math.min(...plans.map((p) => p.price_ratio)) : 1;
   const pricePerNight = matchedRate ? matchedRate.dailyRate * cheapestPlanRatio : null;
   const priceCurrency: Currency | null = matchedRate?.currency ?? null;
@@ -608,7 +612,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     // guest's), and the admin is starting a fresh booking for whichever
     // guest they just picked, not resuming their own checkout.
     if (!identity.isAdminBooking && (await resumePendingBooking(identity))) return;
-    setSelectedPlanId(plans[0]?._id ?? null);
+    setSelectedPlanId(visiblePlans[0]?._id ?? null);
     setGuestStep("plan");
   };
 
@@ -1295,7 +1299,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                     <p className="text-sm text-gray-600 dark:text-gray-300">{dict.modal.noPlan}</p>
                   ) : (
                     <div className="space-y-2">
-                      {plans.map((p) => {
+                      {visiblePlans.map((p) => {
                         const planPricePerNight = matchedRate ? matchedRate.dailyRate * p.price_ratio : null;
                         const convertedPlanPricePerNight =
                           planPricePerNight !== null && priceCurrency
