@@ -6,6 +6,7 @@ from app.services.charge_schedule import (
     outstanding_amount,
     scheduled_amount_due,
     sync_charge_schedule_status,
+    upcoming_charges,
 )
 from tests.booking_factories import booking
 
@@ -71,6 +72,40 @@ class TestOutstandingAmount:
         b.charge_schedule = build_charge_schedule(b)
         b.amount_charged = 500.0
         assert outstanding_amount(b, date(2026, 8, 1)) == 0.0
+
+
+class TestUpcomingCharges:
+    def test_excludes_entries_already_due(self):
+        rules = [
+            CancellationRule(days_before_checkin=30, refund_percentage=1.0),
+            CancellationRule(days_before_checkin=7, refund_percentage=0.5),
+        ]
+        b = booking(rules, date(2026, 8, 20), price=1000.0)
+        b.charge_schedule = build_charge_schedule(b)
+
+        upcoming = upcoming_charges(b, date(2026, 8, 10))
+
+        assert [entry.charge_date for entry in upcoming] == [date(2026, 8, 14)]
+        assert upcoming[0].amount == 500.0
+
+    def test_empty_once_every_entry_is_due(self):
+        rules = [CancellationRule(days_before_checkin=0, refund_percentage=0.5)]
+        b = booking(rules, date(2026, 9, 1), price=1000.0, booking_date=date(2026, 8, 1))
+        b.charge_schedule = build_charge_schedule(b)
+
+        assert upcoming_charges(b, date(2026, 9, 1)) == []
+
+    def test_sorted_by_charge_date(self):
+        rules = [
+            CancellationRule(days_before_checkin=30, refund_percentage=1.0),
+            CancellationRule(days_before_checkin=7, refund_percentage=0.5),
+        ]
+        b = booking(rules, date(2026, 8, 20), price=1000.0, booking_date=date(2026, 7, 1))
+        b.charge_schedule = build_charge_schedule(b)
+
+        upcoming = upcoming_charges(b, date(2026, 6, 1))
+
+        assert [entry.charge_date for entry in upcoming] == sorted(entry.charge_date for entry in upcoming)
 
 
 class TestSyncChargeScheduleStatus:

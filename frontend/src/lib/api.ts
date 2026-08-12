@@ -181,12 +181,18 @@ export interface Booking {
   last_payment_error?: string | null;
 }
 
+export interface UpcomingCharge {
+  charge_date: string;
+  amount: number;
+}
+
 export interface PaymentIntentResponse {
   mode: "setup" | "payment";
   client_secret: string;
   amount: number;
   total_price: number;
   currency: Currency;
+  upcoming_charges: UpcomingCharge[];
 }
 
 export interface BookedDateRange {

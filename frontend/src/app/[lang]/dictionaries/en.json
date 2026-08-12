@@ -146,6 +146,8 @@
         "verifyCardHint": "Your stay is fully refundable for now, so we'll just verify your card — nothing is charged today.",
         "payTitle": "Confirm payment",
         "chargeSummary": "You'll be charged {amount} now — {percent}% of the total {total} — based on your cancellation policy.",
+        "upcomingChargesLabel": "Further charges",
+        "upcomingChargeLine": "{amount} on {date}",
         "payButton": "Pay now",
         "verifyButton": "Book",
         "processing": "Processing…",

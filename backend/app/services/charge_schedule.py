@@ -73,6 +73,16 @@ def outstanding_amount(booking: Booking, as_of: date) -> Decimal:
     return to_decimal(scheduled_amount_due(booking.charge_schedule, as_of) - to_decimal(booking.amount_charged))
 
 
+def upcoming_charges(booking: Booking, as_of: date) -> list[BookingChargeScheduleEntry]:
+    """Schedule entries not yet due as of `as_of` — the amounts a guest
+    should expect to be charged automatically later in the life of the
+    booking, beyond whatever is being paid right now."""
+    return sorted(
+        (entry for entry in booking.charge_schedule if entry.charge_date > as_of),
+        key=lambda entry: entry.charge_date,
+    )
+
+
 def sync_charge_schedule_status(booking: Booking) -> None:
     """Keep each schedule entry's pending/done status in sync with
     `amount_charged`. Call this after anything that changes amount_charged

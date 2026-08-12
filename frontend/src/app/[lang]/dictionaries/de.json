@@ -146,6 +146,8 @@
         "verifyCardHint": "Ihr Aufenthalt ist derzeit vollständig stornierbar, daher prüfen wir nur Ihre Karte — heute wird nichts abgebucht.",
         "payTitle": "Zahlung bestätigen",
         "chargeSummary": "Ihnen werden jetzt {amount} berechnet — {percent} % des Gesamtbetrags von {total} — gemäß Ihrer Stornierungsbedingungen.",
+        "upcomingChargesLabel": "Weitere Abbuchungen",
+        "upcomingChargeLine": "{amount} am {date}",
         "payButton": "Jetzt bezahlen",
         "verifyButton": "Buchen",
         "processing": "Wird verarbeitet…",

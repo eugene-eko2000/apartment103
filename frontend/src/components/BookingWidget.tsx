@@ -1154,7 +1154,15 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
           style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
         >
           <div className="flex flex-col gap-1 lg:flex-row lg:items-baseline lg:justify-between lg:gap-0">
-            <h2 className="text-lg lg:text-xl font-bold text-white whitespace-nowrap [text-shadow:0_1px_3px_rgba(0,0,0,0.35)]">{headerTitle}</h2>
+            <div className="flex flex-col gap-0.5">
+              <h2 className="text-lg lg:text-xl font-bold text-white whitespace-nowrap [text-shadow:0_1px_3px_rgba(0,0,0,0.35)]">{headerTitle}</h2>
+              {nights > 0 && (
+                <p className="text-white/85 text-sm [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
+                  {nights} {nights !== 1 ? dict.nights : dict.night} · {totalGuests}{" "}
+                  {totalGuests !== 1 ? dict.guests : dict.guest}
+                </p>
+              )}
+            </div>
             <div className="text-left shrink-0">
               {showFromPrefix && (
                 <span className="text-white/90 text-base mr-1 [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">{dict.fromPrefix}</span>
@@ -1177,12 +1185,6 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
               )}
             </div>
           </div>
-          {nights > 0 && (
-            <p className="text-white/85 text-sm mt-1 [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
-              {nights} {nights !== 1 ? dict.nights : dict.night} · {totalGuests}{" "}
-              {totalGuests !== 1 ? dict.guests : dict.guest}
-            </p>
-          )}
         </div>
 
         <div className="p-6">

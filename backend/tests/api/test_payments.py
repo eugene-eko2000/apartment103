@@ -63,6 +63,9 @@ class TestCreatePaymentIntent:
         assert body["mode"] == "setup"
         assert body["client_secret"] == "seti_secret_test"
         assert body["amount"] == 0.0
+        # Nothing's due yet, but the full amount becomes non-refundable (and
+        # thus chargeable) right at check-in per the "Flexible" policy.
+        assert body["upcoming_charges"] == [{"charge_date": _future(200), "amount": 1000.0}]
 
     async def test_partial_fee_zone_returns_payment_intent(self, monkeypatch, client, guest, guest_headers):
         policy = await _flat_fee_policy(0.5)
@@ -91,6 +94,40 @@ class TestCreatePaymentIntent:
         assert body["mode"] == "payment"
         assert body["amount"] == pytest.approx(500.0)
         assert body["client_secret"] == "pi_secret_test"
+        # The flat-fee policy never becomes any more non-refundable than the
+        # 50% already due now, so nothing further is scheduled.
+        assert body["upcoming_charges"] == []
+
+    async def test_includes_upcoming_charges_from_schedule(self, monkeypatch, client, guest, guest_headers):
+        # Two-stage policy: 50% becomes non-refundable (and due now) as soon
+        # as the booking is made, and the remaining 50% becomes non-refundable
+        # (and thus due) at the 14-days-before-checkin threshold.
+        policy = await CancellationPolicy(
+            name="Half now, half at 14 days",
+            rules=[
+                CancellationRule(days_before_checkin=200, refund_percentage=0.5),
+                CancellationRule(days_before_checkin=14, refund_percentage=0.0),
+            ],
+        ).insert()
+        booking_id = await _create_booking(client, guest, policy, guest_headers, begin_offset=300, price=1000.0)
+
+        async def fake_get_or_create_customer(guest_arg):
+            return "cus_test"
+
+        async def fake_create_on_session_payment_intent(*, customer_id, amount, currency, metadata):
+            return SimpleNamespace(client_secret="pi_secret_test")
+
+        monkeypatch.setattr(stripe_service, "get_or_create_customer", fake_get_or_create_customer)
+        monkeypatch.setattr(
+            stripe_service, "create_on_session_payment_intent", fake_create_on_session_payment_intent
+        )
+
+        response = await client.post(f"/bookings/{booking_id}/payment/intent", headers=guest_headers)
+        assert response.status_code == 200
+        body = response.json()
+        assert body["mode"] == "payment"
+        assert body["amount"] == pytest.approx(500.0)
+        assert body["upcoming_charges"] == [{"charge_date": _future(101), "amount": 500.0}]
 
     async def test_returns_400_if_already_set_up(
         self, client, guest, cancellation_policy, guest_headers

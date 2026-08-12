@@ -3,17 +3,24 @@
 import { useState } from "react";
 import { CardElement, Elements, useElements, useStripe } from "@stripe/react-stripe-js";
 import type { StripeCardElementOptions } from "@stripe/stripe-js";
+import { format, parse } from "date-fns";
+import { enUS, de, fr, it } from "date-fns/locale";
+import type { Locale as DateFnsLocale } from "date-fns";
 import { getStripe } from "@/lib/stripe";
 import type { PaymentIntentResponse } from "@/lib/api";
 import type { Locale } from "@/lib/i18n-config";
 import { useTheme } from "@/lib/theme-context";
 import { formatPrice } from "@/lib/currency-config";
 
+const DATE_FNS_LOCALES: Record<Locale, DateFnsLocale> = { en: enUS, de, fr, it };
+
 export interface PaymentStepDict {
   verifyCardTitle: string;
   verifyCardHint: string;
   payTitle: string;
   chargeSummary: string;
+  upcomingChargesLabel: string;
+  upcomingChargeLine: string;
   payButton: string;
   verifyButton: string;
   processing: string;
@@ -50,6 +57,7 @@ export default function PaymentStep({
       <PaymentForm
         intent={intent}
         dict={dict}
+        lang={lang}
         guestName={guestName}
         guestEmail={guestEmail}
         onSuccess={onSuccess}
@@ -65,6 +73,7 @@ export default function PaymentStep({
 function PaymentForm({
   intent,
   dict,
+  lang,
   guestName,
   guestEmail,
   onSuccess,
@@ -75,6 +84,7 @@ function PaymentForm({
 }: {
   intent: PaymentIntentResponse;
   dict: PaymentStepDict;
+  lang: Locale;
   guestName: string;
   guestEmail: string;
   onSuccess: () => void;
@@ -139,13 +149,37 @@ function PaymentForm({
         <p className="text-sm text-gray-600 dark:text-gray-300">{dict.verifyCardHint}</p>
       )}
 
-      {intent.mode === "payment" && intent.total_price > 0 && (
-        <p className="text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-gray-700/50 rounded-xl px-3 py-2.5">
-          {dict.chargeSummary
-            .replace("{amount}", formatPrice(intent.amount, intent.currency))
-            .replace("{percent}", String(Math.round((intent.amount / intent.total_price) * 100)))
-            .replace("{total}", formatPrice(intent.total_price, intent.currency))}
-        </p>
+      {((intent.mode === "payment" && intent.total_price > 0) || intent.upcoming_charges.length > 0) && (
+        <div className="text-sm bg-gray-50 dark:bg-gray-700/50 rounded-xl px-3 py-2.5 space-y-1.5">
+          {intent.mode === "payment" && intent.total_price > 0 && (
+            <p className="font-medium text-gray-700 dark:text-gray-200">
+              {dict.chargeSummary
+                .replace("{amount}", formatPrice(intent.amount, intent.currency))
+                .replace("{percent}", String(Math.round((intent.amount / intent.total_price) * 100)))
+                .replace("{total}", formatPrice(intent.total_price, intent.currency))}
+            </p>
+          )}
+
+          {intent.upcoming_charges.length > 0 && (
+            <div className="text-gray-600 dark:text-gray-300">
+              <p className="font-medium text-gray-700 dark:text-gray-200">{dict.upcomingChargesLabel}</p>
+              <ul className="mt-1 space-y-0.5">
+                {intent.upcoming_charges.map((charge) => (
+                  <li key={charge.charge_date}>
+                    {dict.upcomingChargeLine
+                      .replace("{amount}", formatPrice(charge.amount, intent.currency))
+                      .replace(
+                        "{date}",
+                        format(parse(charge.charge_date, "yyyy-MM-dd", new Date()), "MMM d, yyyy", {
+                          locale: DATE_FNS_LOCALES[lang],
+                        })
+                      )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
       )}
 
       <div>

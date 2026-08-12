@@ -10,10 +10,10 @@ from app.api.deps import Principal, get_current_principal
 from app.api.routes.bookings import _ensure_can_access_booking
 from app.models.booking import Booking, BookingCharge, BookingWebhookEvent
 from app.models.payment_event import PaymentEvent
-from app.schemas.payment import PaymentIntentResponse
+from app.schemas.payment import PaymentIntentResponse, UpcomingCharge
 from app.services import booking_emails, stripe_service
 from app.services.availability import find_overlapping_ranges
-from app.services.charge_schedule import outstanding_amount, sync_charge_schedule_status
+from app.services.charge_schedule import outstanding_amount, sync_charge_schedule_status, upcoming_charges
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,13 @@ async def create_payment_intent(
     customer_id = await stripe_service.get_or_create_customer(booking.guest)
     metadata = {"booking_id": str(booking.id)}
 
-    amount = outstanding_amount(booking, date.today())
+    today = date.today()
+    upcoming = [
+        UpcomingCharge(charge_date=entry.charge_date, amount=entry.amount)
+        for entry in upcoming_charges(booking, today)
+    ]
+
+    amount = outstanding_amount(booking, today)
     if amount <= 0:
         intent = await stripe_service.create_setup_intent(customer_id=customer_id, metadata=metadata)
         return PaymentIntentResponse(
@@ -73,6 +79,7 @@ async def create_payment_intent(
             amount=Decimal("0.00"),
             total_price=booking.total_price,
             currency=booking.currency,
+            upcoming_charges=upcoming,
         )
 
     intent = await stripe_service.create_on_session_payment_intent(
@@ -87,6 +94,7 @@ async def create_payment_intent(
         amount=amount,
         total_price=booking.total_price,
         currency=booking.currency,
+        upcoming_charges=upcoming,
     )
 
 
@@ -104,7 +112,8 @@ async def retry_payment(
     if booking.payment_status not in ("requires_action", "failed"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No outstanding payment issue to retry")
 
-    outstanding = outstanding_amount(booking, date.today())
+    today = date.today()
+    outstanding = outstanding_amount(booking, today)
     if outstanding <= 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nothing outstanding to charge")
 
@@ -121,6 +130,10 @@ async def retry_payment(
         amount=outstanding,
         total_price=booking.total_price,
         currency=booking.currency,
+        upcoming_charges=[
+            UpcomingCharge(charge_date=entry.charge_date, amount=entry.amount)
+            for entry in upcoming_charges(booking, today)
+        ],
     )
 
 
