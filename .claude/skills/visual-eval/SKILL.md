@@ -12,17 +12,17 @@ Follow these exact steps in order:
 ## 1. Setup Base Environment (`main`)
 * Use `git worktree add /tmp/visual-eval-base main` to create an isolated workspace for the base branch.
 * Navigate to `/tmp/visual-eval-base` and install dependencies.
-* Start the base backend and frontend on dedicated ports (e.g., Backend on 8000, Frontend on 3000). Ensure the frontend is configured to point to the base backend.
+* Start the base backend and frontend on dedicated ports, use Backend on 8001, Frontend on 3001. Ensure the frontend is configured to point to the base backend.
 * Wait for both services to become healthy.
 
 ## 2. Setup Eval Environment (Current Branch)
 * In the current working directory, install dependencies.
-* Start the eval backend and frontend on different dedicated ports (e.g., Backend on 8001, Frontend on 3001).
+* Start the eval backend and frontend on different dedicated ports (e.g., Backend on 8002, Frontend on 3002).
 * Wait for these services to become healthy.
 
 ## 3. Execute Scenario & Capture Screens
 * Write a temporary script using a browser automation tool (such as Playwright via `npx playwright`) to perform the user's test scenario.
-* The script must execute the exact same steps on both the base frontend (`http://localhost:3000`) and the eval frontend (`http://localhost:3001`).
+* The script must execute the exact same steps on both the base frontend (`http://localhost:3001`) and the eval frontend (`http://localhost:3002`).
 * After every logical step in the scenario, capture a full-page screenshot for both environments (e.g., `step1_base.png`, `step1_eval.png`).
 * Execute the browser script.
 
