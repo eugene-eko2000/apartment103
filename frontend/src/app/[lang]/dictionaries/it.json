@@ -202,7 +202,32 @@
       "cancelQuestion": "Sei sicuro di voler cancellare questa prenotazione?",
       "chargeNotice": "Ti verrà addebitato {amount} del prezzo totale.",
       "confirmCancel": "Cancella prenotazione",
-      "keepBooking": "Non cancellare"
+      "keepBooking": "Non cancellare",
+      "detailsModal": {
+        "close": "Chiudi",
+        "title": "Dettagli prenotazione",
+        "checkIn": "Check-in",
+        "checkOut": "Check-out",
+        "night": "notte",
+        "nights": "notti",
+        "averageNightly": "media {price}/notte",
+        "priceBreakdown": "Dettaglio prezzo",
+        "totalPrice": "Totale",
+        "cancellationPolicy": "Politica di cancellazione",
+        "cancellationLabel": "Cancellazione:",
+        "cancellationTill": "fino al {date}",
+        "cancellationRange": "{startDate} – {endDate}",
+        "cancellationFree": "gratuito",
+        "cancellationCharge": "{cost} di penale",
+        "paymentInfo": "Pagamento",
+        "paidSection": "Pagato",
+        "upcomingSection": "Pagamenti futuri",
+        "noPayments": "Nessun pagamento finora.",
+        "noUpcomingCharges": "Nessun pagamento futuro.",
+        "chargeReasonInitial": "Pagamento iniziale",
+        "chargeReasonAccrual": "Pagamento programmato",
+        "chargeReasonSettlement": "Regolamento di cancellazione"
+      }
     },
     "profileModal": {
       "close": "Chiudi",

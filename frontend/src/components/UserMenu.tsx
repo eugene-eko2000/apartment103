@@ -125,7 +125,7 @@ export default function UserMenu({ dict, lang }: { dict: UserMenuDict; lang: Loc
       )}
 
       {myBookingsOpen && (
-        <MyBookingsModal dict={dict.myBookingsModal} onClose={() => setMyBookingsOpen(false)} />
+        <MyBookingsModal dict={dict.myBookingsModal} lang={lang} onClose={() => setMyBookingsOpen(false)} />
       )}
       {profileOpen && <ProfileModal dict={dict.profileModal} onClose={() => setProfileOpen(false)} />}
     </div>

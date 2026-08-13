@@ -50,6 +50,16 @@ const BOOKING_STATUS_CLASSES: Record<Booking["status"], string> = {
 
 const emptyDateRange = (): BookingDateRange => ({ begin_date: "", end_date: "", price: 0 });
 
+function checkInDate(b: Booking): string | null {
+  if (b.date_ranges.length === 0) return null;
+  return b.date_ranges.reduce((min, r) => (r.begin_date < min ? r.begin_date : min), b.date_ranges[0].begin_date);
+}
+
+function checkOutDate(b: Booking): string | null {
+  if (b.date_ranges.length === 0) return null;
+  return b.date_ranges.reduce((max, r) => (r.end_date > max ? r.end_date : max), b.date_ranges[0].end_date);
+}
+
 function emptyForm(guestId: string, policyId: string): BookingInput {
   return { guest_id: guestId, cancellation_policy_id: policyId, currency: "CHF", date_ranges: [] };
 }
@@ -194,6 +204,8 @@ export default function BookingsPanel() {
   const columns: Column<Booking>[] = [
     { key: "guest", label: "Guest", render: (b) => `${b.guest.first_name} ${b.guest.family_name}` },
     { key: "date", label: "Booked on", render: (b) => b.booking_date },
+    { key: "check_in", label: "Check-in", render: (b) => checkInDate(b) ?? "—" },
+    { key: "check_out", label: "Check-out", render: (b) => checkOutDate(b) ?? "—" },
     { key: "currency", label: "Currency", render: (b) => b.currency },
     {
       key: "total",

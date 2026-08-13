@@ -9,6 +9,8 @@ import { useCurrency } from "@/lib/currency-context";
 import { applicableRefundPercentage } from "@/lib/refund";
 import { readGuestSession } from "@/lib/guest-auth";
 import { fillForRefund } from "@/components/CancellationTimeline";
+import BookingDetailsModal, { type BookingDetailsDict } from "@/components/BookingDetailsModal";
+import type { Locale } from "@/lib/i18n-config";
 
 export interface MyBookingsDict {
   close: string;
@@ -26,6 +28,7 @@ export interface MyBookingsDict {
   chargeNotice: string;
   confirmCancel: string;
   keepBooking: string;
+  detailsModal: BookingDetailsDict;
 }
 
 type Status = "loading" | "loggedOut" | "loaded" | "error";
@@ -40,13 +43,22 @@ function totalPrice(booking: Booking): number {
   return booking.date_ranges.reduce((sum, range) => sum + range.price, 0);
 }
 
-export default function MyBookingsModal({ dict, onClose }: { dict: MyBookingsDict; onClose: () => void }) {
+export default function MyBookingsModal({
+  dict,
+  lang,
+  onClose,
+}: {
+  dict: MyBookingsDict;
+  lang: Locale;
+  onClose: () => void;
+}) {
   const [status, setStatus] = useState<Status>("loading");
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [detailsBooking, setDetailsBooking] = useState<Booking | null>(null);
   const { currency: preferredCurrency } = useCurrency();
 
   const handleCancelConfirm = (booking: Booking) => {
@@ -154,7 +166,11 @@ export default function MyBookingsModal({ dict, onClose }: { dict: MyBookingsDic
                 const chargeFill = fillForRefund(refundPercentage);
 
                 return (
-                <li key={booking._id} className={`bg-gray-50 dark:bg-gray-900/40 rounded-2xl border border-gray-100 dark:border-gray-700 p-5 ${isCancelled ? "opacity-60" : ""}`}>
+                <li
+                  key={booking._id}
+                  onClick={() => setDetailsBooking(booking)}
+                  className={`bg-gray-50 dark:bg-gray-900/40 rounded-2xl border border-gray-100 dark:border-gray-700 p-5 cursor-pointer hover:border-teal-300 dark:hover:border-teal-600 transition-colors ${isCancelled ? "opacity-60" : ""}`}
+                >
                   {booking.date_ranges.map((range, i) => {
                     const from = parse(range.begin_date, "yyyy-MM-dd", new Date());
                     const to = parse(range.end_date, "yyyy-MM-dd", new Date());
@@ -189,7 +205,8 @@ export default function MyBookingsModal({ dict, onClose }: { dict: MyBookingsDic
                     <div className="mt-3 flex justify-end">
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setCancelError(null);
                           setConfirmingId(booking._id);
                         }}
@@ -224,7 +241,10 @@ export default function MyBookingsModal({ dict, onClose }: { dict: MyBookingsDic
                       <div className="flex justify-end gap-2 pt-1">
                         <button
                           type="button"
-                          onClick={() => setConfirmingId(null)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmingId(null);
+                          }}
                           disabled={cancellingId === booking._id}
                           className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer disabled:opacity-50"
                         >
@@ -232,7 +252,10 @@ export default function MyBookingsModal({ dict, onClose }: { dict: MyBookingsDic
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleCancelConfirm(booking)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCancelConfirm(booking);
+                          }}
                           disabled={cancellingId === booking._id}
                           className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-red-600 hover:bg-red-700 cursor-pointer disabled:opacity-50"
                         >
@@ -248,6 +271,15 @@ export default function MyBookingsModal({ dict, onClose }: { dict: MyBookingsDic
           )}
         </div>
       </div>
+
+      {detailsBooking && (
+        <BookingDetailsModal
+          booking={bookings.find((b) => b._id === detailsBooking._id) ?? detailsBooking}
+          dict={dict.detailsModal}
+          lang={lang}
+          onClose={() => setDetailsBooking(null)}
+        />
+      )}
     </div>,
     document.body
   );

@@ -164,6 +164,12 @@ export interface BookingWebhookEvent {
   received_at: string;
 }
 
+export interface BookingChargeScheduleEntry {
+  charge_date: string;
+  amount: number;
+  status: "pending" | "done";
+}
+
 export interface Booking {
   _id: string;
   guest: BookingGuestRef;
@@ -171,6 +177,7 @@ export interface Booking {
   currency: Currency;
   date_ranges: BookingDateRange[];
   cancellation_policy: { name: string; rules: CancellationRule[] };
+  charge_schedule: BookingChargeScheduleEntry[];
   status: BookingStatus;
   stripe_payment_method_id?: string | null;
   payment_status: PaymentStatus;

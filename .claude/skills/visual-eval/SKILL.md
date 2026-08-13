@@ -17,7 +17,7 @@ Follow these exact steps in order:
 
 ## 2. Setup Eval Environment (Current Branch)
 * In the current working directory, install dependencies.
-* Start the eval backend and frontend on different dedicated ports (e.g., Backend on 8002, Frontend on 3002).
+* Start the eval backend and frontend on different dedicated ports, use Backend on 8002, Frontend on 3002.
 * Wait for these services to become healthy.
 
 ## 3. Execute Scenario & Capture Screens

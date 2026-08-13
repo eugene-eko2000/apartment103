@@ -202,7 +202,32 @@
       "cancelQuestion": "Möchten Sie diese Buchung wirklich stornieren?",
       "chargeNotice": "Ihnen werden {amount} des Gesamtpreises berechnet.",
       "confirmCancel": "Buchung stornieren",
-      "keepBooking": "Nicht stornieren"
+      "keepBooking": "Nicht stornieren",
+      "detailsModal": {
+        "close": "Schließen",
+        "title": "Buchungsdetails",
+        "checkIn": "Anreise",
+        "checkOut": "Abreise",
+        "night": "Nacht",
+        "nights": "Nächte",
+        "averageNightly": "Ø {price}/Nacht",
+        "priceBreakdown": "Preisaufschlüsselung",
+        "totalPrice": "Gesamt",
+        "cancellationPolicy": "Stornierungsbedingungen",
+        "cancellationLabel": "Stornierung:",
+        "cancellationTill": "bis {date}",
+        "cancellationRange": "{startDate} – {endDate}",
+        "cancellationFree": "kostenlos",
+        "cancellationCharge": "{cost} Gebühr",
+        "paymentInfo": "Zahlung",
+        "paidSection": "Bezahlt",
+        "upcomingSection": "Anstehende Zahlungen",
+        "noPayments": "Noch keine Zahlungen.",
+        "noUpcomingCharges": "Keine anstehenden Zahlungen.",
+        "chargeReasonInitial": "Erstzahlung",
+        "chargeReasonAccrual": "Geplante Zahlung",
+        "chargeReasonSettlement": "Stornierungsabrechnung"
+      }
     },
     "profileModal": {
       "close": "Schließen",

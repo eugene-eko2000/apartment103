@@ -202,7 +202,32 @@
       "cancelQuestion": "Êtes-vous sûr de vouloir annuler cette réservation ?",
       "chargeNotice": "Vous serez facturé {amount} du prix total.",
       "confirmCancel": "Annuler la réservation",
-      "keepBooking": "Ne pas annuler"
+      "keepBooking": "Ne pas annuler",
+      "detailsModal": {
+        "close": "Fermer",
+        "title": "Détails de la réservation",
+        "checkIn": "Arrivée",
+        "checkOut": "Départ",
+        "night": "nuit",
+        "nights": "nuits",
+        "averageNightly": "moy. {price}/nuit",
+        "priceBreakdown": "Détail du prix",
+        "totalPrice": "Total",
+        "cancellationPolicy": "Conditions d'annulation",
+        "cancellationLabel": "Annulation :",
+        "cancellationTill": "jusqu'au {date}",
+        "cancellationRange": "{startDate} – {endDate}",
+        "cancellationFree": "gratuit",
+        "cancellationCharge": "{cost} de frais",
+        "paymentInfo": "Paiement",
+        "paidSection": "Payé",
+        "upcomingSection": "Paiements à venir",
+        "noPayments": "Aucun paiement pour le moment.",
+        "noUpcomingCharges": "Aucun paiement à venir.",
+        "chargeReasonInitial": "Paiement initial",
+        "chargeReasonAccrual": "Paiement programmé",
+        "chargeReasonSettlement": "Règlement d'annulation"
+      }
     },
     "profileModal": {
       "close": "Fermer",

@@ -202,7 +202,32 @@
       "cancelQuestion": "Are you sure you want to cancel this booking?",
       "chargeNotice": "You'll be charged {amount} of the total price.",
       "confirmCancel": "Cancel booking",
-      "keepBooking": "Don't cancel"
+      "keepBooking": "Don't cancel",
+      "detailsModal": {
+        "close": "Close",
+        "title": "Booking details",
+        "checkIn": "Check-in",
+        "checkOut": "Check-out",
+        "night": "night",
+        "nights": "nights",
+        "averageNightly": "avg. {price}/night",
+        "priceBreakdown": "Price breakdown",
+        "totalPrice": "Total",
+        "cancellationPolicy": "Cancellation policy",
+        "cancellationLabel": "Cancellation:",
+        "cancellationTill": "till {date}",
+        "cancellationRange": "{startDate} – {endDate}",
+        "cancellationFree": "free",
+        "cancellationCharge": "{cost} charge",
+        "paymentInfo": "Payment",
+        "paidSection": "Paid",
+        "upcomingSection": "Upcoming charges",
+        "noPayments": "No payments yet.",
+        "noUpcomingCharges": "No upcoming charges.",
+        "chargeReasonInitial": "Initial payment",
+        "chargeReasonAccrual": "Scheduled payment",
+        "chargeReasonSettlement": "Cancellation settlement"
+      }
     },
     "profileModal": {
       "close": "Close",
