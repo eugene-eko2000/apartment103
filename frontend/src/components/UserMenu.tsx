@@ -5,6 +5,7 @@ import { clearGuestSession, onGuestSessionChange, readGuestSession } from "@/lib
 import LoginModal, { type LoginModalDict } from "@/components/LoginModal";
 import MyBookingsModal, { type MyBookingsDict } from "@/components/MyBookingsModal";
 import ProfileModal, { type ProfileModalDict } from "@/components/ProfileModal";
+import type { Locale } from "@/lib/i18n-config";
 
 export interface UserMenuDict {
   login: string;
@@ -17,7 +18,7 @@ export interface UserMenuDict {
   profileModal: ProfileModalDict;
 }
 
-export default function UserMenu({ dict }: { dict: UserMenuDict }) {
+export default function UserMenu({ dict, lang }: { dict: UserMenuDict; lang: Locale }) {
   const [ready, setReady] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -64,6 +65,7 @@ export default function UserMenu({ dict }: { dict: UserMenuDict }) {
         {loginOpen && (
           <LoginModal
             dict={dict.loginModal}
+            lang={lang}
             onClose={() => setLoginOpen(false)}
             onLoggedIn={() => setLoginOpen(false)}
           />

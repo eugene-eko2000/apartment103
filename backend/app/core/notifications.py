@@ -29,15 +29,19 @@ class EmailAttachment:
     mime_type: str
 
 
-def send_otp_email(to_address: str, code: str) -> None:
+def send_text_email(to_address: str, subject: str, text_content: str) -> None:
     if not settings.sendgrid_api_key:
-        logger.info("OTP email (SendGrid not configured, logging instead) to=%s code=%s", to_address, code)
+        logger.info(
+            "Email (SendGrid not configured, logging instead) to=%s subject=%s body=%s",
+            to_address,
+            subject,
+            text_content,
+        )
         return
 
     from_email = Email(settings.sendgrid_from_address)
     to_email = To(to_address)
-    subject = "Your verification code"
-    content = Content("text/plain", f"Your verification code is {code}.")
+    content = Content("text/plain", text_content)
 
     message = Mail(from_email, to_email, subject, content)
 
@@ -76,19 +80,19 @@ def send_html_email(
     SendGridAPIClient(settings.sendgrid_api_key).send(message)
 
 
-def send_otp_sms(to_number: str, code: str) -> None:
+def send_sms(to_number: str, body: str) -> None:
     if not (
         settings.twilio_account_sid
         and settings.twilio_auth_token
         and settings.twilio_messaging_service_sid
     ):
-        logger.info("OTP SMS (Twilio not configured, logging instead) to=%s code=%s", to_number, code)
+        logger.info("SMS (Twilio not configured, logging instead) to=%s body=%s", to_number, body)
         return
 
     client = TwilioClient(settings.twilio_account_sid, settings.twilio_auth_token)
     client.messages.create(
         to=to_number,
         messaging_service_sid=settings.twilio_messaging_service_sid,
-        body=f"Your verification code is {code}.",
+        body=body,
         risk_check=MessageInstance.RiskCheck.DISABLE,
     )

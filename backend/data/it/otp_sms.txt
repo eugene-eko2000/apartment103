@@ -1,0 +1,1 @@
+Il Suo codice di verifica è {{ code }}.

@@ -283,8 +283,8 @@ export interface OtpRequestResponse {
   retry_after_seconds: number;
 }
 
-export function requestOtp(identifier: string): Promise<OtpRequestResponse> {
-  return request("/auth/otp/request", { method: "POST", body: JSON.stringify({ identifier }) });
+export function requestOtp(identifier: string, language?: Language): Promise<OtpRequestResponse> {
+  return request("/auth/otp/request", { method: "POST", body: JSON.stringify({ identifier, language }) });
 }
 
 export function verifyOtp(

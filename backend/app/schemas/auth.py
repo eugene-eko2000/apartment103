@@ -2,9 +2,17 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from app.models.guest import Language
+
 
 class OtpRequest(BaseModel):
     identifier: str
+    # The site's current UI language, so the verification code email/SMS can
+    # be sent in it. The guest isn't necessarily identified yet at this
+    # point (this is also how first-time guests start registration), so we
+    # can't rely on a stored preferred_language — the client sends its
+    # active locale instead. Falls back to the default language when absent.
+    language: Language | None = None
 
 
 class OtpRequestResponse(BaseModel):

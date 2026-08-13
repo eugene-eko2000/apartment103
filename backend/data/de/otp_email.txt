@@ -1,0 +1,3 @@
+Subject: Ihr Bestätigungscode
+
+Ihr Bestätigungscode lautet {{ code }}.

@@ -66,3 +66,18 @@ def render_email(*, language: Language | None, name: str, context: dict) -> tupl
     language. Returns (subject, html_body)."""
     subject_template, body_template = _compiled_templates(resolve_language(language), name)
     return subject_template.render(**context), body_template.render(**context)
+
+
+@lru_cache(maxsize=None)
+def _compiled_text_template(language: Language, name: str) -> Template:
+    """Compiled template for data/<language>/<name>, for files that are a
+    single body with no `Subject:` line (e.g. SMS text)."""
+    raw = (DATA_DIR / language / name).read_text(encoding="utf-8")
+    return _env.from_string(raw)
+
+
+def render_text(*, language: Language | None, name: str, context: dict) -> str:
+    """Render data/<resolved language>/<name> (no `Subject:` line) with
+    `context`. Falls back to `_DEFAULT_LANGUAGE` the same way render_email
+    does."""
+    return _compiled_text_template(resolve_language(language), name).render(**context)

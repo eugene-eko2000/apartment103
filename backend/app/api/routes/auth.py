@@ -8,7 +8,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.api.deps import Principal, get_current_principal
 from app.core.config import settings
 from app.core.identifiers import classify_identifier, normalize_identifier
-from app.core.notifications import send_otp_email, send_otp_sms
 from app.core.security import (
     SubjectType,
     create_access_token,
@@ -20,6 +19,7 @@ from app.models.admin import Admin
 from app.models.guest import Guest
 from app.models.otp_challenge import OtpChallenge
 from app.schemas.auth import OtpRequest, OtpRequestResponse, OtpVerify, TokenResponse
+from app.services.otp_notifications import send_otp_email, send_otp_sms
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -98,9 +98,9 @@ async def request_otp(payload: OtpRequest) -> OtpRequestResponse:
     await challenge.insert()
 
     if kind == "email":
-        send_otp_email(identifier, code)
+        send_otp_email(identifier, code, payload.language)
     else:
-        send_otp_sms(identifier, code)
+        send_otp_sms(identifier, code, payload.language)
 
     return OtpRequestResponse(
         message=_OTP_REQUESTED_MESSAGE, retry_after_seconds=settings.otp_resend_cooldown_seconds

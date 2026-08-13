@@ -136,7 +136,7 @@ export default function BookingModal({
     setPending(true);
     setErrorMessage(null);
     try {
-      const result = await requestOtp(identifier.trim());
+      const result = await requestOtp(identifier.trim(), lang);
       setOtpCode("");
       setResendMessage(null);
       resendCooldown.start(result.retry_after_seconds);
@@ -154,7 +154,7 @@ export default function BookingModal({
     setErrorMessage(null);
     setResendMessage(null);
     try {
-      const result = await requestOtp(identifier.trim());
+      const result = await requestOtp(identifier.trim(), lang);
       resendCooldown.start(result.retry_after_seconds);
       setResendMessage(dict.codeResent);
     } catch (err) {

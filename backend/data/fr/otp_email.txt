@@ -1,0 +1,3 @@
+Subject: Votre code de vérification
+
+Votre code de vérification est {{ code }}.

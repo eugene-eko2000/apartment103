@@ -53,7 +53,7 @@ export default function SiteHeader({
               labels={{ light: dict.themeSwitcher.light, dark: dict.themeSwitcher.dark, system: dict.themeSwitcher.system }}
               ariaLabel={dict.themeSwitcher.label}
             />
-            <UserMenu dict={dict.userMenu} />
+            <UserMenu dict={dict.userMenu} lang={lang} />
           </div>
         </nav>
         <MobileMenu ariaLabel={dict.nav.menu}>
@@ -72,7 +72,7 @@ export default function SiteHeader({
               ariaLabel={dict.themeSwitcher.label}
               expandOnClick
             />
-            <UserMenu dict={dict.userMenu} />
+            <UserMenu dict={dict.userMenu} lang={lang} />
           </div>
         </MobileMenu>
       </div>

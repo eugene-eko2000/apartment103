@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { ApiError, requestOtp, verifyOtp } from "@/lib/api";
 import { saveGuestSession } from "@/lib/guest-auth";
 import { useOtpResendCooldown } from "@/lib/useOtpResendCooldown";
+import type { Locale } from "@/lib/i18n-config";
 
 export interface LoginModalDict {
   close: string;
@@ -27,10 +28,12 @@ type Step = "identifier" | "otp";
 
 export default function LoginModal({
   dict,
+  lang,
   onClose,
   onLoggedIn,
 }: {
   dict: LoginModalDict;
+  lang: Locale;
   onClose: () => void;
   onLoggedIn: () => void;
 }) {
@@ -64,7 +67,7 @@ export default function LoginModal({
     setPending(true);
     setErrorMessage(null);
     try {
-      const result = await requestOtp(identifier.trim());
+      const result = await requestOtp(identifier.trim(), lang);
       setOtpCode("");
       setResendMessage(null);
       resendCooldown.start(result.retry_after_seconds);
@@ -82,7 +85,7 @@ export default function LoginModal({
     setErrorMessage(null);
     setResendMessage(null);
     try {
-      const result = await requestOtp(identifier.trim());
+      const result = await requestOtp(identifier.trim(), lang);
       resendCooldown.start(result.retry_after_seconds);
       setResendMessage(dict.codeResent);
     } catch (err) {
