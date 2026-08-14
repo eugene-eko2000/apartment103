@@ -7,3 +7,4 @@ This version has breaking changes — APIs, conventions, and file structure may 
 # End-to-end Testig Rules
 
 You have to to run end-to-end testing on each change. Use visual-eval skill, report paths to eval results images.
+Never overwrite any .env, .env.local or any other environment file in this project.

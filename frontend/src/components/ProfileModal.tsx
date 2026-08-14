@@ -109,6 +109,7 @@ export default function ProfileModal({ dict, onClose }: { dict: ProfileModalDict
         // The guest just told us their preferred language/currency — make it
         // the site's active one immediately, not just on their next visit.
         applyGuestPreferences(guest);
+        onClose();
       })
       .catch((err) => {
         setErrorMessage(err instanceof ApiError ? err.message : String(err));
