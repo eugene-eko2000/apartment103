@@ -80,7 +80,7 @@ export default async function Home({
       </div>
 
       {/* ── FULL-VIEWPORT CONTENT ───────────────────────── */}
-      <div className="relative z-10 h-screen flex flex-col overflow-hidden">
+      <div className="relative z-10 h-dvh flex flex-col overflow-hidden">
 
       {/* ── NAV ─────────────────────────────────────────── */}
       <SiteHeader lang={lang} dict={dict} />
