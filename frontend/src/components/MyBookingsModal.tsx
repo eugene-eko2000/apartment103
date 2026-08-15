@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { format, differenceInCalendarDays, parse } from "date-fns";
-import { ApiError, cancelBooking, listBookings, type Booking } from "@/lib/api";
-import { convertCurrency, formatPrice } from "@/lib/currency-config";
+import { ApiError, cancelBooking, listBookings, listBookingsDisplay, type Booking, type BookingDisplay } from "@/lib/api";
+import { formatPrice } from "@/lib/currency-config";
 import { useCurrency } from "@/lib/currency-context";
 import { applicableRefundPercentage } from "@/lib/refund";
 import { readGuestSession } from "@/lib/guest-auth";
@@ -39,10 +39,6 @@ function earliestBeginDate(booking: Booking): Date {
     .reduce((earliest, current) => (current < earliest ? current : earliest));
 }
 
-function totalPrice(booking: Booking): number {
-  return booking.date_ranges.reduce((sum, range) => sum + range.price, 0);
-}
-
 export default function MyBookingsModal({
   dict,
   lang,
@@ -54,12 +50,25 @@ export default function MyBookingsModal({
 }) {
   const [status, setStatus] = useState<Status>("loading");
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [displays, setDisplays] = useState<Record<string, BookingDisplay>>({});
+  const [displaysLoading, setDisplaysLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [detailsBooking, setDetailsBooking] = useState<Booking | null>(null);
   const { currency: preferredCurrency } = useCurrency();
+
+  const refreshDisplays = () => {
+    const session = readGuestSession();
+    if (!session) return;
+    listBookingsDisplay(session.token, preferredCurrency)
+      .then((result) => {
+        setDisplays(result);
+        setDisplaysLoading(false);
+      })
+      .catch(() => setDisplaysLoading(false));
+  };
 
   const handleCancelConfirm = (booking: Booking) => {
     const session = readGuestSession();
@@ -73,6 +82,9 @@ export default function MyBookingsModal({
       .then((updated) => {
         setBookings((prev) => prev.map((b) => (b._id === updated._id ? updated : b)));
         setConfirmingId(null);
+        // Cancellation can add a settlement charge, so the display amounts
+        // (paid/upcoming breakdown) for this booking may now be stale.
+        refreshDisplays();
       })
       .catch((err) => {
         setCancelError(err instanceof ApiError ? err.message : String(err));
@@ -101,6 +113,16 @@ export default function MyBookingsModal({
         });
     });
   }, []);
+
+  // Amounts are computed server-side (Stripe FX rate + commission — see
+  // backend/app/services/currency_service.py); re-fetch whenever the
+  // guest's preferred display currency changes.
+  useEffect(() => {
+    if (status !== "loaded") return;
+    setDisplaysLoading(true);
+    refreshDisplays();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, preferredCurrency]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -145,10 +167,18 @@ export default function MyBookingsModal({
           {status === "loaded" && bookings.length === 0 && (
             <p className="text-gray-500 dark:text-gray-400 text-sm">{dict.empty}</p>
           )}
+          {/* Amounts come from a separate, currency-aware request
+              (refreshDisplays) that lands shortly after the bookings list
+              itself; this only covers that brief window. */}
+          {status === "loaded" && bookings.length > 0 && displaysLoading && (
+            <p className="text-gray-500 dark:text-gray-400 text-sm">{dict.loading}</p>
+          )}
 
-          {status === "loaded" && bookings.length > 0 && (
+          {status === "loaded" && bookings.length > 0 && !displaysLoading && (
             <ul className="space-y-4">
               {bookings.map((booking) => {
+                const display = displays[booking._id];
+                if (!display) return null;
                 const isCancelled = booking.status === "Cancelled";
                 const isConfirming = confirmingId === booking._id;
                 const refundPercentage = applicableRefundPercentage(
@@ -156,11 +186,9 @@ export default function MyBookingsModal({
                   differenceInCalendarDays(earliestBeginDate(booking), new Date())
                 );
                 const chargePercentage = 1 - refundPercentage;
-                const chargeAmount = convertCurrency(
-                  totalPrice(booking) * chargePercentage,
-                  booking.currency,
-                  preferredCurrency
-                );
+                // display.total_price is already converted server-side; the
+                // refund percentage is plain arithmetic, not currency exchange.
+                const chargeAmount = display.total_price * chargePercentage;
                 // Same gradient scale as the cancellation timeline bars, keyed by the
                 // underlying refund rate so the colors line up with that visualization.
                 const chargeFill = fillForRefund(refundPercentage);
@@ -187,7 +215,7 @@ export default function MyBookingsModal({
                           </span>
                         </span>
                         <span className="font-semibold text-gray-900 dark:text-gray-100">
-                          {formatPrice(convertCurrency(range.price, booking.currency, preferredCurrency), preferredCurrency)}
+                          {formatPrice(display.date_ranges[i].price, preferredCurrency)}
                         </span>
                       </div>
                     );
@@ -272,9 +300,10 @@ export default function MyBookingsModal({
         </div>
       </div>
 
-      {detailsBooking && (
+      {detailsBooking && displays[detailsBooking._id] && (
         <BookingDetailsModal
           booking={bookings.find((b) => b._id === detailsBooking._id) ?? detailsBooking}
+          display={displays[detailsBooking._id]}
           dict={dict.detailsModal}
           lang={lang}
           onClose={() => setDetailsBooking(null)}

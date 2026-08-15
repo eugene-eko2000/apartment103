@@ -9,7 +9,7 @@ import type { Locale as DateFnsLocale } from "date-fns";
 import "react-day-picker/style.css";
 import type { Locale } from "@/lib/i18n-config";
 import { useCurrency } from "@/lib/currency-context";
-import { convertCurrency, formatPrice } from "@/lib/currency-config";
+import { formatPrice } from "@/lib/currency-config";
 import {
   ApiError,
   createBooking,
@@ -31,7 +31,7 @@ import {
   type Language,
   type PaymentIntentResponse,
   type Plan,
-  type Price,
+  type PublicPrice,
 } from "@/lib/api";
 import { findDailyRate, findLowestDailyRate, findMinStay } from "@/lib/pricing";
 import { useLocaleSwitch } from "@/lib/use-locale-switch";
@@ -126,7 +126,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const [children, setChildren] = useState<Child[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
-  const [prices, setPrices] = useState<Price[]>([]);
+  const [prices, setPrices] = useState<PublicPrice[]>([]);
   const [bookedRanges, setBookedRanges] = useState<DateRange[]>([]);
   const [identityModalOpen, setIdentityModalOpen] = useState(false);
   const dateRef = useRef<HTMLDivElement>(null);
@@ -200,11 +200,17 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     listPublicPlans()
       .then(setPlans)
       .catch(() => setPlans([]));
-    listPublicPrices()
-      .then(setPrices)
-      .catch(() => setPrices([]));
     fetchAvailability();
   }, []);
+
+  // Prices are already converted server-side into `currency` (Stripe FX
+  // rate + commission — see backend/app/services/currency_service.py), so a
+  // currency switch re-fetches rather than recomputing anything client-side.
+  useEffect(() => {
+    listPublicPrices(currency)
+      .then(setPrices)
+      .catch(() => setPrices([]));
+  }, [currency]);
 
   // Shared by every check-in/check-out DateField below: opening the calendar
   // always refreshes availability first, so it can never show data staler
@@ -515,28 +521,26 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     ? cheapestPerCancellationFee(plans, differenceInCalendarDays(range.from, today))
     : plans;
   const cheapestPlanRatio = plans.length > 0 ? Math.min(...plans.map((p) => p.price_ratio)) : 1;
+  // matchedRate.dailyRate is already converted server-side into `currency`
+  // (see /prices/public?currency=... in the effect above), so everything
+  // below is plain same-currency arithmetic — no FX math on the client.
+  // dailyRateChf mirrors the same arithmetic for the "150 CHF/night"
+  // reference line shown whenever the display currency isn't CHF.
   const pricePerNight = matchedRate ? matchedRate.dailyRate * cheapestPlanRatio : null;
-  const priceCurrency: Currency | null = matchedRate?.currency ?? null;
-  const convertedPricePerNight =
-    pricePerNight !== null && priceCurrency ? convertCurrency(pricePerNight, priceCurrency, currency) : null;
+  const pricePerNightChf = matchedRate ? matchedRate.dailyRateChf * cheapestPlanRatio : null;
   const priceTotal = pricePerNight !== null ? pricePerNight * nights : null;
-  const convertedPriceTotal =
-    priceTotal !== null && priceCurrency ? convertCurrency(priceTotal, priceCurrency, currency) : null;
-  const activePrice = nights > 0 ? convertedPriceTotal : convertedPricePerNight;
-  const activeRawPrice = nights > 0 ? priceTotal : pricePerNight;
+  const priceTotalChf = pricePerNightChf !== null ? pricePerNightChf * nights : null;
+  const activePrice = nights > 0 ? priceTotal : pricePerNight;
+  const activeRawPrice = nights > 0 ? priceTotalChf : pricePerNightChf;
   const selectedPlanPricePerNight =
     selectedPlan && matchedRate ? matchedRate.dailyRate * selectedPlan.price_ratio : null;
-  const convertedSelectedPlanPricePerNight =
-    selectedPlanPricePerNight !== null && priceCurrency
-      ? convertCurrency(selectedPlanPricePerNight, priceCurrency, currency)
-      : null;
+  const selectedPlanPricePerNightChf =
+    selectedPlan && matchedRate ? matchedRate.dailyRateChf * selectedPlan.price_ratio : null;
   const selectedPlanPriceTotal = selectedPlanPricePerNight !== null ? selectedPlanPricePerNight * nights : null;
-  const convertedSelectedPlanPriceTotal =
-    selectedPlanPriceTotal !== null && priceCurrency
-      ? convertCurrency(selectedPlanPriceTotal, priceCurrency, currency)
-      : null;
-  const chosenPlanPrice = nights > 0 ? convertedSelectedPlanPriceTotal : convertedSelectedPlanPricePerNight;
-  const chosenPlanRawPrice = nights > 0 ? selectedPlanPriceTotal : selectedPlanPricePerNight;
+  const selectedPlanPriceTotalChf =
+    selectedPlanPricePerNightChf !== null ? selectedPlanPricePerNightChf * nights : null;
+  const chosenPlanPrice = nights > 0 ? selectedPlanPriceTotal : selectedPlanPricePerNight;
+  const chosenPlanRawPrice = nights > 0 ? selectedPlanPriceTotalChf : selectedPlanPricePerNightChf;
   // Which stage of the extended flow (rate → data → payment) the header
   // should reflect; falls back to the initial planYourStay/"from" price
   // outside the extended flow and on the terminal success/error screens.
@@ -853,7 +857,10 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     if (!matchedRate) return;
     setGuestStep("submitting");
     try {
-      const priceInBaseCurrency = nights * matchedRate.dailyRate * selectedPlan.price_ratio;
+      // matchedRate.dailyRateChf is the CHF baseline (see /prices/public);
+      // the backend converts it into `currency` server-side when the
+      // booking is stored (see backend/app/api/routes/bookings.py).
+      const priceChf = nights * matchedRate.dailyRateChf * selectedPlan.price_ratio;
       const bookingInput = {
         guest_id: finalGuestId,
         cancellation_policy_id: selectedPlan.cancellation_policy.id,
@@ -862,7 +869,8 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
           {
             begin_date: format(range.from, "yyyy-MM-dd"),
             end_date: format(range.to, "yyyy-MM-dd"),
-            price: convertCurrency(priceInBaseCurrency, matchedRate.currency, currency),
+            price: 0,
+            price_chf: priceChf,
           },
         ],
       };
@@ -1197,9 +1205,9 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                   </span>
                 )}
               </span>
-              {priceCurrency !== null && priceCurrency !== currency && headerRawPrice !== null && (
+              {currency !== "CHF" && headerRawPrice !== null && (
                 <div className="text-white/85 text-sm [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
-                  {formatPrice(headerRawPrice, priceCurrency)}{" "}
+                  {formatPrice(headerRawPrice, "CHF")}{" "}
                   {nights > 0 ? dict.total : dict.perNight}
                 </div>
               )}
@@ -1316,16 +1324,11 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                   ) : (
                     <div className="space-y-2">
                       {visiblePlans.map((p) => {
+                        // matchedRate.dailyRate is already converted server-side into
+                        // `currency`, so this is plain same-currency arithmetic.
                         const planPricePerNight = matchedRate ? matchedRate.dailyRate * p.price_ratio : null;
-                        const convertedPlanPricePerNight =
-                          planPricePerNight !== null && priceCurrency
-                            ? convertCurrency(planPricePerNight, priceCurrency, currency)
-                            : null;
-                        const convertedPlanTotal =
-                          planPricePerNight !== null && priceCurrency
-                            ? convertCurrency(planPricePerNight * nights, priceCurrency, currency)
-                            : null;
-                        const activePlanPrice = nights > 0 ? convertedPlanTotal : convertedPlanPricePerNight;
+                        const planTotal = planPricePerNight !== null ? planPricePerNight * nights : null;
+                        const activePlanPrice = nights > 0 ? planTotal : planPricePerNight;
                         const isSelected = selectedPlanId === p._id;
                         const highlight = refundHighlightColor(p.cancellation_policy.rules, range.from!, today);
                         const highlightBackground = `rgba(${highlight[0]}, ${highlight[1]}, ${highlight[2]}, ${isSelected ? 0.3 : 0.14})`;
@@ -1369,9 +1372,9 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                                     </span>
                                   )}
                                 </div>
-                                {nights > 0 && convertedPlanPricePerNight !== null && (
+                                {nights > 0 && planPricePerNight !== null && (
                                   <p className="text-base text-gray-500 dark:text-gray-400 mt-0.5">
-                                    {formatPrice(convertedPlanPricePerNight, currency)}
+                                    {formatPrice(planPricePerNight, currency)}
                                     {dict.perNight}
                                   </p>
                                 )}

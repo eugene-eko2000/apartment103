@@ -74,6 +74,30 @@ export interface PriceInput {
   period: Period;
 }
 
+// Response shape of GET /prices/public?currency=<Currency> — daily_rate is
+// already converted (Stripe FX rate + commission) into the requested
+// currency server-side; daily_rate_chf is the stored CHF baseline. No rate
+// data is ever exposed, only these two final amounts.
+export interface PublicDateRangeRate {
+  begin_date: string;
+  end_date: string;
+  min_stay_days: number;
+  daily_rate: number;
+  daily_rate_chf: number;
+}
+
+export interface PublicPeriod {
+  begin_date: string;
+  end_date: string;
+  currency: Currency;
+  date_ranges: PublicDateRangeRate[];
+}
+
+export interface PublicPrice {
+  _id: string;
+  period: PublicPeriod;
+}
+
 export interface CancellationPolicy {
   _id: string;
   name: string;
@@ -126,6 +150,12 @@ export interface BookingDateRange {
   begin_date: string;
   end_date: string;
   price: number;
+  // Write-only, used by BookingInput: when set, the backend ignores `price`
+  // (send 0 as a placeholder) and computes the stored price by converting
+  // this CHF amount into the booking's currency (see
+  // backend/app/schemas/booking.py::BookingDateRangeInput). Never present
+  // on a Booking read back from the API.
+  price_chf?: number;
 }
 
 // Nested inside a Booking's "guest" Link field, which Beanie serializes with
@@ -186,6 +216,35 @@ export interface Booking {
   webhook_events: BookingWebhookEvent[];
   last_payment_check_at?: string | null;
   last_payment_error?: string | null;
+}
+
+// Response shape of GET /bookings/{id}/display and GET /bookings/display —
+// a currency-converted view of a booking's money fields, computed on
+// demand server-side. Lists are index-aligned with the corresponding lists
+// on Booking (date_ranges, charges, charge_schedule). Never carries raw
+// exchange rates, only final converted amounts (+ their CHF equivalent).
+export interface BookingRangeDisplay {
+  price: number;
+  price_chf: number;
+}
+
+export interface BookingChargeDisplay {
+  amount: number;
+  amount_chf: number;
+}
+
+export interface BookingScheduleDisplay {
+  amount: number;
+  amount_chf: number;
+}
+
+export interface BookingDisplay {
+  currency: Currency;
+  total_price: number;
+  total_price_chf: number;
+  date_ranges: BookingRangeDisplay[];
+  charges: BookingChargeDisplay[];
+  charge_schedule: BookingScheduleDisplay[];
 }
 
 export interface UpcomingCharge {
@@ -336,8 +395,8 @@ export function listPublicPlans(): Promise<Plan[]> {
   return request("/plans/public");
 }
 
-export function listPublicPrices(): Promise<Price[]> {
-  return request("/prices/public");
+export function listPublicPrices(currency: Currency): Promise<PublicPrice[]> {
+  return request(`/prices/public?currency=${currency}`);
 }
 
 export function listPublicBookedDateRanges(): Promise<BookedDateRange[]> {
@@ -374,6 +433,19 @@ export function deleteBooking(bookingId: string, token: string): Promise<void> {
 
 export function cancelBooking(bookingId: string, token: string): Promise<Booking> {
   return request(`/bookings/${bookingId}/cancel`, { method: "POST", headers: authHeaders(token) });
+}
+
+export function getBookingDisplay(bookingId: string, token: string, currency: Currency): Promise<BookingDisplay> {
+  return request(`/bookings/${bookingId}/display?currency=${currency}`, { headers: authHeaders(token) });
+}
+
+// Keyed by booking id — lets a bookings list fetch every visible booking's
+// converted amounts in one call instead of one request per booking.
+export function listBookingsDisplay(
+  token: string,
+  currency: Currency
+): Promise<Record<string, BookingDisplay>> {
+  return request(`/bookings/display?currency=${currency}`, { headers: authHeaders(token) });
 }
 
 export function createPaymentIntent(bookingId: string, token: string): Promise<PaymentIntentResponse> {

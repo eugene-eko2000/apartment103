@@ -5,8 +5,8 @@ import { createPortal } from "react-dom";
 import { format, differenceInCalendarDays, parse, parseISO } from "date-fns";
 import { enUS, de, fr, it } from "date-fns/locale";
 import type { Locale as DateFnsLocale } from "date-fns";
-import type { Booking, BookingCharge } from "@/lib/api";
-import { convertCurrency, formatPrice } from "@/lib/currency-config";
+import type { Booking, BookingCharge, BookingDisplay } from "@/lib/api";
+import { formatPrice } from "@/lib/currency-config";
 import { useCurrency } from "@/lib/currency-context";
 import { CancellationTimeline } from "@/components/CancellationTimeline";
 import type { Locale } from "@/lib/i18n-config";
@@ -51,10 +51,6 @@ function latestEndDate(booking: Booking): Date {
     .reduce((latest, current) => (current > latest ? current : latest));
 }
 
-function totalPrice(booking: Booking): number {
-  return booking.date_ranges.reduce((sum, range) => sum + range.price, 0);
-}
-
 function chargeReasonLabel(reason: BookingCharge["reason"], dict: BookingDetailsDict): string {
   switch (reason) {
     case "initial_charge":
@@ -68,11 +64,13 @@ function chargeReasonLabel(reason: BookingCharge["reason"], dict: BookingDetails
 
 export default function BookingDetailsModal({
   booking,
+  display,
   dict,
   lang,
   onClose,
 }: {
   booking: Booking;
+  display: BookingDisplay;
   dict: BookingDetailsDict;
   lang: Locale;
   onClose: () => void;
@@ -88,10 +86,17 @@ export default function BookingDetailsModal({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  const price = (amount: number) => formatPrice(convertCurrency(amount, booking.currency, preferredCurrency), preferredCurrency);
+  const price = (amount: number) => formatPrice(amount, preferredCurrency);
 
-  const paidCharges = booking.charges.filter((c) => c.status === "succeeded");
-  const upcomingCharges = booking.charge_schedule.filter((e) => e.status === "pending");
+  // display.charges/charge_schedule are index-aligned with booking's own
+  // (unfiltered) lists — pair them up before filtering by status so the
+  // amount for each entry still lines up after the filter.
+  const paidCharges = booking.charges
+    .map((charge, i) => ({ charge, amount: display.charges[i] }))
+    .filter((entry) => entry.charge.status === "succeeded");
+  const upcomingCharges = booking.charge_schedule
+    .map((entry, i) => ({ entry, amount: display.charge_schedule[i] }))
+    .filter((x) => x.entry.status === "pending");
 
   return createPortal(
     <div
@@ -141,7 +146,8 @@ export default function BookingDetailsModal({
                 const from = parse(range.begin_date, "yyyy-MM-dd", new Date());
                 const to = parse(range.end_date, "yyyy-MM-dd", new Date());
                 const nights = differenceInCalendarDays(to, from);
-                const perNight = nights > 0 ? range.price / nights : range.price;
+                const rangePrice = display.date_ranges[i].price;
+                const perNight = nights > 0 ? rangePrice / nights : rangePrice;
                 return (
                   <div key={i} className="px-4 py-2.5 flex items-center justify-between text-sm">
                     <span className="text-gray-700 dark:text-gray-300">
@@ -150,13 +156,13 @@ export default function BookingDetailsModal({
                         ({nights} {nights !== 1 ? dict.nights : dict.night}, {dict.averageNightly.replace("{price}", price(perNight))})
                       </span>
                     </span>
-                    <span className="font-semibold text-gray-900 dark:text-gray-100">{price(range.price)}</span>
+                    <span className="font-semibold text-gray-900 dark:text-gray-100">{price(rangePrice)}</span>
                   </div>
                 );
               })}
               <div className="px-4 py-2.5 flex items-center justify-between text-sm bg-gray-50 dark:bg-gray-900/40">
                 <span className="font-semibold text-gray-700 dark:text-gray-300">{dict.totalPrice}</span>
-                <span className="font-bold text-gray-900 dark:text-gray-100">{price(totalPrice(booking))}</span>
+                <span className="font-bold text-gray-900 dark:text-gray-100">{price(display.total_price)}</span>
               </div>
             </div>
           </div>
@@ -171,7 +177,7 @@ export default function BookingDetailsModal({
               checkInDate={earliestBeginDate(booking)}
               today={new Date()}
               dateLocale={dateFnsLocale}
-              price={totalPrice(booking)}
+              price={display.total_price}
               currency={preferredCurrency}
               cancellationLabel={dict.cancellationLabel}
               tillTemplate={dict.cancellationTill}
@@ -190,7 +196,7 @@ export default function BookingDetailsModal({
               <p className="text-sm text-gray-400 dark:text-gray-500">{dict.noPayments}</p>
             ) : (
               <ul className="space-y-1">
-                {paidCharges.map((charge, i) => (
+                {paidCharges.map(({ charge, amount }, i) => (
                   <li key={i} className="flex items-center justify-between text-sm">
                     <span className="text-gray-700 dark:text-gray-300">
                       {format(parseISO(charge.created_at), "dd/MM/yyyy")}
@@ -198,9 +204,7 @@ export default function BookingDetailsModal({
                         ({chargeReasonLabel(charge.reason, dict)})
                       </span>
                     </span>
-                    <span className="font-semibold text-gray-900 dark:text-gray-100">
-                      {formatPrice(convertCurrency(charge.amount, charge.currency, preferredCurrency), preferredCurrency)}
-                    </span>
+                    <span className="font-semibold text-gray-900 dark:text-gray-100">{price(amount.amount)}</span>
                   </li>
                 ))}
               </ul>
@@ -211,12 +215,12 @@ export default function BookingDetailsModal({
               <p className="text-sm text-gray-400 dark:text-gray-500">{dict.noUpcomingCharges}</p>
             ) : (
               <ul className="space-y-1">
-                {upcomingCharges.map((entry, i) => (
+                {upcomingCharges.map(({ entry, amount }, i) => (
                   <li key={i} className="flex items-center justify-between text-sm">
                     <span className="text-gray-700 dark:text-gray-300">
                       {format(parse(entry.charge_date, "yyyy-MM-dd", new Date()), "dd/MM/yyyy")}
                     </span>
-                    <span className="font-semibold text-gray-900 dark:text-gray-100">{price(entry.amount)}</span>
+                    <span className="font-semibold text-gray-900 dark:text-gray-100">{price(amount.amount)}</span>
                   </li>
                 ))}
               </ul>

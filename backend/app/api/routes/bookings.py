@@ -3,11 +3,20 @@ from beanie.operators import In
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import Principal, get_current_principal
-from app.models.booking import Booking, BookingCancellationPolicy
+from app.models.booking import Booking, BookingCancellationPolicy, BookingDateRange
 from app.models.cancellation_policy import CancellationPolicy
-from app.models.guest import Guest
-from app.schemas.booking import BookedDateRange, BookingCreate
+from app.models.guest import Currency, Guest
+from app.schemas.booking import (
+    BookedDateRange,
+    BookingChargeDisplay,
+    BookingCreate,
+    BookingDateRangeInput,
+    BookingDisplay,
+    BookingRangeDisplay,
+    BookingScheduleDisplay,
+)
 from app.services.charge_schedule import build_charge_schedule
+from app.services.currency_service import convert_amount
 from app.services.payment_reconciliation import settle_cancellation
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
@@ -59,6 +68,64 @@ def _ensure_can_access_booking(principal: Principal, booking: Booking) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized for this booking")
 
 
+async def _date_ranges_in_currency(
+    date_ranges: list[BookingDateRangeInput], currency: Currency
+) -> list[BookingDateRange]:
+    """Resolves each input range's stored `price`: if `price_chf` is set
+    (the booking widget's guest flow), it's converted to `currency` here —
+    the one place a booking's authoritative charge amount is produced from a
+    CHF figure. Otherwise `price` is used exactly as given (the admin
+    editor's manual-override flow), untouched by currency conversion."""
+    return [
+        BookingDateRange(
+            begin_date=date_range.begin_date,
+            end_date=date_range.end_date,
+            price=(
+                await convert_amount(date_range.price_chf, "CHF", currency)
+                if date_range.price_chf is not None
+                else date_range.price
+            ),
+        )
+        for date_range in date_ranges
+    ]
+
+
+async def _build_display(booking: Booking, currency: Currency) -> BookingDisplay:
+    """Currency-converted view of `booking`'s money fields — computed on
+    demand, never persisted. Powers GET /bookings/{id}/display and
+    GET /bookings/display; never used by the admin-facing plain Booking
+    endpoints, which always show raw, un-converted figures."""
+    date_ranges = [
+        BookingRangeDisplay(
+            price=await convert_amount(r.price, booking.currency, currency),
+            price_chf=await convert_amount(r.price, booking.currency, "CHF"),
+        )
+        for r in booking.date_ranges
+    ]
+    charges = [
+        BookingChargeDisplay(
+            amount=await convert_amount(c.amount, c.currency, currency),
+            amount_chf=await convert_amount(c.amount, c.currency, "CHF"),
+        )
+        for c in booking.charges
+    ]
+    charge_schedule = [
+        BookingScheduleDisplay(
+            amount=await convert_amount(e.amount, booking.currency, currency),
+            amount_chf=await convert_amount(e.amount, booking.currency, "CHF"),
+        )
+        for e in booking.charge_schedule
+    ]
+    return BookingDisplay(
+        currency=currency,
+        total_price=await convert_amount(booking.total_price, booking.currency, currency),
+        total_price_chf=await convert_amount(booking.total_price, booking.currency, "CHF"),
+        date_ranges=date_ranges,
+        charges=charges,
+        charge_schedule=charge_schedule,
+    )
+
+
 @router.post("", response_model=Booking, status_code=status.HTTP_201_CREATED)
 async def create_booking(
     payload: BookingCreate, principal: Principal = Depends(get_current_principal)
@@ -78,7 +145,7 @@ async def create_booking(
     booking = Booking(
         guest=guest,
         currency=payload.currency,
-        date_ranges=payload.date_ranges,
+        date_ranges=await _date_ranges_in_currency(payload.date_ranges, payload.currency),
         cancellation_policy=_snapshot_cancellation_policy(cancellation_policy),
     )
     booking.charge_schedule = build_charge_schedule(booking)
@@ -97,6 +164,19 @@ async def list_bookings(principal: Principal = Depends(get_current_principal)) -
     return await Booking.find(In(Booking.id, own_booking_ids), fetch_links=True).to_list()
 
 
+# Registered before "/{booking_id}" so the literal "display" path segment
+# isn't swallowed by that route's PydanticObjectId path param.
+@router.get("/display", response_model=dict[str, BookingDisplay])
+async def list_bookings_display(
+    currency: Currency, principal: Principal = Depends(get_current_principal)
+) -> dict[str, BookingDisplay]:
+    if principal.is_admin:
+        bookings = await Booking.find_all().to_list()
+    else:
+        bookings = await Booking.find({"guest.$id": principal.id}).to_list()
+    return {str(booking.id): await _build_display(booking, currency) for booking in bookings}
+
+
 @router.get("/{booking_id}", response_model=Booking)
 async def get_booking(
     booking_id: PydanticObjectId, principal: Principal = Depends(get_current_principal)
@@ -106,6 +186,17 @@ async def get_booking(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
     _ensure_can_access_booking(principal, booking)
     return booking
+
+
+@router.get("/{booking_id}/display", response_model=BookingDisplay)
+async def get_booking_display(
+    booking_id: PydanticObjectId, currency: Currency, principal: Principal = Depends(get_current_principal)
+) -> BookingDisplay:
+    booking = await Booking.get(booking_id)
+    if booking is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
+    _ensure_can_access_booking(principal, booking)
+    return await _build_display(booking, currency)
 
 
 @router.post("/{booking_id}/cancel", response_model=Booking)
@@ -138,7 +229,7 @@ async def update_booking(
     cancellation_policy = await _get_cancellation_policy_or_404(payload.cancellation_policy_id)
     booking.guest = guest
     booking.currency = payload.currency
-    booking.date_ranges = payload.date_ranges
+    booking.date_ranges = await _date_ranges_in_currency(payload.date_ranges, payload.currency)
     booking.cancellation_policy = _snapshot_cancellation_policy(cancellation_policy)
     booking.charge_schedule = build_charge_schedule(booking)
     await booking.save()
