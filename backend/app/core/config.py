@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -53,6 +55,10 @@ class Settings(BaseSettings):
     twilio_account_sid: str | None = None
     twilio_auth_token: str | None = None
     twilio_messaging_service_sid: str | None = None
+
+    # Markup applied on top of Stripe's FX rate when converting a CHF price
+    # into a guest-facing non-CHF currency (see app/services/currency_service.py).
+    commission_rate: Decimal = Decimal("0.025")
 
 
 settings = Settings()

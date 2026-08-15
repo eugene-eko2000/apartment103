@@ -26,9 +26,9 @@ Each currency in the response carries several rate variants
 (ECB) market rate, `base_rate` is Stripe's own rate before Stripe's fee, and
 `exchange_rate` is base_rate with Stripe's *own* ~2% fx_fee_rate + a small
 duration premium already deducted. We use `base_rate` — Stripe's rate,
-without Stripe's own fee baked in — so this site's separate 2% commission
-(COMMISSION_RATE below) is the only markup applied, instead of stacking on
-top of Stripe's.
+without Stripe's own fee baked in — so this site's separate commission
+(settings.commission_rate) is the only markup applied, instead of stacking
+on top of Stripe's.
 """
 
 import asyncio
@@ -48,8 +48,6 @@ SUPPORTED_CURRENCIES: tuple[Currency, ...] = ("CHF", "EUR", "USD", "GBP")
 # CHF is the currency all prices are stored in; FX quotes are requested for
 # the other three, converting *into* CHF (see get_exchange_rates for why).
 NON_CHF_CURRENCIES: tuple[Currency, ...] = tuple(c for c in SUPPORTED_CURRENCIES if c != "CHF")
-
-COMMISSION_RATE = Decimal("0.02")
 
 # The FX Quotes API is still in preview; Stripe requires this pinned on the
 # request rather than picking up the account's default API version.
@@ -100,13 +98,14 @@ async def get_exchange_rates() -> dict[Currency, Decimal]:
 
 async def convert_amount(amount: Decimal, from_currency: Currency, to_currency: Currency) -> Decimal:
     """Convert `amount` from one supported currency to another using live
-    Stripe FX rates, adding a 2% commission whenever the target currency
-    isn't CHF (converting into the base currency carries no markup)."""
+    Stripe FX rates, adding settings.commission_rate on top whenever the
+    target currency isn't CHF (converting into the base currency carries no
+    markup)."""
     if from_currency == to_currency:
         return to_decimal(amount)
 
     rates = await get_exchange_rates()
     converted = (amount / rates[from_currency]) * rates[to_currency]
     if to_currency != "CHF":
-        converted *= Decimal("1") + COMMISSION_RATE
+        converted *= Decimal("1") + settings.commission_rate
     return to_decimal(converted)
