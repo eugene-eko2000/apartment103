@@ -11,21 +11,33 @@ export function applicableRefundPercentage(rules: CancellationRule[], daysBefore
   return applicable ? applicable.refund_percentage : 0;
 }
 
-// When two or more plans would charge the same cancellation fee *right now*
-// for this check-in (i.e. applicableRefundPercentage resolves to the same
-// value, even if their underlying rule schedules differ elsewhere), only the
-// cheapest of them is worth showing as a distinct rate option — the rest are
-// strictly worse choices with no upside for these dates. Ties keep the first
-// plan encountered.
+// Two plans are only interchangeable if their cancellation terms match for
+// every day remaining between now and check-in, not just today. Rule
+// thresholds beyond daysBeforeCheckIn can never be reached (the guest is
+// already past them at booking time), so they're excluded from the
+// comparison; a plan is uniquely identified by the thresholds it can still
+// hit plus the refund each one pays out.
+function scheduleFingerprint(rules: CancellationRule[], daysBeforeCheckIn: number): string {
+  return [...rules]
+    .filter((rule) => rule.days_before_checkin <= daysBeforeCheckIn)
+    .sort((a, b) => b.days_before_checkin - a.days_before_checkin)
+    .map((rule) => `${rule.days_before_checkin}:${rule.refund_percentage}`)
+    .join("|");
+}
+
+// When two or more plans have the exact same cancellation schedule for the
+// remaining time until check-in, only the cheapest of them is worth showing
+// as a distinct rate option — the rest are strictly worse choices with no
+// upside for these dates. Ties keep the first plan encountered.
 export function cheapestPerCancellationFee(plans: Plan[], daysBeforeCheckIn: number): Plan[] {
-  const feeOf = (plan: Plan) => applicableRefundPercentage(plan.cancellation_policy.rules, daysBeforeCheckIn);
-  const cheapestForFee = new Map<number, Plan>();
+  const keyOf = (plan: Plan) => scheduleFingerprint(plan.cancellation_policy.rules, daysBeforeCheckIn);
+  const cheapestForKey = new Map<string, Plan>();
   for (const plan of plans) {
-    const fee = feeOf(plan);
-    const current = cheapestForFee.get(fee);
+    const key = keyOf(plan);
+    const current = cheapestForKey.get(key);
     if (!current || plan.price_ratio < current.price_ratio) {
-      cheapestForFee.set(fee, plan);
+      cheapestForKey.set(key, plan);
     }
   }
-  return plans.filter((plan) => cheapestForFee.get(feeOf(plan)) === plan);
+  return plans.filter((plan) => cheapestForKey.get(keyOf(plan)) === plan);
 }
