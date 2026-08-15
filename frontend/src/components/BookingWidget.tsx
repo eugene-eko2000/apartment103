@@ -553,9 +553,9 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     : guestStep === "submitting" || guestStep === "payment"
     ? dict.paymentDetailsTitle
     : dict.planYourStay;
-  const showFromPrefix = !extended || guestStep === "plan";
-  const headerPrice = showFromPrefix ? activePrice : chosenPlanPrice;
-  const headerRawPrice = showFromPrefix ? activeRawPrice : chosenPlanRawPrice;
+  const showFromPrefix = (!extended || guestStep === "plan") && !selectedPlan;
+  const headerPrice = selectedPlan ? chosenPlanPrice : activePrice;
+  const headerRawPrice = selectedPlan ? chosenPlanRawPrice : activeRawPrice;
   const isFormValid =
     !!range?.from &&
     !!range?.to &&
