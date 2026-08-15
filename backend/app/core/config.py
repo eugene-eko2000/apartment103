@@ -58,7 +58,7 @@ class Settings(BaseSettings):
 
     # Markup applied on top of Stripe's FX rate when converting a CHF price
     # into a guest-facing non-CHF currency (see app/services/currency_service.py).
-    commission_rate: Decimal = Decimal("0.025")
+    commission_rate: Decimal = Decimal("0.04")
 
 
 settings = Settings()
