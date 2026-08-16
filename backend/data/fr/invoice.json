@@ -1,0 +1,15 @@
+{
+  "invoice": "Facture",
+  "date": "Date",
+  "booking_reference": "Référence de réservation",
+  "billed_to": "Facturé à",
+  "stay": "Séjour",
+  "description": "Description",
+  "amount": "Montant",
+  "payment_reference": "Référence de paiement",
+  "charge_reasons": {
+    "initial_charge": "Acompte / paiement initial",
+    "scheduled_accrual": "Échéance de paiement",
+    "cancellation_settlement": "Règlement d'annulation"
+  }
+}

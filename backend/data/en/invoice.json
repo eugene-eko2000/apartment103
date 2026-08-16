@@ -1,0 +1,15 @@
+{
+  "invoice": "Invoice",
+  "date": "Date",
+  "booking_reference": "Booking reference",
+  "billed_to": "Billed to",
+  "stay": "Stay",
+  "description": "Description",
+  "amount": "Amount",
+  "payment_reference": "Payment reference",
+  "charge_reasons": {
+    "initial_charge": "Booking deposit / initial charge",
+    "scheduled_accrual": "Scheduled payment installment",
+    "cancellation_settlement": "Cancellation settlement charge"
+  }
+}

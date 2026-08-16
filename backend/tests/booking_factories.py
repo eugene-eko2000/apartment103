@@ -5,16 +5,17 @@ from datetime import date
 
 from app.models.booking import Booking, BookingCancellationPolicy, BookingDateRange
 from app.models.cancellation_policy import CancellationRule
-from app.models.guest import Guest, ResidenceAddress
+from app.models.guest import Guest, Language, ResidenceAddress
 
 
-def guest() -> Guest:
+def guest(preferred_language: Language | None = None) -> Guest:
     return Guest(
         family_name="Test",
         first_name="Guest",
         residence_address=ResidenceAddress(street_address="1 St", zip="0000", city="City", country="CH"),
         phone_number="+41000000000",
         email="test@example.com",
+        preferred_language=preferred_language,
     )
 
 
