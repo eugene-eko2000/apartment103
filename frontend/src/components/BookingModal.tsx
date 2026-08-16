@@ -5,6 +5,7 @@ import { ApiError, getGuest, requestOtp, verifyOtp, type Guest, type GuestInput,
 import type { PaymentStepDict } from "@/components/PaymentStep";
 import { useOtpResendCooldown } from "@/lib/useOtpResendCooldown";
 import type { Locale } from "@/lib/i18n-config";
+import type { Currency } from "@/lib/currency-config";
 
 export interface BookingModalDict {
   close: string;
@@ -98,11 +99,13 @@ export function guestToForm(guest: Guest, fallbackLang: Locale | null = null): G
 export default function BookingModal({
   dict,
   lang,
+  currency,
   onClose,
   onVerified,
 }: {
   dict: BookingModalDict;
   lang: Locale;
+  currency: Currency;
   onClose: () => void;
   onVerified: (identity: VerifiedIdentity) => void;
 }) {
@@ -202,6 +205,7 @@ export default function BookingModal({
           email: isEmail ? identifier.trim() : "",
           phone_number: isEmail ? "" : identifier.trim(),
           preferred_language: lang,
+          preferred_currency: currency,
         },
       });
     } catch (err) {

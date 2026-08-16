@@ -851,7 +851,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     );
   };
 
-  const submitBooking = async (finalGuestId: string, token: string) => {
+  const submitBooking = async (finalGuestId: string, token: string, bookingCurrency: Currency = currency) => {
     if (!selectedPlan || !range?.from || !range?.to) return;
     const matchedRate = findDailyRate(prices, format(range.from, "yyyy-MM-dd"));
     if (!matchedRate) return;
@@ -864,7 +864,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
       const bookingInput = {
         guest_id: finalGuestId,
         cancellation_policy_id: selectedPlan.cancellation_policy.id,
-        currency,
+        currency: bookingCurrency,
         date_ranges: [
           {
             begin_date: format(range.from, "yyyy-MM-dd"),
@@ -916,7 +916,10 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
           isAdminBooking: true,
           expiresAt: Date.now() + expires_in * 1000,
         });
-        await submitBooking(guest._id, verified.authToken);
+        if (guestForm.preferred_currency && guestForm.preferred_currency !== currency) {
+          setCurrency(guestForm.preferred_currency);
+        }
+        await submitBooking(guest._id, verified.authToken, guestForm.preferred_currency ?? currency);
       } else if (verified.guestMode === "create") {
         const result = await registerGuestSelf(verified.authToken, guestForm);
         saveGuestSession({
@@ -934,13 +937,13 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
         if (guestForm.preferred_currency && guestForm.preferred_currency !== currency) {
           setCurrency(guestForm.preferred_currency);
         }
-        await submitBooking(result.guest._id, result.access_token);
+        await submitBooking(result.guest._id, result.access_token, guestForm.preferred_currency ?? currency);
       } else if (verified.guestMode === "update" && verified.guestId) {
         await updateGuest(verified.guestId, verified.authToken, guestForm);
         if (guestForm.preferred_currency && guestForm.preferred_currency !== currency) {
           setCurrency(guestForm.preferred_currency);
         }
-        await submitBooking(verified.guestId, verified.authToken);
+        await submitBooking(verified.guestId, verified.authToken, guestForm.preferred_currency ?? currency);
       }
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : String(err));
@@ -1590,6 +1593,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
         <BookingModal
           dict={dict.modal}
           lang={lang}
+          currency={currency}
           onClose={() => setIdentityModalOpen(false)}
           onVerified={handleVerified}
         />

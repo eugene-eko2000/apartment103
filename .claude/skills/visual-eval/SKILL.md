@@ -33,8 +33,9 @@ Follow these exact steps in order:
   2. Compute the absolute difference between them (`cv2.absdiff`).
   3. Apply a binary threshold to isolate the changed pixels.
   4. Find the contours of the thresholded differences.
-  5. Draw visible bounding boxes (e.g., in bright red, thickness 2) around the contours on a copy of the **eval** screenshot.
-  6. Save this final annotated image as `step{N}_annotated.png`.
+  5. Draw visible bounding boxes (e.g., in bright red, thickness 2) around the contours on a copy of both **base** and **eval** screenshots.
+  6. Combine annotaged base and eval screenshots into a side-by-side image. Map each annotation between two images. Connect each annotation on base side with a corresponding one on eval side with a line. If there are unmatched annotations, indicate them with a label (e.g., "New" or "Removed").
+  7. Save this final annotated image as `step{N}_annotated.png`.
 * Execute the comparison script.
 
 ## 5. Teardown
