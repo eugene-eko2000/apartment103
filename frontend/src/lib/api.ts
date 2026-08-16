@@ -185,6 +185,13 @@ export interface BookingCharge {
   reason: "initial_charge" | "scheduled_accrual" | "cancellation_settlement";
   status: "succeeded" | "requires_action" | "failed";
   created_at: string;
+  // Stripe's settlement-currency (CHF) view of this charge, read from its
+  // balance transaction — null until fetched (see refreshChargeFees).
+  amount_chf?: number | null;
+  exchange_rate?: number | null;
+  processing_fee_chf?: number | null;
+  conversion_fee_chf?: number | null;
+  net_amount_chf?: number | null;
 }
 
 export interface BookingWebhookEvent {
@@ -433,6 +440,13 @@ export function deleteBooking(bookingId: string, token: string): Promise<void> {
 
 export function cancelBooking(bookingId: string, token: string): Promise<Booking> {
   return request(`/bookings/${bookingId}/cancel`, { method: "POST", headers: authHeaders(token) });
+}
+
+export function refreshChargeFees(bookingId: string, paymentIntentId: string, token: string): Promise<Booking> {
+  return request(`/bookings/${bookingId}/charges/${encodeURIComponent(paymentIntentId)}/fees/refresh`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
 }
 
 export function getBookingDisplay(bookingId: string, token: string, currency: Currency): Promise<BookingDisplay> {

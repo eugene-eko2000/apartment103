@@ -7,8 +7,10 @@ import {
   listBookings,
   listCancellationPolicies,
   listGuests,
+  refreshChargeFees,
   updateBooking,
   type Booking,
+  type BookingCharge,
   type BookingDateRange,
   type BookingInput,
   type BookingWebhookEvent,
@@ -104,6 +106,101 @@ function WebhookEventItem({ event }: { event: BookingWebhookEvent }) {
   );
 }
 
+function PaymentBreakdownSummary({ booking }: { booking: Booking }) {
+  const totalPrice = booking.date_ranges.reduce((sum, r) => sum + r.price, 0);
+  const charges = booking.charges;
+  const hasFeeData = charges.length > 0 && charges.every((c) => c.amount_chf != null);
+  const sum = (pick: (c: BookingCharge) => number | null | undefined) =>
+    charges.reduce((total, c) => total + (pick(c) ?? 0), 0);
+
+  return (
+    <div>
+      <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">Payment breakdown</span>
+      <div className="grid grid-cols-2 gap-3 text-sm text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2">
+        <div>
+          <span className="block text-xs text-slate-500 dark:text-slate-400">Total price</span>
+          {totalPrice.toFixed(2)} {booking.currency}
+        </div>
+        <div>
+          <span className="block text-xs text-slate-500 dark:text-slate-400">Total price (CHF)</span>
+          {hasFeeData ? `${sum((c) => c.amount_chf).toFixed(2)} CHF` : "—"}
+        </div>
+        <div>
+          <span className="block text-xs text-slate-500 dark:text-slate-400">Processing fee (CHF)</span>
+          {hasFeeData ? sum((c) => c.processing_fee_chf).toFixed(2) : "—"}
+        </div>
+        {booking.currency !== "CHF" && (
+          <div>
+            <span className="block text-xs text-slate-500 dark:text-slate-400">Currency conversion fee (CHF)</span>
+            {hasFeeData ? sum((c) => c.conversion_fee_chf).toFixed(2) : "—"}
+          </div>
+        )}
+        <div>
+          <span className="block text-xs text-slate-500 dark:text-slate-400">Net received (CHF)</span>
+          {hasFeeData ? sum((c) => c.net_amount_chf).toFixed(2) : "—"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChargeFeeDetails({
+  bookingId,
+  charge,
+  token,
+  onRefreshed,
+}: {
+  bookingId: string;
+  charge: BookingCharge;
+  token: string;
+  onRefreshed: (updated: Booking) => void;
+}) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleRefresh = async () => {
+    setPending(true);
+    setError(null);
+    try {
+      const updated = await refreshChargeFees(bookingId, charge.stripe_payment_intent_id, token);
+      onRefreshed(updated);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const refreshButton = (
+    <button
+      type="button"
+      onClick={handleRefresh}
+      disabled={pending}
+      className="underline decoration-dotted hover:text-slate-600 dark:hover:text-slate-300 disabled:opacity-50"
+    >
+      {pending ? "Refreshing…" : charge.amount_chf == null ? "Refresh fees" : "Refresh"}
+    </button>
+  );
+
+  return (
+    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-slate-500 dark:text-slate-400">
+      {charge.amount_chf == null ? (
+        <span>Fee data not yet available.</span>
+      ) : (
+        <>
+          <span>CHF equivalent: {charge.amount_chf.toFixed(2)} CHF</span>
+          <span>Processing fee: {(charge.processing_fee_chf ?? 0).toFixed(2)} CHF</span>
+          {!!charge.conversion_fee_chf && <span>Conversion fee: {charge.conversion_fee_chf.toFixed(2)} CHF</span>}
+          <span>Net: {(charge.net_amount_chf ?? 0).toFixed(2)} CHF</span>
+          {charge.exchange_rate != null && <span>FX rate: {charge.exchange_rate.toFixed(4)}</span>}
+        </>
+      )}
+      {refreshButton}
+      {error && <span className="text-red-500 dark:text-red-400">{error}</span>}
+    </div>
+  );
+}
+
 export default function BookingsPanel() {
   const { session, logout } = useAdminAuth();
   const token = session!.token;
@@ -167,6 +264,11 @@ export default function BookingsPanel() {
       if (err instanceof ApiError && err.status === 401) return logout();
       window.alert(err instanceof ApiError ? err.message : String(err));
     }
+  };
+
+  const handleChargeFeesRefreshed = (updated: Booking) => {
+    setEditing(updated);
+    setBookings((prev) => prev.map((b) => (b._id === updated._id ? updated : b)));
   };
 
   const handleBulkDelete = async (selectedBookings: Booking[]) => {
@@ -323,6 +425,8 @@ export default function BookingsPanel() {
                 <ReadOnlyField label="Last payment error" value={editing.last_payment_error ?? "—"} />
               </div>
 
+              <PaymentBreakdownSummary booking={editing} />
+
               <div>
                 <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
                   Charges ({editing.charges.length})
@@ -334,15 +438,23 @@ export default function BookingsPanel() {
                     {editing.charges.map((charge, i) => (
                       <div
                         key={i}
-                        className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 flex flex-wrap gap-x-3 gap-y-0.5"
+                        className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 space-y-1"
                       >
-                        <span className="font-semibold">
-                          {charge.amount.toFixed(2)} {charge.currency}
-                        </span>
-                        <span>{charge.reason}</span>
-                        <span>{charge.status}</span>
-                        <span className="text-slate-400 dark:text-slate-500">{new Date(charge.created_at).toLocaleString()}</span>
-                        <span className="text-slate-400 dark:text-slate-500 break-all">{charge.stripe_payment_intent_id}</span>
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                          <span className="font-semibold">
+                            {charge.amount.toFixed(2)} {charge.currency}
+                          </span>
+                          <span>{charge.reason}</span>
+                          <span>{charge.status}</span>
+                          <span className="text-slate-400 dark:text-slate-500">{new Date(charge.created_at).toLocaleString()}</span>
+                          <span className="text-slate-400 dark:text-slate-500 break-all">{charge.stripe_payment_intent_id}</span>
+                        </div>
+                        <ChargeFeeDetails
+                          bookingId={editing._id}
+                          charge={charge}
+                          token={token}
+                          onRefreshed={handleChargeFeesRefreshed}
+                        />
                       </div>
                     ))}
                   </div>

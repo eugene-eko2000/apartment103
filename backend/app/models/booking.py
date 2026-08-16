@@ -56,6 +56,18 @@ class BookingCharge(BaseModel):
     status: BookingChargeStatus
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+    # Stripe's own settlement-currency (CHF) view of this charge, read from
+    # its balance transaction (see app.services.stripe_service.
+    # get_charge_fee_breakdown) once, either right after payment_intent.
+    # succeeded or via the admin "refresh fees" action. None until fetched —
+    # e.g. for charges made before this existed, or if the balance
+    # transaction wasn't settled yet when the webhook fired.
+    amount_chf: Money | None = None
+    exchange_rate: float | None = None
+    processing_fee_chf: Money | None = None
+    conversion_fee_chf: Money | None = None
+    net_amount_chf: Money | None = None
+
 
 class BookingChargeScheduleEntry(BaseModel):
     """One increment of the total price becoming due, computed once at

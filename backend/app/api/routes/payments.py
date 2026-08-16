@@ -6,7 +6,7 @@ import stripe
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from app.api.deps import Principal, get_current_principal
+from app.api.deps import Principal, get_current_principal, require_admin
 from app.api.routes.bookings import _ensure_can_access_booking
 from app.models.booking import Booking, BookingCharge, BookingWebhookEvent
 from app.models.payment_event import PaymentEvent
@@ -137,6 +137,43 @@ async def retry_payment(
     )
 
 
+@router.post("/bookings/{booking_id}/charges/{payment_intent_id}/fees/refresh", response_model=Booking)
+async def refresh_charge_fees(
+    booking_id: PydanticObjectId, payment_intent_id: str, principal: Principal = Depends(require_admin)
+) -> Booking:
+    """Manually (re-)fetches a charge's Stripe fee/FX breakdown — covers the
+    case _attach_fee_breakdown missed at webhook time (balance transaction
+    not settled yet), and backfills charges made before this feature
+    existed. Admin-only: this is internal financial data, not shown to
+    guests."""
+    booking = await _get_booking_or_404(booking_id)
+    charge = next((c for c in booking.charges if c.stripe_payment_intent_id == payment_intent_id), None)
+    if charge is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Charge not found on this booking")
+
+    try:
+        breakdown = await stripe_service.get_charge_fee_breakdown(payment_intent_id)
+    except stripe.StripeError as exc:
+        # Surfaced to the admin (unlike _attach_fee_breakdown's silent,
+        # best-effort webhook-time fetch) since they explicitly asked for a
+        # refresh and need to know it didn't work.
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Stripe request failed: {exc.user_message or exc}"
+        ) from exc
+    if breakdown is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Stripe hasn't settled this charge's balance transaction yet — try again shortly.",
+        )
+    charge.amount_chf = breakdown.amount_settlement
+    charge.exchange_rate = breakdown.exchange_rate
+    charge.processing_fee_chf = breakdown.processing_fee_settlement
+    charge.conversion_fee_chf = breakdown.conversion_fee_settlement
+    charge.net_amount_chf = breakdown.net_settlement
+    await booking.save()
+    return booking
+
+
 # Stripe events this handler acts on, grouped by the booking-lifecycle step
 # they belong to. Anything else is still logged (see stripe_webhook below)
 # but doesn't change payment_status/charges.
@@ -185,6 +222,27 @@ async def _apply_setup_failed(booking: Booking, setup_intent: dict) -> None:
     await booking.save()
 
 
+async def _attach_fee_breakdown(booking: Booking, charge: BookingCharge) -> None:
+    """Best-effort: Stripe's balance transaction (and thus the fee/FX
+    breakdown) can lag a moment behind payment_intent.succeeded, so a miss
+    here just leaves the charge's fee fields unset — an admin can backfill
+    later via POST .../fees/refresh. Must never raise, since this runs
+    inside the webhook handler."""
+    try:
+        breakdown = await stripe_service.get_charge_fee_breakdown(charge.stripe_payment_intent_id)
+    except Exception:
+        logger.exception("Failed to fetch Stripe fee breakdown for %s", charge.stripe_payment_intent_id)
+        return
+    if breakdown is None:
+        return
+    charge.amount_chf = breakdown.amount_settlement
+    charge.exchange_rate = breakdown.exchange_rate
+    charge.processing_fee_chf = breakdown.processing_fee_settlement
+    charge.conversion_fee_chf = breakdown.conversion_fee_settlement
+    charge.net_amount_chf = breakdown.net_settlement
+    await booking.save()
+
+
 async def _apply_successful_charge(booking: Booking, payment_intent: dict) -> None:
     amount = stripe_service.from_minor_units(payment_intent["amount"])
     currency = payment_intent["currency"].upper()
@@ -213,6 +271,8 @@ async def _apply_successful_charge(booking: Booking, payment_intent: dict) -> No
     await booking.save()
 
     charge = booking.charges[-1]
+    await _attach_fee_breakdown(booking, charge)
+
     if reason == "initial_charge":
         await _send_email_safely(booking_emails.send_booking_confirmation_email(booking))
     else:
@@ -252,8 +312,11 @@ async def stripe_webhook(request: Request) -> dict[str, str]:
 
     # stripe-python's StripeObject no longer subclasses dict, so it doesn't
     # support .get() — convert to a plain (recursively-converted) dict here so
-    # the handlers below, which use .get() throughout, keep working.
-    obj = event.data.object.to_dict()
+    # the handlers below, which use .get() throughout, keep working. Tests
+    # monkeypatch construct_webhook_event with an already-plain-dict object,
+    # which has no .to_dict() to call.
+    raw_object = event.data.object
+    obj = raw_object.to_dict() if hasattr(raw_object, "to_dict") else raw_object
     booking_id_str = obj.get("metadata", {}).get("booking_id")
     booking: Booking | None = None
     if booking_id_str:

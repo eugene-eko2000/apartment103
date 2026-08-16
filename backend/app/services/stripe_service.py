@@ -9,13 +9,17 @@ threading, idempotency keys) stay in one place.
 """
 
 import asyncio
+import logging
 from decimal import Decimal
 
 import stripe
+from pydantic import BaseModel
 
 from app.core.config import settings
 from app.core.money import to_decimal
 from app.models.guest import Currency, Guest
+
+logger = logging.getLogger(__name__)
 
 stripe.api_key = settings.stripe_secret_key
 
@@ -109,3 +113,74 @@ async def charge_off_session(
 def construct_webhook_event(payload: bytes, sig_header: str) -> stripe.Event:
     # Signature verification is local/CPU-bound (HMAC), no network call.
     return stripe.Webhook.construct_event(payload, sig_header, settings.stripe_webhook_secret)
+
+
+class ChargeFeeBreakdown(BaseModel):
+    """Stripe's settlement-currency (CHF) view of one charge, read from its
+    balance transaction."""
+
+    settlement_currency: Currency
+    amount_settlement: Decimal
+    exchange_rate: float | None
+    processing_fee_settlement: Decimal
+    conversion_fee_settlement: Decimal
+    net_settlement: Decimal
+
+
+async def get_charge_fee_breakdown(payment_intent_id: str) -> ChargeFeeBreakdown | None:
+    """Fetches and parses the fee/FX breakdown for a succeeded charge from
+    its balance transaction. Returns None if it isn't available to read yet
+    (the balance transaction can lag briefly behind payment_intent.succeeded
+    for some payment methods) — callers should treat that as "not ready,
+    try again later" rather than an error.
+
+    Splitting fee_details into "processing" vs "currency conversion" relies
+    on matching "conversion" in each entry's description (case-insensitive):
+    Stripe's fee_details `type` field doesn't distinguish them (both are
+    "stripe_fee"), and the description is the only signal the API exposes
+    for this split. Everything not matched as a conversion fee is bucketed
+    as processing fee; if fee_details is empty, the whole `fee` is bucketed
+    as processing fee so no amount is silently dropped.
+    """
+    intent = await asyncio.to_thread(
+        stripe.PaymentIntent.retrieve,
+        payment_intent_id,
+        expand=["latest_charge.balance_transaction"],
+    )
+    charge = intent.latest_charge
+    balance_transaction = charge.balance_transaction if charge else None
+    if balance_transaction is None:
+        return None
+
+    settlement_currency = balance_transaction.currency.upper()
+    if settlement_currency != "CHF":
+        # This app's pricing/commission model assumes CHF settlement (see
+        # app/services/currency_service.py) — storing another currency's
+        # figures under *_chf fields would be misleading, so refuse instead.
+        logger.warning(
+            "Stripe balance transaction for %s settled in %s, not CHF; skipping fee breakdown",
+            payment_intent_id,
+            settlement_currency,
+        )
+        return None
+
+    conversion_fee = Decimal("0")
+    processing_fee = Decimal("0")
+    fee_details = balance_transaction.fee_details or []
+    for detail in fee_details:
+        amount = from_minor_units(detail.amount)
+        if "conversion" in (detail.description or "").lower():
+            conversion_fee += amount
+        else:
+            processing_fee += amount
+    if not fee_details:
+        processing_fee = from_minor_units(balance_transaction.fee)
+
+    return ChargeFeeBreakdown(
+        settlement_currency=settlement_currency,
+        amount_settlement=from_minor_units(balance_transaction.amount),
+        exchange_rate=balance_transaction.exchange_rate,
+        processing_fee_settlement=processing_fee,
+        conversion_fee_settlement=conversion_fee,
+        net_settlement=from_minor_units(balance_transaction.net),
+    )
