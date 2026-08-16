@@ -18,6 +18,7 @@ import { Modal } from "../Modal";
 import { SelectField, SubmitButton, TextField } from "../FormFields";
 import { PhoneInput } from "@/components/PhoneInput";
 import { CountrySelect } from "@/components/CountrySelect";
+import { isValidCountry } from "@/lib/countries";
 
 const LANGUAGES: Language[] = ["en", "de", "fr", "it"];
 const CURRENCIES: Currency[] = ["EUR", "CHF", "USD", "GBP"];
@@ -226,7 +227,11 @@ export default function GuestsPanel() {
               />
             </div>
             {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
-            <SubmitButton pending={pending} label={editing ? "Save changes" : "Create guest"} />
+            <SubmitButton
+              pending={pending}
+              label={editing ? "Save changes" : "Create guest"}
+              disabled={!isValidCountry(form.residence_address.country)}
+            />
           </form>
         </Modal>
       )}

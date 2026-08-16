@@ -145,11 +145,19 @@ export function FileField({
   );
 }
 
-export function SubmitButton({ pending, label }: { pending: boolean; label: string }) {
+export function SubmitButton({
+  pending,
+  label,
+  disabled = false,
+}: {
+  pending: boolean;
+  label: string;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending || disabled}
       className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors disabled:opacity-60 cursor-pointer"
     >
       {pending ? "Saving…" : label}

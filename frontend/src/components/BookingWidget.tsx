@@ -40,7 +40,9 @@ import { CancellationTimeline, refundHighlightColor } from "@/components/Cancell
 import { cheapestPerCancellationFee } from "@/lib/refund";
 import PaymentStep from "@/components/PaymentStep";
 import { PhoneInput } from "@/components/PhoneInput";
+import { isValidPhoneNumber } from "react-phone-number-input";
 import { CountrySelect } from "@/components/CountrySelect";
+import { isValidCountry } from "@/lib/countries";
 import { clearGuestSession, readGuestSession, saveGuestSession } from "@/lib/guest-auth";
 
 const CHILD_AGES = Array.from({ length: 18 }, (_, i) => i);
@@ -48,6 +50,7 @@ const DISPLAY_FORMAT = "dd/MM/yyyy";
 const DATE_PLACEHOLDER = "DD/MM/YYYY";
 const LANGUAGES: Language[] = ["en", "de", "fr", "it"];
 const CURRENCIES: Currency[] = ["EUR", "CHF", "USD", "GBP"];
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 const DATE_FNS_LOCALES: Record<Locale, DateFnsLocale> = { en: enUS, de, fr, it };
 const TRANSITION_MS = 380;
@@ -562,6 +565,21 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     !!range?.to &&
     nights >= checkInMinStay &&
     children.every((child) => child.age !== null);
+  // Gates the guest-details step's Next button: every mandatory "Your data"
+  // field (state/preferred language/preferred currency are all optional)
+  // has to hold a genuinely valid value, not just something non-empty —
+  // otherwise the native HTML validation popup on submit is the only thing
+  // catching a typo, after the guest already thought they were done.
+  const isGuestDetailsValid =
+    !!guestForm &&
+    guestForm.first_name.trim() !== "" &&
+    guestForm.family_name.trim() !== "" &&
+    EMAIL_RE.test(guestForm.email.trim()) &&
+    isValidPhoneNumber(guestForm.phone_number || "") &&
+    guestForm.residence_address.street_address.trim() !== "" &&
+    guestForm.residence_address.zip.trim() !== "" &&
+    guestForm.residence_address.city.trim() !== "" &&
+    isValidCountry(guestForm.residence_address.country);
 
   // animate is false only for the locale-switch resume effect below: that
   // call happens milliseconds after the page's very first paint, before
@@ -1512,7 +1530,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                     </button>
                     <button
                       type="submit"
-                      disabled={pending || !isFormValid}
+                      disabled={pending || !isFormValid || !isGuestDetailsValid}
                       className="flex-1 text-white font-semibold py-4 rounded-xl text-base transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                       style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
                     >

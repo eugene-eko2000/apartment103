@@ -7,6 +7,7 @@ import { readGuestSession } from "@/lib/guest-auth";
 import { useApplyGuestPreferences } from "@/lib/guest-preferences";
 import { PhoneInput } from "@/components/PhoneInput";
 import { CountrySelect } from "@/components/CountrySelect";
+import { isValidCountry } from "@/lib/countries";
 
 const LANGUAGES: Language[] = ["en", "de", "fr", "it"];
 const CURRENCIES: Currency[] = ["EUR", "CHF", "USD", "GBP"];
@@ -219,7 +220,7 @@ export default function ProfileModal({ dict, onClose }: { dict: ProfileModalDict
               <div className="flex justify-end">
                 <button
                   type="submit"
-                  disabled={pending}
+                  disabled={pending || !isValidCountry(form.residence_address.country)}
                   className="text-white font-semibold py-2.5 px-6 rounded-xl text-sm transition-all shadow-lg active:scale-[0.98] disabled:opacity-60 cursor-pointer"
                   style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
                 >

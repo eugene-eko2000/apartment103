@@ -210,3 +210,7 @@ const FLAG_BY_NAME = new Map(COUNTRIES.map((c) => [c.name, c.flag]));
 export function countryFlag(name: string): string {
   return FLAG_BY_NAME.get(name) ?? "";
 }
+
+export function isValidCountry(name: string): boolean {
+  return FLAG_BY_NAME.has(name);
+}

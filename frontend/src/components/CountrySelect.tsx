@@ -100,9 +100,16 @@ export function CountrySelect({
           e.target.select();
         }}
         onChange={(e) => {
-          setQuery(e.target.value);
+          const next = e.target.value;
+          setQuery(next);
           setOpen(true);
           setHighlighted(0);
+          // Commit as soon as the typed text exactly names a real country,
+          // even without an explicit Enter/click — otherwise typing the
+          // full correct name and clicking straight into the next field
+          // would blur-revert it away as if nothing had been chosen.
+          const exact = COUNTRIES.find((c) => c.name.toLowerCase() === next.trim().toLowerCase());
+          if (exact) onChange(exact.name);
         }}
         onBlur={() => {
           // A click on an option is handled via onMouseDown (which
