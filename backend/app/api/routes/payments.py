@@ -6,7 +6,7 @@ import stripe
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from app.api.deps import Principal, get_current_principal, require_admin
+from app.api.deps import Principal, get_current_principal
 from app.api.routes.bookings import _ensure_can_access_booking
 from app.models.booking import Booking, BookingCharge, BookingWebhookEvent
 from app.models.payment_event import PaymentEvent
@@ -137,43 +137,6 @@ async def retry_payment(
     )
 
 
-@router.post("/bookings/{booking_id}/charges/{payment_intent_id}/fees/refresh", response_model=Booking)
-async def refresh_charge_fees(
-    booking_id: PydanticObjectId, payment_intent_id: str, principal: Principal = Depends(require_admin)
-) -> Booking:
-    """Manually (re-)fetches a charge's Stripe fee/FX breakdown — covers the
-    case _attach_fee_breakdown missed at webhook time (balance transaction
-    not settled yet), and backfills charges made before this feature
-    existed. Admin-only: this is internal financial data, not shown to
-    guests."""
-    booking = await _get_booking_or_404(booking_id)
-    charge = next((c for c in booking.charges if c.stripe_payment_intent_id == payment_intent_id), None)
-    if charge is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Charge not found on this booking")
-
-    try:
-        breakdown = await stripe_service.get_charge_fee_breakdown(payment_intent_id)
-    except stripe.StripeError as exc:
-        # Surfaced to the admin (unlike _attach_fee_breakdown's silent,
-        # best-effort webhook-time fetch) since they explicitly asked for a
-        # refresh and need to know it didn't work.
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Stripe request failed: {exc.user_message or exc}"
-        ) from exc
-    if breakdown is None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Stripe hasn't settled this charge's balance transaction yet — try again shortly.",
-        )
-    charge.amount_chf = breakdown.amount_settlement
-    charge.exchange_rate = breakdown.exchange_rate
-    charge.processing_fee_chf = breakdown.processing_fee_settlement
-    charge.conversion_fee_chf = breakdown.conversion_fee_settlement
-    charge.net_amount_chf = breakdown.net_settlement
-    await booking.save()
-    return booking
-
-
 # Stripe events this handler acts on, grouped by the booking-lifecycle step
 # they belong to. Anything else is still logged (see stripe_webhook below)
 # but doesn't change payment_status/charges.
@@ -223,11 +186,13 @@ async def _apply_setup_failed(booking: Booking, setup_intent: dict) -> None:
 
 
 async def _attach_fee_breakdown(booking: Booking, charge: BookingCharge) -> None:
-    """Best-effort: Stripe's balance transaction (and thus the fee/FX
-    breakdown) can lag a moment behind payment_intent.succeeded, so a miss
-    here just leaves the charge's fee fields unset — an admin can backfill
-    later via POST .../fees/refresh. Must never raise, since this runs
-    inside the webhook handler."""
+    """Captures Stripe's fee/FX breakdown immediately alongside the payment
+    itself — stripe_service.get_charge_fee_breakdown already retries a few
+    times to ride out the balance transaction briefly lagging behind
+    payment_intent.succeeded, so this is not an on-demand/lazy fetch. If it
+    still comes back empty (or errors), the charge's fee fields are simply
+    left unset — this must never raise, since it runs inside the webhook
+    handler and a failure here must not fail the webhook response."""
     try:
         breakdown = await stripe_service.get_charge_fee_breakdown(charge.stripe_payment_intent_id)
     except Exception:

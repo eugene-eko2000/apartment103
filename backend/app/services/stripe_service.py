@@ -127,12 +127,17 @@ class ChargeFeeBreakdown(BaseModel):
     net_settlement: Decimal
 
 
-async def get_charge_fee_breakdown(payment_intent_id: str) -> ChargeFeeBreakdown | None:
+async def get_charge_fee_breakdown(
+    payment_intent_id: str, *, attempts: int = 3, retry_delay_seconds: float = 1.0
+) -> ChargeFeeBreakdown | None:
     """Fetches and parses the fee/FX breakdown for a succeeded charge from
-    its balance transaction. Returns None if it isn't available to read yet
-    (the balance transaction can lag briefly behind payment_intent.succeeded
-    for some payment methods) — callers should treat that as "not ready,
-    try again later" rather than an error.
+    its balance transaction. This is meant to be captured immediately
+    alongside the payment itself (see app.api.routes.payments.
+    _attach_fee_breakdown, called right from the payment_intent.succeeded
+    webhook handler) rather than fetched on demand later, so a few retries
+    are built in here to ride out the balance transaction briefly lagging
+    behind payment_intent.succeeded for some payment methods. Returns None
+    if it's still not available after every attempt.
 
     Splitting fee_details into "processing" vs "currency conversion" relies
     on matching "conversion" in each entry's description (case-insensitive):
@@ -142,13 +147,19 @@ async def get_charge_fee_breakdown(payment_intent_id: str) -> ChargeFeeBreakdown
     as processing fee; if fee_details is empty, the whole `fee` is bucketed
     as processing fee so no amount is silently dropped.
     """
-    intent = await asyncio.to_thread(
-        stripe.PaymentIntent.retrieve,
-        payment_intent_id,
-        expand=["latest_charge.balance_transaction"],
-    )
-    charge = intent.latest_charge
-    balance_transaction = charge.balance_transaction if charge else None
+    balance_transaction = None
+    for attempt in range(attempts):
+        intent = await asyncio.to_thread(
+            stripe.PaymentIntent.retrieve,
+            payment_intent_id,
+            expand=["latest_charge.balance_transaction"],
+        )
+        charge = intent.latest_charge
+        balance_transaction = charge.balance_transaction if charge else None
+        if balance_transaction is not None:
+            break
+        if attempt < attempts - 1:
+            await asyncio.sleep(retry_delay_seconds)
     if balance_transaction is None:
         return None
 

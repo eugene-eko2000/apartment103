@@ -70,17 +70,21 @@ class TestGetChargeFeeBreakdown:
         assert result.processing_fee_settlement == pytest.approx(32.00)
         assert result.conversion_fee_settlement == pytest.approx(0)
 
-    async def test_returns_none_when_balance_transaction_missing(self, monkeypatch):
+    async def test_returns_none_when_balance_transaction_missing_after_all_retries(self, monkeypatch):
         intent = SimpleNamespace(latest_charge=SimpleNamespace(balance_transaction=None))
-        monkeypatch.setattr(stripe.PaymentIntent, "retrieve", lambda *a, **k: intent)
+        calls = []
+        monkeypatch.setattr(stripe.PaymentIntent, "retrieve", lambda *a, **k: (calls.append(1), intent)[1])
 
-        assert await stripe_service.get_charge_fee_breakdown("pi_4") is None
+        result = await stripe_service.get_charge_fee_breakdown("pi_4", attempts=3, retry_delay_seconds=0)
+
+        assert result is None
+        assert len(calls) == 3
 
     async def test_returns_none_when_no_latest_charge(self, monkeypatch):
         intent = SimpleNamespace(latest_charge=None)
         monkeypatch.setattr(stripe.PaymentIntent, "retrieve", lambda *a, **k: intent)
 
-        assert await stripe_service.get_charge_fee_breakdown("pi_5") is None
+        assert await stripe_service.get_charge_fee_breakdown("pi_5", attempts=1) is None
 
     async def test_returns_none_when_settlement_currency_is_not_chf(self, monkeypatch, caplog):
         intent = _intent_with_balance_transaction(currency="eur")
@@ -90,3 +94,16 @@ class TestGetChargeFeeBreakdown:
 
         assert result is None
         assert "not CHF" in caplog.text
+
+    async def test_retries_until_balance_transaction_is_available(self, monkeypatch):
+        not_ready = SimpleNamespace(latest_charge=SimpleNamespace(balance_transaction=None))
+        ready = _intent_with_balance_transaction(
+            fee_details=[SimpleNamespace(amount=3200, description="Stripe processing fees")],
+        )
+        responses = iter([not_ready, not_ready, ready])
+        monkeypatch.setattr(stripe.PaymentIntent, "retrieve", lambda *a, **k: next(responses))
+
+        result = await stripe_service.get_charge_fee_breakdown("pi_7", attempts=3, retry_delay_seconds=0)
+
+        assert result is not None
+        assert result.processing_fee_settlement == pytest.approx(32.00)

@@ -7,7 +7,6 @@ import {
   listBookings,
   listCancellationPolicies,
   listGuests,
-  refreshChargeFees,
   updateBooking,
   type Booking,
   type BookingCharge,
@@ -144,59 +143,22 @@ function PaymentBreakdownSummary({ booking }: { booking: Booking }) {
   );
 }
 
-function ChargeFeeDetails({
-  bookingId,
-  charge,
-  token,
-  onRefreshed,
-}: {
-  bookingId: string;
-  charge: BookingCharge;
-  token: string;
-  onRefreshed: (updated: Booking) => void;
-}) {
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleRefresh = async () => {
-    setPending(true);
-    setError(null);
-    try {
-      const updated = await refreshChargeFees(bookingId, charge.stripe_payment_intent_id, token);
-      onRefreshed(updated);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : String(err));
-    } finally {
-      setPending(false);
-    }
-  };
-
-  const refreshButton = (
-    <button
-      type="button"
-      onClick={handleRefresh}
-      disabled={pending}
-      className="underline decoration-dotted hover:text-slate-600 dark:hover:text-slate-300 disabled:opacity-50"
-    >
-      {pending ? "Refreshing…" : charge.amount_chf == null ? "Refresh fees" : "Refresh"}
-    </button>
-  );
+function ChargeFeeDetails({ charge }: { charge: BookingCharge }) {
+  if (charge.amount_chf == null) {
+    // Fetched immediately alongside the payment itself (see
+    // _attach_fee_breakdown in the backend's Stripe webhook handler, which
+    // retries a few times); if it's still missing here, Stripe's balance
+    // transaction wasn't available even after those retries.
+    return <p className="text-slate-400 dark:text-slate-500 italic">Fee data not available for this charge.</p>;
+  }
 
   return (
     <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-slate-500 dark:text-slate-400">
-      {charge.amount_chf == null ? (
-        <span>Fee data not yet available.</span>
-      ) : (
-        <>
-          <span>CHF equivalent: {charge.amount_chf.toFixed(2)} CHF</span>
-          <span>Processing fee: {(charge.processing_fee_chf ?? 0).toFixed(2)} CHF</span>
-          {!!charge.conversion_fee_chf && <span>Conversion fee: {charge.conversion_fee_chf.toFixed(2)} CHF</span>}
-          <span>Net: {(charge.net_amount_chf ?? 0).toFixed(2)} CHF</span>
-          {charge.exchange_rate != null && <span>FX rate: {charge.exchange_rate.toFixed(4)}</span>}
-        </>
-      )}
-      {refreshButton}
-      {error && <span className="text-red-500 dark:text-red-400">{error}</span>}
+      <span>CHF equivalent: {charge.amount_chf.toFixed(2)} CHF</span>
+      <span>Processing fee: {(charge.processing_fee_chf ?? 0).toFixed(2)} CHF</span>
+      {!!charge.conversion_fee_chf && <span>Conversion fee: {charge.conversion_fee_chf.toFixed(2)} CHF</span>}
+      <span>Net: {(charge.net_amount_chf ?? 0).toFixed(2)} CHF</span>
+      {charge.exchange_rate != null && <span>FX rate: {charge.exchange_rate.toFixed(4)}</span>}
     </div>
   );
 }
@@ -264,11 +226,6 @@ export default function BookingsPanel() {
       if (err instanceof ApiError && err.status === 401) return logout();
       window.alert(err instanceof ApiError ? err.message : String(err));
     }
-  };
-
-  const handleChargeFeesRefreshed = (updated: Booking) => {
-    setEditing(updated);
-    setBookings((prev) => prev.map((b) => (b._id === updated._id ? updated : b)));
   };
 
   const handleBulkDelete = async (selectedBookings: Booking[]) => {
@@ -449,12 +406,7 @@ export default function BookingsPanel() {
                           <span className="text-slate-400 dark:text-slate-500">{new Date(charge.created_at).toLocaleString()}</span>
                           <span className="text-slate-400 dark:text-slate-500 break-all">{charge.stripe_payment_intent_id}</span>
                         </div>
-                        <ChargeFeeDetails
-                          bookingId={editing._id}
-                          charge={charge}
-                          token={token}
-                          onRefreshed={handleChargeFeesRefreshed}
-                        />
+                        <ChargeFeeDetails charge={charge} />
                       </div>
                     ))}
                   </div>

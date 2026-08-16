@@ -2,7 +2,6 @@ from datetime import date, timedelta
 from types import SimpleNamespace
 
 import pytest
-import stripe
 from beanie import PydanticObjectId
 
 from app.models.booking import Booking, BookingCharge
@@ -471,92 +470,3 @@ class TestStripeWebhook:
         assert booking.amount_charged == pytest.approx(1000.0)
         assert len(booking.charges) == 1
 
-
-class TestRefreshChargeFees:
-    async def _booking_with_charge(
-        self, client, guest, cancellation_policy, guest_headers, payment_intent_id="pi_refresh_1"
-    ) -> str:
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers, price=1000.0)
-        booking = await Booking.get(PydanticObjectId(booking_id))
-        booking.charges.append(
-            BookingCharge(
-                stripe_payment_intent_id=payment_intent_id,
-                amount=1000.0,
-                currency="CHF",
-                reason="initial_charge",
-                status="succeeded",
-            )
-        )
-        await booking.save()
-        return booking_id
-
-    async def test_admin_can_refresh_fees(
-        self, monkeypatch, client, guest, cancellation_policy, guest_headers, admin_headers
-    ):
-        booking_id = await self._booking_with_charge(client, guest, cancellation_policy, guest_headers)
-
-        async def fake_get_charge_fee_breakdown(payment_intent_id):
-            assert payment_intent_id == "pi_refresh_1"
-            return ChargeFeeBreakdown(
-                settlement_currency="CHF",
-                amount_settlement=1000.00,
-                exchange_rate=None,
-                processing_fee_settlement=15.00,
-                conversion_fee_settlement=0.00,
-                net_settlement=985.00,
-            )
-
-        monkeypatch.setattr(stripe_service, "get_charge_fee_breakdown", fake_get_charge_fee_breakdown)
-
-        response = await client.post(
-            f"/bookings/{booking_id}/charges/pi_refresh_1/fees/refresh", headers=admin_headers
-        )
-        assert response.status_code == 200
-        charge = response.json()["charges"][0]
-        assert charge["amount_chf"] == pytest.approx(1000.00)
-        assert charge["processing_fee_chf"] == pytest.approx(15.00)
-        assert charge["net_amount_chf"] == pytest.approx(985.00)
-
-    async def test_non_admin_is_forbidden(self, client, guest, cancellation_policy, guest_headers):
-        booking_id = await self._booking_with_charge(client, guest, cancellation_policy, guest_headers)
-        response = await client.post(f"/bookings/{booking_id}/charges/pi_refresh_1/fees/refresh", headers=guest_headers)
-        assert response.status_code == 403
-
-    async def test_returns_404_for_unknown_charge(
-        self, client, guest, cancellation_policy, guest_headers, admin_headers
-    ):
-        booking_id = await self._booking_with_charge(client, guest, cancellation_policy, guest_headers)
-        response = await client.post(
-            f"/bookings/{booking_id}/charges/pi_does_not_exist/fees/refresh", headers=admin_headers
-        )
-        assert response.status_code == 404
-
-    async def test_returns_409_when_breakdown_not_ready(
-        self, monkeypatch, client, guest, cancellation_policy, guest_headers, admin_headers
-    ):
-        booking_id = await self._booking_with_charge(client, guest, cancellation_policy, guest_headers)
-
-        async def fake_get_charge_fee_breakdown(payment_intent_id):
-            return None
-
-        monkeypatch.setattr(stripe_service, "get_charge_fee_breakdown", fake_get_charge_fee_breakdown)
-
-        response = await client.post(
-            f"/bookings/{booking_id}/charges/pi_refresh_1/fees/refresh", headers=admin_headers
-        )
-        assert response.status_code == 409
-
-    async def test_returns_502_when_stripe_call_fails(
-        self, monkeypatch, client, guest, cancellation_policy, guest_headers, admin_headers
-    ):
-        booking_id = await self._booking_with_charge(client, guest, cancellation_policy, guest_headers)
-
-        async def fake_get_charge_fee_breakdown(payment_intent_id):
-            raise stripe.AuthenticationError("No API key provided.")
-
-        monkeypatch.setattr(stripe_service, "get_charge_fee_breakdown", fake_get_charge_fee_breakdown)
-
-        response = await client.post(
-            f"/bookings/{booking_id}/charges/pi_refresh_1/fees/refresh", headers=admin_headers
-        )
-        assert response.status_code == 502
