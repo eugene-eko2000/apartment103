@@ -33,6 +33,7 @@ export interface BookingModalDict {
   state: string;
   stateOptional: string;
   country: string;
+  selectCountry: string;
   phoneNumber: string;
   email: string;
   preferredLanguage: string;

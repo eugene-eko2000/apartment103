@@ -40,6 +40,7 @@ import { CancellationTimeline, refundHighlightColor } from "@/components/Cancell
 import { cheapestPerCancellationFee } from "@/lib/refund";
 import PaymentStep from "@/components/PaymentStep";
 import { PhoneInput } from "@/components/PhoneInput";
+import { CountrySelect } from "@/components/CountrySelect";
 import { clearGuestSession, readGuestSession, saveGuestSession } from "@/lib/guest-auth";
 
 const CHILD_AGES = Array.from({ length: 18 }, (_, i) => i);
@@ -1477,9 +1478,10 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                       onChange={(v) => updateAddress("state", v)}
                       required={false}
                     />
-                    <TextField
+                    <CountrySelect
                       label={dict.modal.country}
                       value={guestForm.residence_address.country}
+                      noneLabel={dict.modal.selectCountry}
                       onChange={(v) => updateAddress("country", v)}
                     />
                     <SelectField
@@ -1766,12 +1768,14 @@ function SelectField({
   options,
   noneLabel,
   onChange,
+  required = false,
 }: {
   label: string;
   value: string;
   options: string[];
   noneLabel: string;
   onChange: (v: string) => void;
+  required?: boolean;
 }) {
   const id = useId();
   return (
@@ -1781,6 +1785,7 @@ function SelectField({
       </label>
       <select
         id={id}
+        required={required}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-teal-300 focus:border-teal-400 cursor-pointer"

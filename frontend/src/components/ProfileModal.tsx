@@ -6,6 +6,7 @@ import { ApiError, getGuest, updateGuest, type Currency, type Guest, type GuestI
 import { readGuestSession } from "@/lib/guest-auth";
 import { useApplyGuestPreferences } from "@/lib/guest-preferences";
 import { PhoneInput } from "@/components/PhoneInput";
+import { CountrySelect } from "@/components/CountrySelect";
 
 const LANGUAGES: Language[] = ["en", "de", "fr", "it"];
 const CURRENCIES: Currency[] = ["EUR", "CHF", "USD", "GBP"];
@@ -25,6 +26,7 @@ export interface ProfileModalDict {
   city: string;
   stateOptional: string;
   country: string;
+  selectCountry: string;
   preferredLanguage: string;
   preferredCurrency: string;
   noPreference: string;
@@ -189,9 +191,10 @@ export default function ProfileModal({ dict, onClose }: { dict: ProfileModalDict
                   onChange={(v) => updateAddress("state", v)}
                   required={false}
                 />
-                <TextField
+                <CountrySelect
                   label={dict.country}
                   value={form.residence_address.country}
+                  noneLabel={dict.selectCountry}
                   onChange={(v) => updateAddress("country", v)}
                 />
                 <SelectField
@@ -271,12 +274,14 @@ function SelectField({
   options,
   noneLabel,
   onChange,
+  required = false,
 }: {
   label: string;
   value: string;
   options: string[];
   noneLabel: string;
   onChange: (v: string) => void;
+  required?: boolean;
 }) {
   const id = useId();
   return (
@@ -286,6 +291,7 @@ function SelectField({
       </label>
       <select
         id={id}
+        required={required}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-teal-300 focus:border-teal-400 cursor-pointer"

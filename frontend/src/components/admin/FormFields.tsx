@@ -83,12 +83,14 @@ export function SelectField<T extends string>({
   options,
   onChange,
   noneLabel,
+  required = false,
 }: {
   label: string;
   value: string;
   options: { value: T; label: string }[];
   onChange: (v: T) => void;
   noneLabel?: string;
+  required?: boolean;
 }) {
   const id = useId();
   return (
@@ -98,6 +100,7 @@ export function SelectField<T extends string>({
       </label>
       <select
         id={id}
+        required={required}
         value={value}
         onChange={(e) => onChange(e.target.value as T)}
         className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-400 focus:border-indigo-500 cursor-pointer"

@@ -17,6 +17,7 @@ import { DataTable, type Column } from "../DataTable";
 import { Modal } from "../Modal";
 import { SelectField, SubmitButton, TextField } from "../FormFields";
 import { PhoneInput } from "@/components/PhoneInput";
+import { CountrySelect } from "@/components/CountrySelect";
 
 const LANGUAGES: Language[] = ["en", "de", "fr", "it"];
 const CURRENCIES: Currency[] = ["EUR", "CHF", "USD", "GBP"];
@@ -200,9 +201,11 @@ export default function GuestsPanel() {
                 onChange={(v) => updateAddress("state", v)}
                 required={false}
               />
-              <TextField
+              <CountrySelect
                 label="Country"
                 value={form.residence_address.country}
+                noneLabel="Select a country"
+                tone="admin"
                 onChange={(v) => updateAddress("country", v)}
               />
             </div>
