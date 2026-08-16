@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { COUNTRIES, countryFlag } from "@/lib/countries";
+import { COUNTRIES, countryFlag, localizedCountryName } from "@/lib/countries";
+import type { Locale } from "@/lib/i18n-config";
 
-const display = (name: string) => (name ? `${countryFlag(name)} ${name}` : "");
+const display = (name: string, locale: Locale) =>
+  name ? `${countryFlag(name)} ${localizedCountryName(name, locale)}` : "";
 
 const TONE_CLASSES = {
   booking: {
@@ -35,18 +37,23 @@ export function CountrySelect({
   value,
   onChange,
   noneLabel,
+  noMatchesLabel = "No matches",
   required = true,
   tone = "booking",
+  locale = "en",
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   noneLabel: string;
+  noMatchesLabel?: string;
   required?: boolean;
   tone?: keyof typeof TONE_CLASSES;
+  locale?: Locale;
 }) {
   const id = useId();
   const rootRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<(HTMLLIElement | null)[]>([]);
   // Only holds the in-progress search text while the listbox is open; while
   // closed the field just shows display(value) directly, computed on every
   // render, so it can never drift out of sync with value (e.g. a guest
@@ -55,13 +62,31 @@ export function CountrySelect({
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(0);
   const classes = TONE_CLASSES[tone];
-  const inputValue = open ? query : display(value);
+  const inputValue = open ? query : display(value, locale);
+
+  // Localized name, sorted for that locale's alphabet — recomputed only when
+  // the locale changes, not on every keystroke.
+  const localizedCountries = useMemo(
+    () =>
+      COUNTRIES.map((c) => ({ ...c, displayName: localizedCountryName(c.name, locale) })).sort((a, b) =>
+        a.displayName.localeCompare(b.displayName, locale)
+      ),
+    [locale]
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q || q === display(value).toLowerCase()) return COUNTRIES;
-    return COUNTRIES.filter((c) => c.name.toLowerCase().includes(q));
-  }, [query, value]);
+    if (!q || q === display(value, locale).toLowerCase()) return localizedCountries;
+    return localizedCountries.filter((c) => c.displayName.toLowerCase().includes(q));
+  }, [query, value, locale, localizedCountries]);
+
+  // Scroll the highlighted option into view whenever the listbox opens (so
+  // it lands on the currently selected country, not the top of the list) or
+  // the highlight moves via keyboard.
+  useEffect(() => {
+    if (!open) return;
+    itemRefs.current[highlighted]?.scrollIntoView({ block: "nearest" });
+  }, [open, highlighted]);
 
   useEffect(() => {
     if (!open) return;
@@ -94,9 +119,13 @@ export function CountrySelect({
         placeholder={noneLabel}
         value={inputValue}
         onFocus={(e) => {
-          setQuery(display(value));
+          setQuery(display(value, locale));
           setOpen(true);
-          setHighlighted(0);
+          // Land the highlight (and, via the scroll effect above, the
+          // viewport) on the already-selected country instead of always
+          // resetting to the top of the list.
+          const selectedIndex = localizedCountries.findIndex((c) => c.name === value);
+          setHighlighted(selectedIndex === -1 ? 0 : selectedIndex);
           e.target.select();
         }}
         onChange={(e) => {
@@ -108,7 +137,7 @@ export function CountrySelect({
           // even without an explicit Enter/click — otherwise typing the
           // full correct name and clicking straight into the next field
           // would blur-revert it away as if nothing had been chosen.
-          const exact = COUNTRIES.find((c) => c.name.toLowerCase() === next.trim().toLowerCase());
+          const exact = localizedCountries.find((c) => c.displayName.toLowerCase() === next.trim().toLowerCase());
           if (exact) onChange(exact.name);
         }}
         onBlur={() => {
@@ -142,11 +171,14 @@ export function CountrySelect({
           className={`absolute z-50 mt-1 max-h-56 w-full overflow-auto rounded-lg border shadow-lg py-1 text-sm ${classes.panel}`}
         >
           {filtered.length === 0 ? (
-            <li className={`px-3 py-2 ${classes.empty}`}>No matches</li>
+            <li className={`px-3 py-2 ${classes.empty}`}>{noMatchesLabel}</li>
           ) : (
             filtered.map((c, i) => (
               <li
                 key={c.name}
+                ref={(el) => {
+                  itemRefs.current[i] = el;
+                }}
                 role="option"
                 aria-selected={c.name === value}
                 onMouseDown={(e) => {
@@ -156,7 +188,7 @@ export function CountrySelect({
                 onMouseEnter={() => setHighlighted(i)}
                 className={`px-3 py-1.5 cursor-pointer ${i === highlighted ? classes.highlighted : classes.item}`}
               >
-                {c.flag} {c.name}
+                {c.flag} {c.displayName}
               </li>
             ))
           )}

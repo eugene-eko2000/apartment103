@@ -8,6 +8,7 @@ import { useApplyGuestPreferences } from "@/lib/guest-preferences";
 import { PhoneInput } from "@/components/PhoneInput";
 import { CountrySelect } from "@/components/CountrySelect";
 import { isValidCountry } from "@/lib/countries";
+import type { Locale } from "@/lib/i18n-config";
 
 const LANGUAGES: Language[] = ["en", "de", "fr", "it"];
 const CURRENCIES: Currency[] = ["EUR", "CHF", "USD", "GBP"];
@@ -28,6 +29,7 @@ export interface ProfileModalDict {
   stateOptional: string;
   country: string;
   selectCountry: string;
+  noMatchesCountry: string;
   preferredLanguage: string;
   preferredCurrency: string;
   noPreference: string;
@@ -52,7 +54,15 @@ function guestToForm(guest: Guest): GuestInput {
   };
 }
 
-export default function ProfileModal({ dict, onClose }: { dict: ProfileModalDict; onClose: () => void }) {
+export default function ProfileModal({
+  dict,
+  lang,
+  onClose,
+}: {
+  dict: ProfileModalDict;
+  lang: Locale;
+  onClose: () => void;
+}) {
   const [status, setStatus] = useState<Status>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [form, setForm] = useState<GuestInput | null>(null);
@@ -196,6 +206,8 @@ export default function ProfileModal({ dict, onClose }: { dict: ProfileModalDict
                   label={dict.country}
                   value={form.residence_address.country}
                   noneLabel={dict.selectCountry}
+                  noMatchesLabel={dict.noMatchesCountry}
+                  locale={lang}
                   onChange={(v) => updateAddress("country", v)}
                 />
                 <SelectField

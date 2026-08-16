@@ -1500,6 +1500,8 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                       label={dict.modal.country}
                       value={guestForm.residence_address.country}
                       noneLabel={dict.modal.selectCountry}
+                      noMatchesLabel={dict.modal.noMatchesCountry}
+                      locale={lang}
                       onChange={(v) => updateAddress("country", v)}
                     />
                     <SelectField
