@@ -4,12 +4,14 @@ import { useEffect, useState } from "react";
 import {
   ApiError,
   deleteBooking,
+  getBookingDisplay,
   listBookings,
   listCancellationPolicies,
   listGuests,
   updateBooking,
   type Booking,
   type BookingCharge,
+  type BookingChargeScheduleEntry,
   type BookingDateRange,
   type BookingInput,
   type BookingWebhookEvent,
@@ -105,60 +107,67 @@ function WebhookEventItem({ event }: { event: BookingWebhookEvent }) {
   );
 }
 
-function PaymentBreakdownSummary({ booking }: { booking: Booking }) {
+function TotalPriceSummary({ booking, totalPriceChf }: { booking: Booking; totalPriceChf: number | null }) {
   const totalPrice = booking.date_ranges.reduce((sum, r) => sum + r.price, 0);
-  const charges = booking.charges;
-  const hasFeeData = charges.length > 0 && charges.every((c) => c.amount_chf != null);
-  const sum = (pick: (c: BookingCharge) => number | null | undefined) =>
-    charges.reduce((total, c) => total + (pick(c) ?? 0), 0);
+  const isChf = booking.currency === "CHF";
 
   return (
     <div>
-      <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">Payment breakdown</span>
-      <div className="grid grid-cols-2 gap-3 text-sm text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2">
+      <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">Total price</span>
+      <div
+        className={`grid gap-3 text-sm text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 ${isChf ? "grid-cols-1" : "grid-cols-2"}`}
+      >
         <div>
-          <span className="block text-xs text-slate-500 dark:text-slate-400">Total price</span>
+          <span className="block text-xs text-slate-500 dark:text-slate-400">Total price ({booking.currency})</span>
           {totalPrice.toFixed(2)} {booking.currency}
         </div>
-        <div>
-          <span className="block text-xs text-slate-500 dark:text-slate-400">Total price (CHF)</span>
-          {hasFeeData ? `${sum((c) => c.amount_chf).toFixed(2)} CHF` : "—"}
-        </div>
-        <div>
-          <span className="block text-xs text-slate-500 dark:text-slate-400">Processing fee (CHF)</span>
-          {hasFeeData ? sum((c) => c.processing_fee_chf).toFixed(2) : "—"}
-        </div>
-        {booking.currency !== "CHF" && (
+        {!isChf && (
           <div>
-            <span className="block text-xs text-slate-500 dark:text-slate-400">Currency conversion fee (CHF)</span>
-            {hasFeeData ? sum((c) => c.conversion_fee_chf).toFixed(2) : "—"}
+            <span className="block text-xs text-slate-500 dark:text-slate-400">Total price (CHF)</span>
+            {totalPriceChf != null ? `${totalPriceChf.toFixed(2)} CHF` : "—"}
           </div>
         )}
-        <div>
-          <span className="block text-xs text-slate-500 dark:text-slate-400">Net received (CHF)</span>
-          {hasFeeData ? sum((c) => c.net_amount_chf).toFixed(2) : "—"}
-        </div>
       </div>
     </div>
   );
 }
 
-function ChargeFeeDetails({ charge }: { charge: BookingCharge }) {
-  if (charge.amount_chf == null) {
-    // Fetched immediately alongside the payment itself (see
-    // _attach_fee_breakdown in the backend's Stripe webhook handler, which
-    // retries a few times); if it's still missing here, Stripe's balance
-    // transaction wasn't available even after those retries.
-    return <p className="text-slate-400 dark:text-slate-500 italic">Fee data not available for this charge.</p>;
-  }
-
+function PaidAmountRow({ charge, bookingCurrency }: { charge: BookingCharge; bookingCurrency: Currency }) {
+  const isChf = bookingCurrency === "CHF";
   return (
-    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-slate-500 dark:text-slate-400">
-      <span>CHF equivalent: {charge.amount_chf.toFixed(2)} CHF</span>
-      <span>Processing fee: {(charge.processing_fee_chf ?? 0).toFixed(2)} CHF</span>
-      {!!charge.conversion_fee_chf && <span>Conversion fee: {charge.conversion_fee_chf.toFixed(2)} CHF</span>}
-      <span>Net: {(charge.net_amount_chf ?? 0).toFixed(2)} CHF</span>
-      {charge.exchange_rate != null && <span>FX rate: {charge.exchange_rate.toFixed(4)}</span>}
+    <div className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 space-y-1">
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+        <span className="text-slate-400 dark:text-slate-500">{new Date(charge.created_at).toLocaleString()}</span>
+        <span className="font-semibold">
+          {charge.amount.toFixed(2)} {charge.currency}
+        </span>
+        {!isChf && (
+          <span>{charge.amount_chf != null ? `${charge.amount_chf.toFixed(2)} CHF` : "CHF amount unavailable"}</span>
+        )}
+        {!isChf && charge.exchange_rate != null && <span>FX rate: {charge.exchange_rate.toFixed(4)}</span>}
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-slate-500 dark:text-slate-400">
+        <span>Processing fee: {charge.processing_fee_chf != null ? `${charge.processing_fee_chf.toFixed(2)} CHF` : "—"}</span>
+        {!isChf && (
+          <span>Conversion fee: {charge.conversion_fee_chf != null ? `${charge.conversion_fee_chf.toFixed(2)} CHF` : "—"}</span>
+        )}
+        <span>Net: {charge.net_amount_chf != null ? `${charge.net_amount_chf.toFixed(2)} CHF` : "—"}</span>
+      </div>
+      <div className="flex flex-wrap gap-x-3 text-slate-400 dark:text-slate-500">
+        <span>{charge.reason}</span>
+        <span className="break-all">{charge.stripe_payment_intent_id}</span>
+      </div>
+    </div>
+  );
+}
+
+function UpcomingPaymentRow({ entry, bookingCurrency }: { entry: BookingChargeScheduleEntry; bookingCurrency: Currency }) {
+  return (
+    <div className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 flex flex-wrap gap-x-3">
+      <span className="font-semibold">{entry.charge_date}</span>
+      <span>
+        {entry.amount.toFixed(2)} {bookingCurrency}
+      </span>
     </div>
   );
 }
@@ -178,6 +187,12 @@ export default function BookingsPanel() {
   const [form, setForm] = useState<BookingInput>(emptyForm("", ""));
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  // Estimated CHF equivalent of the booking's whole total price, from the
+  // same currency-conversion path guest-facing prices already use (see
+  // GET /bookings/{id}/display) — not from Stripe: unlike the per-charge
+  // fee fields, most of the total usually hasn't been charged yet, so
+  // there's no Stripe transaction to read it from.
+  const [totalPriceChf, setTotalPriceChf] = useState<number | null>(null);
 
   const load = () => {
     Promise.all([listBookings(token), listGuests(token), listCancellationPolicies(token)])
@@ -215,6 +230,15 @@ export default function BookingsPanel() {
     });
     setFormError(null);
     setShowModal(true);
+
+    if (booking.currency === "CHF") {
+      setTotalPriceChf(null);
+    } else {
+      setTotalPriceChf(null);
+      getBookingDisplay(booking._id, token, booking.currency)
+        .then((display) => setTotalPriceChf(display.total_price_chf))
+        .catch(() => setTotalPriceChf(null));
+    }
   };
 
   const handleDelete = async (booking: Booking) => {
@@ -382,33 +406,37 @@ export default function BookingsPanel() {
                 <ReadOnlyField label="Last payment error" value={editing.last_payment_error ?? "—"} />
               </div>
 
-              <PaymentBreakdownSummary booking={editing} />
+              <TotalPriceSummary booking={editing} totalPriceChf={totalPriceChf} />
 
               <div>
                 <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
-                  Charges ({editing.charges.length})
+                  Paid amounts ({editing.charges.length})
                 </span>
                 {editing.charges.length === 0 ? (
                   <p className="text-xs text-slate-400 dark:text-slate-500 italic">None yet.</p>
                 ) : (
                   <div className="space-y-1.5">
                     {editing.charges.map((charge, i) => (
-                      <div
-                        key={i}
-                        className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 space-y-1"
-                      >
-                        <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                          <span className="font-semibold">
-                            {charge.amount.toFixed(2)} {charge.currency}
-                          </span>
-                          <span>{charge.reason}</span>
-                          <span>{charge.status}</span>
-                          <span className="text-slate-400 dark:text-slate-500">{new Date(charge.created_at).toLocaleString()}</span>
-                          <span className="text-slate-400 dark:text-slate-500 break-all">{charge.stripe_payment_intent_id}</span>
-                        </div>
-                        <ChargeFeeDetails charge={charge} />
-                      </div>
+                      <PaidAmountRow key={i} charge={charge} bookingCurrency={editing.currency} />
                     ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                  Upcoming payments (
+                  {editing.charge_schedule.filter((e) => e.status === "pending").length})
+                </span>
+                {editing.charge_schedule.filter((e) => e.status === "pending").length === 0 ? (
+                  <p className="text-xs text-slate-400 dark:text-slate-500 italic">None scheduled.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {editing.charge_schedule
+                      .filter((e) => e.status === "pending")
+                      .map((entry, i) => (
+                        <UpcomingPaymentRow key={i} entry={entry} bookingCurrency={editing.currency} />
+                      ))}
                   </div>
                 )}
               </div>
