@@ -152,7 +152,18 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   // ── Post-OTP booking procedure ──────────────────────────
   const [verified, setVerified] = useState<VerifiedIdentity | null>(null);
   const [guestForm, setGuestForm] = useState<GuestInput | null>(null);
-  const [guestStep, setGuestStep] = useState<GuestFlowStep>("form");
+  // Must default to "plan", not "form": handleVerified sets `verified`/
+  // `guestForm` before it awaits resumePendingBooking, so React can commit a
+  // render in between where the widget is already extended but the plan
+  // hasn't been resolved yet (selectedPlanId is still null). Defaulting to
+  // "form" let that in-between render show the guest-details step — already
+  // pre-filled for a returning guest, and gated only on isFormValid/
+  // isGuestDetailsValid (neither of which checks selectedPlan) — so its Next
+  // button was live and, once selectedPlan resolved moments later, a click
+  // right then would submit straight through to payment, skipping the plan
+  // step (and effectively the guest-details step too, since the guest never
+  // meant to submit it) entirely.
+  const [guestStep, setGuestStep] = useState<GuestFlowStep>("plan");
   const [pending, setPending] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [paymentIntent, setPaymentIntent] = useState<PaymentIntentResponse | null>(null);
@@ -928,8 +939,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     }
   };
 
-  const handleGuestFormSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleGuestFormSubmit = async () => {
     if (!verified || !guestForm) return;
     setPending(true);
     setFormError(null);
@@ -1235,8 +1245,8 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
           {dict.back}
         </button>
         <button
-          type="submit"
-          form="guest-details-form"
+          type="button"
+          onClick={handleGuestFormSubmit}
           disabled={pending || !isFormValid || !isGuestDetailsValid}
           className="flex-1 text-white font-semibold py-4 rounded-xl text-base transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
@@ -1519,7 +1529,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
               )}
 
               {guestStep === "form" && guestForm && verified && (
-                <form id="guest-details-form" onSubmit={handleGuestFormSubmit} className="space-y-5">
+                <div className="space-y-5">
                   {childAgesBlock}
 
                   {/* ── Guest details ─────────────────────────────── */}
@@ -1595,7 +1605,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                   </div>
 
                   {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
-                </form>
+                </div>
               )}
 
               {guestStep === "submitting" && (
