@@ -659,8 +659,12 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   // who's already partway through checkout is meant to finish (or cancel)
   // that one rather than start another. Called right after a guest's
   // identity resolves (fresh OTP verify or a resumed session): if they have
-  // a Pending booking, jump straight into its payment step instead of the
-  // usual plan/details steps. Returns whether it resumed.
+  // a Pending booking, jump straight into its guest-details step (skipping
+  // only the plan step, since the plan is already known from the pending
+  // booking) instead of starting the usual flow over from scratch. Payment
+  // itself is intentionally NOT skipped to — the guest still needs to review
+  // their details before paying, same as any fresh booking. Returns whether
+  // it resumed.
   const resumePendingBooking = async (identity: VerifiedIdentity): Promise<boolean> => {
     const bookings = await listBookings(identity.authToken);
     const pendingBooking = bookings.find((b) => b.status === "Pending");
@@ -675,46 +679,38 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
       return false;
     }
 
-    try {
-      // Fetched fresh here rather than trusting the `plans` state: this can
-      // run from the silent mount-time auto-resume effect below, whose
-      // closure was formed before that effect's own listPublicPlans() call
-      // had a chance to land, so reading the state var there would always
-      // see the pre-fetch empty array.
-      const [intent, availablePlans] = await Promise.all([
-        createPaymentIntent(pendingBooking._id, identity.authToken),
-        listPublicPlans().catch(() => plans),
-      ]);
-      const beginDates = pendingBooking.date_ranges.map((r) => parse(r.begin_date, "yyyy-MM-dd", new Date()));
-      const endDates = pendingBooking.date_ranges.map((r) => parse(r.end_date, "yyyy-MM-dd", new Date()));
-      setRange({
-        from: beginDates.reduce((min, d) => (d < min ? d : min)),
-        to: endDates.reduce((max, d) => (d > max ? d : max)),
-      });
-      setBookingId(pendingBooking._id);
-      setPaymentIntent(intent);
-      setPlans(availablePlans);
-      // Bookings don't store a plan id, only a snapshot of the cancellation
-      // policy they were made under — match it back to a current plan so
-      // the rate shows as selected if the guest goes Back to the plan step,
-      // and so the header price can resolve instead of spinning forever
-      // with no plan selected.
-      const matchedPlan = availablePlans.find(
-        (p) => p.cancellation_policy.name === pendingBooking.cancellation_policy.name
-      );
-      setSelectedPlanId(matchedPlan?._id ?? null);
-      setGuestStep("payment");
-      return true;
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        // Another guest's payment claimed these dates while this one sat
-        // Pending — the backend has already deleted it, so there's nothing
-        // left to resume into. Fall through to a fresh booking flow.
-        window.alert(err.message);
-        return false;
-      }
-      throw err;
-    }
+    // Fetched fresh here rather than trusting the `plans` state: this can
+    // run from the silent mount-time auto-resume effect below, whose
+    // closure was formed before that effect's own listPublicPlans() call
+    // had a chance to land, so reading the state var there would always see
+    // the pre-fetch empty array.
+    //
+    // No payment intent is created here — submitBooking creates one once the
+    // guest actually submits the guest-details step below, same as a fresh
+    // booking. Creating one now would go unused and leave an orphan Stripe
+    // intent, since submitBooking would just create a fresh one anyway. That
+    // also means the "dates got claimed by another guest's payment" 409 (see
+    // submitBooking) surfaces there instead of here.
+    const availablePlans = await listPublicPlans().catch(() => plans);
+    const beginDates = pendingBooking.date_ranges.map((r) => parse(r.begin_date, "yyyy-MM-dd", new Date()));
+    const endDates = pendingBooking.date_ranges.map((r) => parse(r.end_date, "yyyy-MM-dd", new Date()));
+    setRange({
+      from: beginDates.reduce((min, d) => (d < min ? d : min)),
+      to: endDates.reduce((max, d) => (d > max ? d : max)),
+    });
+    setBookingId(pendingBooking._id);
+    setPlans(availablePlans);
+    // Bookings don't store a plan id, only a snapshot of the cancellation
+    // policy they were made under — match it back to a current plan so
+    // the rate shows as selected if the guest goes Back to the plan step,
+    // and so the header price can resolve instead of spinning forever
+    // with no plan selected.
+    const matchedPlan = availablePlans.find(
+      (p) => p.cancellation_policy.name === pendingBooking.cancellation_policy.name
+    );
+    setSelectedPlanId(matchedPlan?._id ?? null);
+    setGuestStep("form");
+    return true;
   };
 
   // Shared by resumeFromSession and the mount-time pending-booking check
