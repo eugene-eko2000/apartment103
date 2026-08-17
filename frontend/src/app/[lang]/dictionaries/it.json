@@ -43,7 +43,42 @@
     "copyright": "© {year} Berg See Home. Tutti i diritti riservati.",
     "privacy": "Privacy",
     "terms": "Termini",
-    "contact": "Contatti"
+    "contact": "Contatti",
+    "privacyModal": {
+      "title": "Informativa sulla privacy",
+      "close": "Chiudi",
+      "intro": "La presente informativa sulla privacy spiega come Berg See Home (\"noi\") raccoglie, utilizza e protegge i tuoi dati personali quando utilizzi il nostro sito web e i nostri servizi di prenotazione.",
+      "sections": [
+        {
+          "heading": "Informazioni raccolte",
+          "body": "Quando effettui una prenotazione o ci contatti, raccogliamo informazioni quali nome, indirizzo e-mail, numero di telefono, indirizzo postale, paese e dati di pagamento necessari per elaborare la tua prenotazione."
+        },
+        {
+          "heading": "Come utilizziamo le tue informazioni",
+          "body": "Utilizziamo le tue informazioni per elaborare le prenotazioni, comunicare con te riguardo al tuo soggiorno, gestire i pagamenti e adempiere agli obblighi di legge, come la registrazione locale degli ospiti."
+        },
+        {
+          "heading": "Conservazione dei dati",
+          "body": "Conserviamo i tuoi dati di prenotazione e di ospite per il tempo necessario al tuo soggiorno. Dopo la data di check-out, conserviamo i tuoi dati per un mese, trascorso il quale vengono eliminati definitivamente dai nostri sistemi."
+        },
+        {
+          "heading": "Informazioni di pagamento",
+          "body": "I pagamenti sono elaborati in modo sicuro dal nostro fornitore di servizi di pagamento (Stripe). Non memorizziamo i dati completi della tua carta sui nostri server."
+        },
+        {
+          "heading": "Cookie",
+          "body": "Utilizziamo i cookie per ricordare le tue preferenze di lingua e valuta. Puoi gestire le tue preferenze relative ai cookie in qualsiasi momento."
+        },
+        {
+          "heading": "I tuoi diritti",
+          "body": "Hai il diritto di accedere ai tuoi dati personali, correggerli o richiederne la cancellazione. Per esercitare questi diritti, contattaci tramite i recapiti indicati di seguito."
+        },
+        {
+          "heading": "Contattaci",
+          "body": "Per qualsiasi domanda su questa informativa sulla privacy o su come trattiamo i tuoi dati, contattaci tramite i recapiti forniti su questo sito."
+        }
+      ]
+    }
   },
   "languageSwitcher": {
     "label": "Lingua"

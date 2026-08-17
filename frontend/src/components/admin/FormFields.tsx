@@ -149,14 +149,18 @@ export function SubmitButton({
   pending,
   label,
   disabled = false,
+  form,
 }: {
   pending: boolean;
   label: string;
   disabled?: boolean;
+  /** id of a <form> elsewhere in the DOM to submit, e.g. when rendered in a Modal footer outside the form. */
+  form?: string;
 }) {
   return (
     <button
       type="submit"
+      form={form}
       disabled={pending || disabled}
       className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors disabled:opacity-60 cursor-pointer"
     >

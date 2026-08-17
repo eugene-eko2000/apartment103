@@ -158,14 +158,18 @@ export default function ProfileModal({
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto">
-          {status === "loading" && <p className="text-gray-500 dark:text-gray-400 text-sm">{dict.loading}</p>}
-          {status === "loggedOut" && <p className="text-gray-500 dark:text-gray-400 text-sm">{dict.loggedOut}</p>}
-          {status === "noProfile" && <p className="text-gray-500 dark:text-gray-400 text-sm">{dict.noProfile}</p>}
-          {status === "error" && <p className="text-red-600 dark:text-red-400 text-sm">{errorMessage}</p>}
+        {status !== "loaded" && (
+          <div className="p-6 overflow-y-auto">
+            {status === "loading" && <p className="text-gray-500 dark:text-gray-400 text-sm">{dict.loading}</p>}
+            {status === "loggedOut" && <p className="text-gray-500 dark:text-gray-400 text-sm">{dict.loggedOut}</p>}
+            {status === "noProfile" && <p className="text-gray-500 dark:text-gray-400 text-sm">{dict.noProfile}</p>}
+            {status === "error" && <p className="text-red-600 dark:text-red-400 text-sm">{errorMessage}</p>}
+          </div>
+        )}
 
-          {status === "loaded" && form && (
-            <form onSubmit={handleSubmit} className="space-y-5">
+        {status === "loaded" && form && (
+          <form onSubmit={handleSubmit} className="flex flex-col min-h-0">
+            <div className="p-6 space-y-5 overflow-y-auto">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <TextField
                   label={dict.firstName}
@@ -228,20 +232,20 @@ export default function ProfileModal({
 
               {errorMessage && <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>}
               {saved && !errorMessage && <p className="text-sm text-teal-600 dark:text-teal-400">{dict.saved}</p>}
+            </div>
 
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={pending || !isValidCountry(form.residence_address.country)}
-                  className="text-white font-semibold py-2.5 px-6 rounded-xl text-sm transition-all shadow-lg active:scale-[0.98] disabled:opacity-60 cursor-pointer"
-                  style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
-                >
-                  {pending ? dict.saving : dict.save}
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
+            <div className="px-6 pb-6 pt-4 border-t border-gray-100 dark:border-gray-700 shrink-0 flex justify-end">
+              <button
+                type="submit"
+                disabled={pending || !isValidCountry(form.residence_address.country)}
+                className="text-white font-semibold py-2.5 px-6 rounded-xl text-sm transition-all shadow-lg active:scale-[0.98] disabled:opacity-60 cursor-pointer"
+                style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
+              >
+                {pending ? dict.saving : dict.save}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>,
     document.body

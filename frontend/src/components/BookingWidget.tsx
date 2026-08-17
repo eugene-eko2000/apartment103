@@ -228,8 +228,20 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     });
   };
 
-  // Close calendar on outside click
+  // Close calendar on outside click. Guarded on calendarOpen (and thus
+  // re-subscribed whenever it changes, to see a fresh value rather than a
+  // stale one closed over at mount) — without it, this fired on *every*
+  // click anywhere on the page while dateRef/calendarRef are both null
+  // (i.e. the whole time the widget is in its extended, post-login flow,
+  // since that JSX branch doesn't render the date-picker section at all),
+  // because `null?.contains(...)` is vacuously falsy and never short-circuits
+  // the check below. Each such click called captureCompactRect(), stashing
+  // the widget's *current* (extended-mode) rect as if it were its compact
+  // one; Cancel later reading that stale rect raced the calendar-breakout
+  // effect against the real collapse animation and left a stale flow
+  // spacer reserving extra page height after the widget had already shrunk.
   useEffect(() => {
+    if (!calendarOpen) return;
     const handler = (e: MouseEvent) => {
       const target = e.target as Node;
       if (dateRef.current?.contains(target)) return;
@@ -239,7 +251,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  }, [calendarOpen]);
 
   // Animate the widget moving/resizing between its compact and extended
   // layouts on desktop (FLIP: freeze at the pre-toggle rect, then transition
@@ -1172,6 +1184,107 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     </div>
   );
 
+  // Action row for whichever step is showing, rendered outside the
+  // scrollable content area (below) so it stays put — visible and
+  // reachable — regardless of how tall that step's content gets. The
+  // "payment" step is the one exception: its Pay/Verify button lives
+  // inside PaymentStep's own Stripe <Elements> tree and can't be hoisted
+  // out here, so it pins its own action row within the scrollable area.
+  const footer = !extended ? (
+    <>
+      <button
+        className={`w-full text-white font-semibold py-4 rounded-xl text-base transition-all shadow-lg ${
+          isFormValid && !checkingSession
+            ? "active:scale-[0.98] cursor-pointer"
+            : "opacity-50 cursor-not-allowed"
+        }`}
+        style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
+        onClick={handleBookClick}
+        disabled={!isFormValid || checkingSession}
+      >
+        {dict.bookNow}
+      </button>
+
+      <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-3">
+        {dict.noCharge}
+      </p>
+    </>
+  ) : guestStep === "plan" && verified && range?.from ? (
+    <div className="flex gap-3">
+      <button
+        type="button"
+        onClick={cancelBookingFlow}
+        className="flex-1 text-gray-600 dark:text-gray-300 font-semibold py-4 rounded-xl text-base transition-all border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-[0.98] cursor-pointer"
+      >
+        {dict.cancel}
+      </button>
+      <button
+        type="button"
+        disabled={!selectedPlan}
+        onClick={() => setGuestStep("form")}
+        className="flex-1 text-white font-semibold py-4 rounded-xl text-base transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+        style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
+      >
+        {dict.modal.next}
+      </button>
+    </div>
+  ) : guestStep === "form" && guestForm && verified ? (
+    <>
+      <div className="flex gap-3">
+        <button
+          type="button"
+          onClick={() => setGuestStep("plan")}
+          className="flex-1 text-gray-600 dark:text-gray-300 font-semibold py-4 rounded-xl text-base transition-all border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-[0.98] cursor-pointer"
+        >
+          {dict.back}
+        </button>
+        <button
+          type="submit"
+          form="guest-details-form"
+          disabled={pending || !isFormValid || !isGuestDetailsValid}
+          className="flex-1 text-white font-semibold py-4 rounded-xl text-base transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
+        >
+          {dict.modal.next}
+        </button>
+      </div>
+      <button
+        type="button"
+        onClick={cancelBookingFlow}
+        className="block w-full text-center text-xs text-gray-400 dark:text-gray-500 hover:text-teal-700 dark:hover:text-teal-400 cursor-pointer mt-3"
+      >
+        {dict.cancel}
+      </button>
+    </>
+  ) : guestStep === "success" ? (
+    <button
+      type="button"
+      onClick={handleDone}
+      className="w-full text-white font-semibold py-3 rounded-xl text-sm transition-all shadow-lg cursor-pointer"
+      style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
+    >
+      {dict.modal.done}
+    </button>
+  ) : guestStep === "error" ? (
+    <>
+      <button
+        type="button"
+        onClick={() => setGuestStep("form")}
+        className="w-full text-white font-semibold py-3 rounded-xl text-sm transition-all shadow-lg cursor-pointer"
+        style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
+      >
+        {dict.modal.tryAgain}
+      </button>
+      <button
+        type="button"
+        onClick={cancelBookingFlow}
+        className="block w-full text-center text-xs text-gray-400 dark:text-gray-500 hover:text-teal-700 dark:hover:text-teal-400 cursor-pointer mt-3"
+      >
+        {dict.cancel}
+      </button>
+    </>
+  ) : null;
+
   return (
     <>
       {/* Only a desktop concept — on mobile extended mode is inline page
@@ -1184,14 +1297,16 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
       />
       <div
         ref={widgetRef}
-        className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl ${
+        className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col ${
           extended
             ? // Mobile (base): a plain in-flow block, full window width via the
               // classic "full-bleed" trick (relative + left-1/2 + negative
               // translate breaks it out of the hero section's side padding),
               // no independent scrolling — it grows/shrinks with the page.
-              // Desktop (lg:): unchanged floating, centered overlay.
-              "relative w-screen left-1/2 -translate-x-1/2 lg:fixed lg:z-[91] lg:w-full lg:max-w-3xl lg:max-h-[90vh] lg:overflow-y-auto"
+              // Desktop (lg:): unchanged floating, centered overlay. Only the
+              // middle content area scrolls (below) — the header and the
+              // step's action row stay fixed in place, out of that scroll.
+              "relative w-screen left-1/2 -translate-x-1/2 lg:fixed lg:z-[91] lg:w-full lg:max-w-3xl lg:max-h-[90vh] lg:overflow-hidden"
             : calendarOpen
             ? "absolute z-[91] max-w-[min(680px,calc(100vw-1.5rem))] max-lg:left-1/2 max-lg:-translate-x-1/2"
             : "w-full"
@@ -1200,7 +1315,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
       >
         {/* ── Header ────────────────────────────────────────── */}
         <div
-          className="relative px-6 py-5 rounded-t-2xl"
+          className="relative px-6 py-5 rounded-t-2xl shrink-0"
           style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
         >
           <div className="flex flex-col gap-1 lg:flex-row lg:items-baseline lg:justify-between lg:gap-0">
@@ -1237,7 +1352,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
           </div>
         </div>
 
-        <div className="p-6">
+        <div className="p-6 pb-0 lg:overflow-y-auto lg:flex-1 lg:min-h-0">
           {!extended ? (
             <>
               {/* ── Date inputs + dropdown calendar ───────────────── */}
@@ -1307,24 +1422,6 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
 
                 {childAgesBlock && <div className="mt-3">{childAgesBlock}</div>}
               </section>
-
-              {/* ── Book ──────────────────────────────────────────── */}
-              <button
-                className={`w-full text-white font-semibold py-4 rounded-xl text-base transition-all shadow-lg ${
-                  isFormValid && !checkingSession
-                    ? "active:scale-[0.98] cursor-pointer"
-                    : "opacity-50 cursor-not-allowed"
-                }`}
-                style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
-                onClick={handleBookClick}
-                disabled={!isFormValid || checkingSession}
-              >
-                {dict.bookNow}
-              </button>
-
-              <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-3">
-                {dict.noCharge}
-              </p>
             </>
           ) : (
             <>
@@ -1422,30 +1519,11 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                       })}
                     </div>
                   )}
-
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={cancelBookingFlow}
-                      className="flex-1 text-gray-600 dark:text-gray-300 font-semibold py-4 rounded-xl text-base transition-all border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-[0.98] cursor-pointer"
-                    >
-                      {dict.cancel}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!selectedPlan}
-                      onClick={() => setGuestStep("form")}
-                      className="flex-1 text-white font-semibold py-4 rounded-xl text-base transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                      style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
-                    >
-                      {dict.modal.next}
-                    </button>
-                  </div>
                 </div>
               )}
 
               {guestStep === "form" && guestForm && verified && (
-                <form onSubmit={handleGuestFormSubmit} className="space-y-5">
+                <form id="guest-details-form" onSubmit={handleGuestFormSubmit} className="space-y-5">
                   {childAgesBlock}
 
                   {/* ── Guest details ─────────────────────────────── */}
@@ -1521,31 +1599,6 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                   </div>
 
                   {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
-
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setGuestStep("plan")}
-                      className="flex-1 text-gray-600 dark:text-gray-300 font-semibold py-4 rounded-xl text-base transition-all border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-[0.98] cursor-pointer"
-                    >
-                      {dict.back}
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={pending || !isFormValid || !isGuestDetailsValid}
-                      className="flex-1 text-white font-semibold py-4 rounded-xl text-base transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                      style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
-                    >
-                      {dict.modal.next}
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={cancelBookingFlow}
-                    className="block w-full text-center text-xs text-gray-400 dark:text-gray-500 hover:text-teal-700 dark:hover:text-teal-400 cursor-pointer"
-                  >
-                    {dict.cancel}
-                  </button>
                 </form>
               )}
 
@@ -1569,45 +1622,34 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
               )}
 
               {guestStep === "success" && (
-                <div className="text-center py-4 space-y-4">
+                <div className="text-center py-4 space-y-2">
                   <p className="text-sm text-gray-700 dark:text-gray-300">
                     {dict.modal.successMessage.replace("{name}", guestForm?.first_name ?? "")}
                   </p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">{dict.modal.emailNotice}</p>
-                  <button
-                    type="button"
-                    onClick={handleDone}
-                    className="w-full text-white font-semibold py-3 rounded-xl text-sm transition-all shadow-lg cursor-pointer"
-                    style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
-                  >
-                    {dict.modal.done}
-                  </button>
                 </div>
               )}
 
               {guestStep === "error" && (
-                <div className="text-center py-4 space-y-4">
+                <div className="text-center py-4">
                   <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>
-                  <button
-                    type="button"
-                    onClick={() => setGuestStep("form")}
-                    className="w-full text-white font-semibold py-3 rounded-xl text-sm transition-all shadow-lg cursor-pointer"
-                    style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
-                  >
-                    {dict.modal.tryAgain}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={cancelBookingFlow}
-                    className="block w-full text-center text-xs text-gray-400 dark:text-gray-500 hover:text-teal-700 dark:hover:text-teal-400 cursor-pointer"
-                  >
-                    {dict.cancel}
-                  </button>
                 </div>
               )}
             </>
           )}
         </div>
+
+        {footer && (
+          <div
+            className={
+              extended
+                ? "px-6 pb-6 pt-4 border-t border-gray-100 dark:border-gray-700 shrink-0"
+                : "px-6 pb-6 shrink-0"
+            }
+          >
+            {footer}
+          </div>
+        )}
       </div>
       <div ref={spacerRef} aria-hidden="true" style={{ height: 0 }} />
 

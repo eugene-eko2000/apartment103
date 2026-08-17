@@ -156,8 +156,47 @@ export default function GooglePhotosImportModal({
     }
   };
 
+  const footer =
+    step === "category" ? (
+      <button
+        type="button"
+        onClick={handleConnect}
+        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors cursor-pointer"
+      >
+        Continue with Google Photos
+      </button>
+    ) : step === "waiting" ? (
+      <div className="space-y-3">
+        {pickerUri && (
+          <a
+            href={pickerUri}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block w-full text-center bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors"
+          >
+            Open Google Photos to choose photos ↗
+          </a>
+        )}
+        <button
+          type="button"
+          onClick={handleCancel}
+          className="w-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold py-2.5 rounded-lg text-sm cursor-pointer"
+        >
+          Cancel
+        </button>
+      </div>
+    ) : step === "summary" ? (
+      <button
+        type="button"
+        onClick={onClose}
+        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors cursor-pointer"
+      >
+        Done
+      </button>
+    ) : undefined;
+
   return (
-    <Modal title="Import from Google Photos" onClose={handleCancel}>
+    <Modal title="Import from Google Photos" onClose={handleCancel} footer={footer}>
       <div className="space-y-4">
         {step === "category" && (
           <>
@@ -171,13 +210,6 @@ export default function GooglePhotosImportModal({
               onChange={(v) => setCategory(v as ImageCategory)}
             />
             {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-            <button
-              type="button"
-              onClick={handleConnect}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors cursor-pointer"
-            >
-              Continue with Google Photos
-            </button>
           </>
         )}
 
@@ -186,29 +218,10 @@ export default function GooglePhotosImportModal({
         )}
 
         {step === "waiting" && (
-          <>
-            {pickerUri && (
-              <a
-                href={pickerUri}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block w-full text-center bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors"
-              >
-                Open Google Photos to choose photos ↗
-              </a>
-            )}
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Choose photos in the tab that opened, then come back here — the import starts automatically once
-              you&apos;re done selecting.
-            </p>
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="w-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold py-2.5 rounded-lg text-sm cursor-pointer"
-            >
-              Cancel
-            </button>
-          </>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Choose photos in the tab that opened, then come back here — the import starts automatically once
+            you&apos;re done selecting.
+          </p>
         )}
 
         {step === "importing" && (
@@ -233,13 +246,6 @@ export default function GooglePhotosImportModal({
                 ))}
               </ul>
             )}
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors cursor-pointer"
-            >
-              Done
-            </button>
           </>
         )}
       </div>

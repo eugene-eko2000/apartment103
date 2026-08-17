@@ -501,8 +501,12 @@ export default function PhotosPanel() {
       )}
 
       {showUpload && (
-        <Modal title="Add photo" onClose={() => setShowUpload(false)}>
-          <form onSubmit={handleUpload} className="space-y-4">
+        <Modal
+          title="Add photo"
+          onClose={() => setShowUpload(false)}
+          footer={<SubmitButton form="upload-photo-form" pending={pending} label="Upload" />}
+        >
+          <form id="upload-photo-form" onSubmit={handleUpload} className="space-y-4">
             <FileField
               label="File"
               accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
@@ -516,13 +520,25 @@ export default function PhotosPanel() {
             />
             <TextField label="Alt text" value={alt} required={false} onChange={setAlt} placeholder="Describe the photo" />
             {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
-            <SubmitButton pending={pending} label="Upload" />
           </form>
         </Modal>
       )}
 
       {viewing && (
-        <Modal title={categoryName(viewing.category)} onClose={() => setViewing(null)} maxHeight="calc(100vh - 120px)">
+        <Modal
+          title={categoryName(viewing.category)}
+          onClose={() => setViewing(null)}
+          maxHeight="calc(100vh - 120px)"
+          footer={
+            <button
+              type="button"
+              onClick={() => handleDelete(viewing)}
+              className="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-semibold py-2.5 rounded-lg cursor-pointer transition-colors"
+            >
+              Delete photo
+            </button>
+          }
+        >
           <div className="space-y-4">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={imageUrl(viewing.key)} alt={viewing.alt} className="w-full rounded-lg" />
@@ -593,14 +609,6 @@ export default function PhotosPanel() {
               </form>
               {labelError && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{labelError}</p>}
             </div>
-
-            <button
-              type="button"
-              onClick={() => handleDelete(viewing)}
-              className="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-semibold py-2.5 rounded-lg cursor-pointer transition-colors"
-            >
-              Delete photo
-            </button>
           </div>
         </Modal>
       )}

@@ -143,8 +143,9 @@ export default function PricesPanel() {
           title={editing ? "Edit price period" : "New price period"}
           onClose={() => setShowModal(false)}
           maxHeight="calc(100vh - 120px)"
+          footer={<SubmitButton form="price-period-form" pending={pending} label={editing ? "Save changes" : "Create price period"} />}
         >
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form id="price-period-form" onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <TextField
                 label="Begin date"
@@ -208,7 +209,6 @@ export default function PricesPanel() {
               }}
             />
             {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
-            <SubmitButton pending={pending} label={editing ? "Save changes" : "Create price period"} />
           </form>
         </Modal>
       )}

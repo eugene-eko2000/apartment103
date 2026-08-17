@@ -130,8 +130,12 @@ export default function AdminsPanel() {
       />
 
       {showModal && (
-        <Modal title={editing ? "Edit admin" : "New admin"} onClose={() => setShowModal(false)}>
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <Modal
+          title={editing ? "Edit admin" : "New admin"}
+          onClose={() => setShowModal(false)}
+          footer={<SubmitButton form="admin-form" pending={pending} label={editing ? "Save changes" : "Create admin"} />}
+        >
+          <form id="admin-form" onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <TextField
                 label="First name"
@@ -156,7 +160,6 @@ export default function AdminsPanel() {
               onChange={(v) => setForm((p) => ({ ...p, phone_number: v }))}
             />
             {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
-            <SubmitButton pending={pending} label={editing ? "Save changes" : "Create admin"} />
           </form>
         </Modal>
       )}

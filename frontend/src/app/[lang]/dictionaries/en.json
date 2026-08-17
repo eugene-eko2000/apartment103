@@ -43,7 +43,42 @@
     "copyright": "© {year} Berg See Home. All rights reserved.",
     "privacy": "Privacy",
     "terms": "Terms",
-    "contact": "Contact"
+    "contact": "Contact",
+    "privacyModal": {
+      "title": "Privacy Policy",
+      "close": "Close",
+      "intro": "This Privacy Policy explains how Berg See Home (\"we\", \"us\") collects, uses, and protects your personal data when you use our website and booking services.",
+      "sections": [
+        {
+          "heading": "Information We Collect",
+          "body": "When you make a booking or contact us, we collect information such as your name, email address, phone number, postal address, country, and payment details necessary to process your reservation."
+        },
+        {
+          "heading": "How We Use Your Information",
+          "body": "We use your information to process bookings, communicate with you about your stay, handle payments, and comply with legal obligations such as local guest registration requirements."
+        },
+        {
+          "heading": "Data Retention",
+          "body": "We retain your booking and guest data for as long as necessary to fulfil your stay. After your check-out date, we keep your data for one month, after which it is permanently deleted from our systems."
+        },
+        {
+          "heading": "Payment Information",
+          "body": "Payments are processed securely by our payment provider (Stripe). We do not store your full card details on our servers."
+        },
+        {
+          "heading": "Cookies",
+          "body": "We use cookies to remember your language and currency preferences. You can manage your cookie preferences at any time."
+        },
+        {
+          "heading": "Your Rights",
+          "body": "You have the right to access, correct, or request deletion of your personal data. To exercise these rights, please contact us using the details below."
+        },
+        {
+          "heading": "Contact Us",
+          "body": "If you have any questions about this Privacy Policy or how we handle your data, please contact us via the contact details provided on this website."
+        }
+      ]
+    }
   },
   "languageSwitcher": {
     "label": "Language"

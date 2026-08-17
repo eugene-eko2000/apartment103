@@ -129,9 +129,9 @@ export default function LoginModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
         <div
-          className="px-6 py-4 rounded-t-2xl flex items-center justify-between sticky top-0"
+          className="px-6 py-4 rounded-t-2xl flex items-center justify-between shrink-0"
           style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
         >
           <h2 className="text-lg font-bold text-white">
@@ -147,9 +147,9 @@ export default function LoginModal({
           </button>
         </div>
 
-        <div className="p-6">
-          {step === "identifier" && (
-            <form onSubmit={handleRequestOtp} className="space-y-4">
+        {step === "identifier" && (
+          <form onSubmit={handleRequestOtp} className="flex flex-col min-h-0">
+            <div className="p-6 space-y-4 overflow-y-auto">
               <div>
                 <p className="text-sm text-gray-500 dark:text-gray-400">{dict.identifierHint}</p>
               </div>
@@ -168,12 +168,16 @@ export default function LoginModal({
                 />
               </div>
               {errorMessage && <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>}
+            </div>
+            <div className="px-6 pb-6 pt-4 border-t border-gray-100 dark:border-gray-700 shrink-0">
               <SubmitButton pending={pending} label={dict.sendCode} />
-            </form>
-          )}
+            </div>
+          </form>
+        )}
 
-          {step === "otp" && (
-            <form onSubmit={handleVerifyOtp} className="space-y-4">
+        {step === "otp" && (
+          <form onSubmit={handleVerifyOtp} className="flex flex-col min-h-0">
+            <div className="p-6 space-y-4 overflow-y-auto">
               <div>
                 <p className="text-sm text-gray-500 dark:text-gray-400">{dict.otpHint.replace("{identifier}", identifier)}</p>
               </div>
@@ -194,6 +198,8 @@ export default function LoginModal({
               </div>
               {errorMessage && <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>}
               {resendMessage && <p className="text-sm text-teal-600 dark:text-teal-400">{resendMessage}</p>}
+            </div>
+            <div className="px-6 pb-6 pt-4 border-t border-gray-100 dark:border-gray-700 shrink-0 space-y-4">
               <SubmitButton pending={pending} label={dict.verifyCode} />
               <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
                 <button
@@ -208,9 +214,9 @@ export default function LoginModal({
                   {dict.changeIdentifier}
                 </button>
               </div>
-            </form>
-          )}
-        </div>
+            </div>
+          </form>
+        )}
       </div>
     </div>,
     document.body

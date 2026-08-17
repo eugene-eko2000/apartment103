@@ -43,7 +43,42 @@
     "copyright": "© {year} Berg See Home. Tous droits réservés.",
     "privacy": "Confidentialité",
     "terms": "Conditions",
-    "contact": "Contact"
+    "contact": "Contact",
+    "privacyModal": {
+      "title": "Politique de confidentialité",
+      "close": "Fermer",
+      "intro": "Cette politique de confidentialité explique comment Berg See Home (« nous ») collecte, utilise et protège vos données personnelles lorsque vous utilisez notre site web et nos services de réservation.",
+      "sections": [
+        {
+          "heading": "Informations que nous collectons",
+          "body": "Lorsque vous effectuez une réservation ou nous contactez, nous collectons des informations telles que votre nom, adresse e-mail, numéro de téléphone, adresse postale, pays et informations de paiement nécessaires au traitement de votre réservation."
+        },
+        {
+          "heading": "Utilisation de vos informations",
+          "body": "Nous utilisons vos informations pour traiter les réservations, communiquer avec vous au sujet de votre séjour, gérer les paiements et respecter les obligations légales telles que l'enregistrement local des voyageurs."
+        },
+        {
+          "heading": "Conservation des données",
+          "body": "Nous conservons vos données de réservation et d'invité aussi longtemps que nécessaire pour votre séjour. Après votre date de départ, nous conservons vos données pendant un mois, après quoi elles sont définitivement supprimées de nos systèmes."
+        },
+        {
+          "heading": "Informations de paiement",
+          "body": "Les paiements sont traités en toute sécurité par notre prestataire de paiement (Stripe). Nous ne stockons pas l'intégralité de vos données de carte sur nos serveurs."
+        },
+        {
+          "heading": "Cookies",
+          "body": "Nous utilisons des cookies pour mémoriser vos préférences de langue et de devise. Vous pouvez gérer vos préférences de cookies à tout moment."
+        },
+        {
+          "heading": "Vos droits",
+          "body": "Vous avez le droit d'accéder à vos données personnelles, de les corriger ou d'en demander la suppression. Pour exercer ces droits, veuillez nous contacter via les coordonnées ci-dessous."
+        },
+        {
+          "heading": "Nous contacter",
+          "body": "Si vous avez des questions concernant cette politique de confidentialité ou la manière dont nous traitons vos données, veuillez nous contacter via les coordonnées indiquées sur ce site."
+        }
+      ]
+    }
   },
   "languageSwitcher": {
     "label": "Langue"

@@ -142,8 +142,12 @@ export default function PlansPanel() {
       />
 
       {showModal && (
-        <Modal title={editing ? "Edit plan" : "New plan"} onClose={() => setShowModal(false)}>
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <Modal
+          title={editing ? "Edit plan" : "New plan"}
+          onClose={() => setShowModal(false)}
+          footer={<SubmitButton form="plan-form" pending={pending} label={editing ? "Save changes" : "Create plan"} />}
+        >
+          <form id="plan-form" onSubmit={handleSubmit} className="space-y-4">
             <TextField label="Name" value={form.name} onChange={(v) => setForm((p) => ({ ...p, name: v }))} />
             <SelectField
               label="Cancellation policy"
@@ -159,7 +163,6 @@ export default function PlansPanel() {
               onChange={(v) => setForm((p) => ({ ...p, price_ratio: v }))}
             />
             {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
-            <SubmitButton pending={pending} label={editing ? "Save changes" : "Create plan"} />
           </form>
         </Modal>
       )}

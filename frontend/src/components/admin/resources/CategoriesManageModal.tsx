@@ -107,8 +107,39 @@ export default function CategoriesManageModal({
     }
   };
 
+  const footer = (
+    <form onSubmit={handleAdd} className="space-y-2">
+      <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Add a category</p>
+      <div className="flex gap-2">
+        <input
+          value={name}
+          onChange={(e) => handleNameChange(e.target.value)}
+          placeholder="Name"
+          className="flex-1 min-w-0 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400"
+        />
+        <input
+          value={slug}
+          onChange={(e) => {
+            setSlugEdited(true);
+            setSlug(slugify(e.target.value));
+          }}
+          placeholder="slug"
+          className="w-32 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400"
+        />
+        <button
+          type="submit"
+          disabled={addPending || !name.trim() || !slug.trim()}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg cursor-pointer disabled:opacity-50 transition-colors"
+        >
+          Add
+        </button>
+      </div>
+      {addError && <p className="text-xs text-red-600 dark:text-red-400">{addError}</p>}
+    </form>
+  );
+
   return (
-    <Modal title="Manage categories" onClose={onClose}>
+    <Modal title="Manage categories" onClose={onClose} footer={footer}>
       <div className="space-y-4">
         <ul className="space-y-2">
           {categories.map((category) => {
@@ -182,35 +213,6 @@ export default function CategoriesManageModal({
             <li className="text-sm text-slate-400 dark:text-slate-500 py-2">No categories yet.</li>
           )}
         </ul>
-
-        <form onSubmit={handleAdd} className="space-y-2 border-t border-slate-200 dark:border-slate-700 pt-4">
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Add a category</p>
-          <div className="flex gap-2">
-            <input
-              value={name}
-              onChange={(e) => handleNameChange(e.target.value)}
-              placeholder="Name"
-              className="flex-1 min-w-0 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400"
-            />
-            <input
-              value={slug}
-              onChange={(e) => {
-                setSlugEdited(true);
-                setSlug(slugify(e.target.value));
-              }}
-              placeholder="slug"
-              className="w-32 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400"
-            />
-            <button
-              type="submit"
-              disabled={addPending || !name.trim() || !slug.trim()}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg cursor-pointer disabled:opacity-50 transition-colors"
-            >
-              Add
-            </button>
-          </div>
-          {addError && <p className="text-xs text-red-600 dark:text-red-400">{addError}</p>}
-        </form>
       </div>
     </Modal>
   );

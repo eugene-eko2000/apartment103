@@ -126,8 +126,12 @@ export default function ClosuresPanel() {
       />
 
       {showModal && (
-        <Modal title={editing ? "Edit closure" : "New closure"} onClose={() => setShowModal(false)}>
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <Modal
+          title={editing ? "Edit closure" : "New closure"}
+          onClose={() => setShowModal(false)}
+          footer={<SubmitButton form="closure-form" pending={pending} label={editing ? "Save changes" : "Create closure"} />}
+        >
+          <form id="closure-form" onSubmit={handleSubmit} className="space-y-4">
             <TextField
               label="Platform"
               value={form.platform}
@@ -147,7 +151,6 @@ export default function ClosuresPanel() {
               onChange={(v) => setForm((p) => ({ ...p, end_date: v }))}
             />
             {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
-            <SubmitButton pending={pending} label={editing ? "Save changes" : "Create closure"} />
           </form>
         </Modal>
       )}

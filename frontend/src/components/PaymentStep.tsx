@@ -206,33 +206,42 @@ function PaymentForm({
       </div>
 
       {errorMessage && <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>}
-      <div className="flex gap-3">
+
+      {/* Sticky rather than hoisted to the parent's own fixed footer (unlike
+          the other booking-widget steps): this button calls handleSubmit,
+          which needs useStripe()/useElements() — it can only render inside
+          this component's <Elements> tree, not in a sibling owned by
+          BookingWidget. Sticking it to the bottom of the shared scrollable
+          area gets the same "always reachable" result without that hop. */}
+      <div className="sticky bottom-0 -mx-6 px-6 pb-6 pt-4 bg-white dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700 space-y-3">
+        <div className="flex gap-3">
+          <button
+            type="button"
+            disabled={submitting}
+            onClick={onBack}
+            className="flex-1 text-gray-600 dark:text-gray-300 font-semibold py-4 rounded-xl text-base transition-all border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          >
+            {backLabel}
+          </button>
+          <button
+            type="button"
+            disabled={!stripe || !elements || submitting || !cardComplete || !cardholderName.trim()}
+            onClick={handleSubmit}
+            className="flex-1 text-white font-semibold py-4 rounded-xl text-base transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
+          >
+            {submitting ? dict.processing : intent.mode === "setup" ? dict.verifyButton : dict.payButton}
+          </button>
+        </div>
         <button
           type="button"
           disabled={submitting}
-          onClick={onBack}
-          className="flex-1 text-gray-600 dark:text-gray-300 font-semibold py-4 rounded-xl text-base transition-all border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          onClick={onCancel}
+          className="block w-full text-center text-xs text-gray-400 dark:text-gray-500 hover:text-teal-700 dark:hover:text-teal-400 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         >
-          {backLabel}
-        </button>
-        <button
-          type="button"
-          disabled={!stripe || !elements || submitting || !cardComplete || !cardholderName.trim()}
-          onClick={handleSubmit}
-          className="flex-1 text-white font-semibold py-4 rounded-xl text-base transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-          style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
-        >
-          {submitting ? dict.processing : intent.mode === "setup" ? dict.verifyButton : dict.payButton}
+          {cancelLabel}
         </button>
       </div>
-      <button
-        type="button"
-        disabled={submitting}
-        onClick={onCancel}
-        className="block w-full text-center text-xs text-gray-400 dark:text-gray-500 hover:text-teal-700 dark:hover:text-teal-400 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-      >
-        {cancelLabel}
-      </button>
     </div>
   );
 }

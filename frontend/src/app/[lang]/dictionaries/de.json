@@ -43,7 +43,42 @@
     "copyright": "© {year} Berg See Home. Alle Rechte vorbehalten.",
     "privacy": "Datenschutz",
     "terms": "AGB",
-    "contact": "Kontakt"
+    "contact": "Kontakt",
+    "privacyModal": {
+      "title": "Datenschutzerklärung",
+      "close": "Schließen",
+      "intro": "Diese Datenschutzerklärung erklärt, wie Berg See Home („wir“, „uns“) Ihre personenbezogenen Daten erhebt, nutzt und schützt, wenn Sie unsere Website und Buchungsdienste nutzen.",
+      "sections": [
+        {
+          "heading": "Erhobene Informationen",
+          "body": "Wenn Sie eine Buchung vornehmen oder uns kontaktieren, erheben wir Informationen wie Ihren Namen, Ihre E-Mail-Adresse, Telefonnummer, Postanschrift, Ihr Land und Zahlungsdaten, die für die Bearbeitung Ihrer Reservierung erforderlich sind."
+        },
+        {
+          "heading": "Verwendung Ihrer Informationen",
+          "body": "Wir verwenden Ihre Daten, um Buchungen zu bearbeiten, mit Ihnen über Ihren Aufenthalt zu kommunizieren, Zahlungen abzuwickeln und gesetzliche Verpflichtungen wie die örtliche Gästemeldepflicht zu erfüllen."
+        },
+        {
+          "heading": "Datenspeicherung",
+          "body": "Wir speichern Ihre Buchungs- und Gästedaten so lange, wie es für Ihren Aufenthalt erforderlich ist. Nach Ihrem Check-out-Datum bewahren wir Ihre Daten einen Monat lang auf, danach werden sie dauerhaft aus unseren Systemen gelöscht."
+        },
+        {
+          "heading": "Zahlungsinformationen",
+          "body": "Zahlungen werden sicher über unseren Zahlungsanbieter (Stripe) abgewickelt. Wir speichern Ihre vollständigen Kartendaten nicht auf unseren Servern."
+        },
+        {
+          "heading": "Cookies",
+          "body": "Wir verwenden Cookies, um Ihre Sprach- und Währungspräferenzen zu speichern. Sie können Ihre Cookie-Einstellungen jederzeit verwalten."
+        },
+        {
+          "heading": "Ihre Rechte",
+          "body": "Sie haben das Recht, auf Ihre personenbezogenen Daten zuzugreifen, sie zu berichtigen oder deren Löschung zu verlangen. Um diese Rechte auszuüben, kontaktieren Sie uns bitte über die unten stehenden Angaben."
+        },
+        {
+          "heading": "Kontakt",
+          "body": "Wenn Sie Fragen zu dieser Datenschutzerklärung oder zum Umgang mit Ihren Daten haben, kontaktieren Sie uns bitte über die auf dieser Website angegebenen Kontaktdaten."
+        }
+      ]
+    }
   },
   "languageSwitcher": {
     "label": "Sprache"

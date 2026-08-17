@@ -127,8 +127,12 @@ export default function CancellationPoliciesPanel() {
       />
 
       {showModal && (
-        <Modal title={editing ? "Edit cancellation policy" : "New cancellation policy"} onClose={() => setShowModal(false)}>
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <Modal
+          title={editing ? "Edit cancellation policy" : "New cancellation policy"}
+          onClose={() => setShowModal(false)}
+          footer={<SubmitButton form="cancellation-policy-form" pending={pending} label={editing ? "Save changes" : "Create policy"} />}
+        >
+          <form id="cancellation-policy-form" onSubmit={handleSubmit} className="space-y-4">
             <TextField label="Name" value={form.name} onChange={(v) => setForm((p) => ({ ...p, name: v }))} />
             <RepeatingRows<CancellationRule>
               label="Refund rules"
@@ -157,7 +161,6 @@ export default function CancellationPoliciesPanel() {
               )}
             />
             {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
-            <SubmitButton pending={pending} label={editing ? "Save changes" : "Create policy"} />
           </form>
         </Modal>
       )}

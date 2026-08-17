@@ -339,8 +339,13 @@ export default function BookingsPanel() {
       />
 
       {showModal && editing && (
-        <Modal title="Edit booking" onClose={() => setShowModal(false)} maxWidth="max-w-2xl">
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <Modal
+          title="Edit booking"
+          onClose={() => setShowModal(false)}
+          maxWidth="max-w-2xl"
+          footer={<SubmitButton form="booking-form" pending={pending} label="Save changes" />}
+        >
+          <form id="booking-form" onSubmit={handleSubmit} className="space-y-4">
             <SelectField
               label="Guest"
               value={form.guest_id}
@@ -458,7 +463,6 @@ export default function BookingsPanel() {
             </div>
 
             {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
-            <SubmitButton pending={pending} label="Save changes" />
           </form>
         </Modal>
       )}

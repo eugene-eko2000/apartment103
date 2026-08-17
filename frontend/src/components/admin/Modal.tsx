@@ -6,12 +6,15 @@ export function Modal({
   title,
   onClose,
   children,
+  footer,
   maxHeight = "90vh",
   maxWidth = "max-w-lg",
 }: {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
+  /** Fixed action bar rendered below the scrollable content, outside the scroll area. */
+  footer?: React.ReactNode;
   /** CSS max-height for the dialog box, e.g. "calc(100vh - 120px)". */
   maxHeight?: string;
   /** Tailwind max-width class for the dialog box, e.g. "max-w-2xl". */
@@ -32,8 +35,8 @@ export function Modal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className={`bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full ${maxWidth} overflow-y-auto`} style={{ maxHeight }}>
-        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-800 rounded-t-xl">
+      <div className={`bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full ${maxWidth} flex flex-col overflow-hidden`} style={{ maxHeight }}>
+        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between shrink-0 bg-white dark:bg-slate-800 rounded-t-xl">
           <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">{title}</h2>
           <button
             type="button"
@@ -44,7 +47,10 @@ export function Modal({
             ×
           </button>
         </div>
-        <div className="p-6">{children}</div>
+        <div className="p-6 overflow-y-auto">{children}</div>
+        {footer && (
+          <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 shrink-0">{footer}</div>
+        )}
       </div>
     </div>
   );
