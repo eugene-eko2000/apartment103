@@ -171,17 +171,21 @@ def convert_amount_with_rates(
     if from_currency == to_currency:
         return to_decimal(amount)
 
-    converted = (amount / rates[from_currency]) * rates[to_currency]
+    # Commission is charged on the CHF amount, before the destination rate
+    # is applied -- the markup is a CHF-denominated fee, so it is defined
+    # against the base currency rather than against whatever the guest's
+    # currency happens to be. Converting *into* CHF carries no markup.
+    in_chf = amount / rates[from_currency]
     if to_currency != "CHF":
-        converted *= Decimal("1") + settings.commission_rate
-    return to_decimal(converted)
+        in_chf *= Decimal("1") + settings.commission_rate
+    return to_decimal(in_chf * rates[to_currency])
 
 
 async def convert_amount(amount: Decimal, from_currency: Currency, to_currency: Currency) -> Decimal:
     """Convert `amount` from one supported currency to another using live
-    Stripe FX rates, adding settings.commission_rate on top whenever the
-    target currency isn't CHF (converting into the base currency carries no
-    markup).
+    Stripe FX rates, applying settings.commission_rate to the CHF amount
+    before the destination rate whenever the target currency isn't CHF
+    (converting into the base currency carries no markup).
 
     Thin wrapper over convert_amount_with_rates for one-off conversions.
     """

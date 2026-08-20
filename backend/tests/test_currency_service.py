@@ -101,7 +101,7 @@ class TestRounding:
 
         result = await currency_service.convert_amount(Decimal("33.33"), "GBP", "USD")
 
-        # (33.33 / 0.8) * 4 = 166.65, * 1.025 = 170.81625 -> rounds to 170.82
+        # 33.33 / 0.8 = 41.6625, * 1.025 = 42.7040625, * 4 = 170.81625 -> rounds to 170.82
         assert result == Decimal("170.82")
 
 
