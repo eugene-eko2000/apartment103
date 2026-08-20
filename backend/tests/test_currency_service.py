@@ -1,3 +1,5 @@
+import asyncio
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
@@ -101,3 +103,90 @@ class TestRounding:
 
         # (33.33 / 0.8) * 4 = 166.65, * 1.025 = 170.81625 -> rounds to 170.82
         assert result == Decimal("170.82")
+
+
+class TestExchangeRateCache:
+    """get_exchange_rates' caching contract: one Stripe call per TTL window
+    even under concurrency, and a failed refresh falls back to the last good
+    snapshot instead of failing the request."""
+
+    @pytest.fixture(autouse=True)
+    def clear_cache(self, monkeypatch):
+        # These tests exercise the real get_exchange_rates, so the autouse
+        # fake_rates patch above must not apply, and the module cache must
+        # start empty.
+        monkeypatch.undo()
+        monkeypatch.setattr(currency_service, "_cached_rates", None)
+        monkeypatch.setattr(currency_service, "_cached_at", None)
+        monkeypatch.setattr(currency_service, "_refresh_lock", asyncio.Lock())
+
+    async def test_concurrent_cold_reads_trigger_a_single_fetch(self, monkeypatch):
+        calls = 0
+
+        async def slow_fetch():
+            nonlocal calls
+            calls += 1
+            await asyncio.sleep(0)  # let the other waiters queue on the lock
+            return dict(_FAKE_RATES)
+
+        monkeypatch.setattr(currency_service, "_fetch_rates", slow_fetch)
+
+        results = await asyncio.gather(*(currency_service.get_exchange_rates() for _ in range(10)))
+
+        assert calls == 1
+        assert all(r == _FAKE_RATES for r in results)
+
+    async def test_serves_stale_rates_when_refresh_fails(self, monkeypatch):
+        async def failing_fetch():
+            raise RuntimeError("Stripe is down")
+
+        monkeypatch.setattr(currency_service, "_cached_rates", dict(_FAKE_RATES))
+        # Older than the TTL (so a refresh is attempted) but well inside the
+        # hard-stale window.
+        monkeypatch.setattr(
+            currency_service, "_cached_at", datetime.now(timezone.utc) - timedelta(hours=2)
+        )
+        monkeypatch.setattr(currency_service, "_fetch_rates", failing_fetch)
+
+        assert await currency_service.get_exchange_rates() == _FAKE_RATES
+
+    async def test_raises_when_refresh_fails_and_cache_is_too_old(self, monkeypatch):
+        async def failing_fetch():
+            raise RuntimeError("Stripe is down")
+
+        monkeypatch.setattr(currency_service, "_cached_rates", dict(_FAKE_RATES))
+        monkeypatch.setattr(
+            currency_service, "_cached_at", datetime.now(timezone.utc) - timedelta(days=2)
+        )
+        monkeypatch.setattr(currency_service, "_fetch_rates", failing_fetch)
+
+        with pytest.raises(RuntimeError):
+            await currency_service.get_exchange_rates()
+
+    async def test_raises_when_refresh_fails_with_an_empty_cache(self, monkeypatch):
+        async def failing_fetch():
+            raise RuntimeError("Stripe is down")
+
+        monkeypatch.setattr(currency_service, "_fetch_rates", failing_fetch)
+
+        with pytest.raises(RuntimeError):
+            await currency_service.get_exchange_rates()
+
+
+class TestRatesFor:
+    """rates_for is what keeps hoisting the rate fetch out of a conversion
+    loop from turning same-currency responses into a Stripe round trip."""
+
+    async def test_skips_the_fetch_when_nothing_needs_converting(self, monkeypatch):
+        async def fail_if_called():
+            raise AssertionError("get_exchange_rates should not be called")
+
+        monkeypatch.setattr(currency_service, "get_exchange_rates", fail_if_called)
+
+        assert await currency_service.rates_for({"CHF"}, "CHF") == {}
+
+    async def test_fetches_when_any_target_differs(self):
+        assert await currency_service.rates_for({"CHF"}, "CHF", "EUR") == _FAKE_RATES
+
+    async def test_fetches_when_any_source_differs(self):
+        assert await currency_service.rates_for({"CHF", "USD"}, "CHF") == _FAKE_RATES

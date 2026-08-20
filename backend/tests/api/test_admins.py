@@ -20,6 +20,23 @@ class TestCreateAdmin:
         assert body["email"] == "sam@example.com"
         assert "_id" in body
 
+    async def test_lowercases_email(self, client, admin_headers):
+        """Login matches admins on an exact email (see
+        app.api.routes.auth._find_principal), so a capitalized address must
+        be normalized on write or it would never resolve."""
+        response = await client.post(
+            "/admins",
+            json={
+                "family_name": "Smith",
+                "first_name": "Sam",
+                "phone_number": "+15551112222",
+                "email": "Sam.Smith@Example.COM",
+            },
+            headers=admin_headers,
+        )
+        assert response.status_code == 201
+        assert response.json()["email"] == "sam.smith@example.com"
+
     async def test_requires_admin(self, client, guest_headers):
         response = await client.post(
             "/admins",
@@ -116,6 +133,20 @@ class TestUpdateAdmin:
         body = response.json()
         assert body["family_name"] == "Updated"
         assert body["email"] == "updated@example.com"
+
+    async def test_lowercases_email(self, client, admin, admin_headers):
+        response = await client.put(
+            f"/admins/{admin.id}",
+            json={
+                "family_name": "Updated",
+                "first_name": "Name",
+                "phone_number": "+15559998888",
+                "email": "Updated@Example.COM",
+            },
+            headers=admin_headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["email"] == "updated@example.com"
 
     async def test_returns_404_for_unknown_id(self, client, admin_headers):
         response = await client.put(

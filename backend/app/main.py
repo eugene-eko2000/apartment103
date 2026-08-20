@@ -1,5 +1,6 @@
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +15,7 @@ from app.api.routes import (
     guests,
     health,
     images,
+    payment_events,
     payments,
     plans,
     prices,
@@ -28,6 +30,9 @@ logging.basicConfig(level=logging.INFO)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_mongo()
+    # Once, here, rather than on every upload/delete/read — see
+    # app.api.routes.images._storage_dir.
+    Path(settings.image_storage_path).mkdir(parents=True, exist_ok=True)
     start_scheduler()
     yield
     scheduler.shutdown(wait=False)
@@ -59,5 +64,6 @@ app.include_router(closures.public_router)
 app.include_router(closures.router)
 app.include_router(payments.router)
 app.include_router(payments.webhook_router)
+app.include_router(payment_events.router)
 app.include_router(images.public_router)
 app.include_router(images.router)

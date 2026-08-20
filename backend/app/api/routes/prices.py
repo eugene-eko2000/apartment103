@@ -1,13 +1,22 @@
-from beanie import PydanticObjectId
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 
+from app.api.crud import make_crud_router
 from app.api.deps import require_admin
 from app.models.guest import Currency
 from app.models.price import Price
 from app.schemas.price import PriceCreate, PublicDateRangeRate, PublicPeriod, PublicPrice
-from app.services.currency_service import convert_amount
+from app.services.currency_service import convert_amount_with_rates, rates_for
 
-router = APIRouter(prefix="/prices", tags=["prices"], dependencies=[Depends(require_admin)])
+router: APIRouter = make_crud_router(
+    model=Price,
+    create_schema=PriceCreate,
+    prefix="/prices",
+    noun="Price",
+    id_param="price_id",
+    tags=["prices"],
+    dependencies=[Depends(require_admin)],
+    sort="period.begin_date",
+)
 
 # Unauthenticated: lets the booking widget look up nightly rates without an
 # admin session. Mounted ahead of `router` in main.py so "/prices/public" is
@@ -18,6 +27,10 @@ public_router = APIRouter(prefix="/prices", tags=["prices"])
 @public_router.get("/public", response_model=list[PublicPrice])
 async def list_public_prices(currency: Currency = "CHF") -> list[PublicPrice]:
     prices = await Price.find_all().sort("period.begin_date").to_list()
+    # One rate lookup for the whole response rather than two awaits per
+    # date range — and none at all when nothing needs converting (see
+    # app.services.currency_service.rates_for).
+    rates = await rates_for({price.period.currency for price in prices}, currency, "CHF")
     return [
         PublicPrice(
             id=price.id,
@@ -30,8 +43,12 @@ async def list_public_prices(currency: Currency = "CHF") -> list[PublicPrice]:
                         begin_date=date_range.begin_date,
                         end_date=date_range.end_date,
                         min_stay_days=date_range.min_stay_days,
-                        daily_rate=await convert_amount(date_range.daily_rate, price.period.currency, currency),
-                        daily_rate_chf=await convert_amount(date_range.daily_rate, price.period.currency, "CHF"),
+                        daily_rate=convert_amount_with_rates(
+                            date_range.daily_rate, price.period.currency, currency, rates
+                        ),
+                        daily_rate_chf=convert_amount_with_rates(
+                            date_range.daily_rate, price.period.currency, "CHF", rates
+                        ),
                     )
                     for date_range in price.period.date_ranges
                 ],
@@ -39,41 +56,3 @@ async def list_public_prices(currency: Currency = "CHF") -> list[PublicPrice]:
         )
         for price in prices
     ]
-
-
-@router.post("", response_model=Price, status_code=status.HTTP_201_CREATED)
-async def create_price(payload: PriceCreate) -> Price:
-    price = Price(period=payload.period)
-    await price.insert()
-    return price
-
-
-@router.get("", response_model=list[Price])
-async def list_prices() -> list[Price]:
-    return await Price.find_all().sort("period.begin_date").to_list()
-
-
-@router.get("/{price_id}", response_model=Price)
-async def get_price(price_id: PydanticObjectId) -> Price:
-    price = await Price.get(price_id)
-    if price is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Price not found")
-    return price
-
-
-@router.put("/{price_id}", response_model=Price)
-async def update_price(price_id: PydanticObjectId, payload: PriceCreate) -> Price:
-    price = await Price.get(price_id)
-    if price is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Price not found")
-    price.period = payload.period
-    await price.save()
-    return price
-
-
-@router.delete("/{price_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_price(price_id: PydanticObjectId) -> None:
-    price = await Price.get(price_id)
-    if price is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Price not found")
-    await price.delete()

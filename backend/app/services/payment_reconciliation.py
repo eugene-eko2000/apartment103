@@ -21,6 +21,19 @@ from app.services.charge_schedule import outstanding_amount
 logger = logging.getLogger(__name__)
 
 
+async def _record_failure(booking: Booking) -> None:
+    """Persist just the two failure fields with $set rather than
+    Document.save(): a full-document replace here would write this
+    in-memory copy back over whatever the payment webhook for the same
+    PaymentIntent may have concurrently applied."""
+    await booking.set(
+        {
+            Booking.last_payment_error: booking.last_payment_error,
+            Booking.payment_status: booking.payment_status,
+        }
+    )
+
+
 def _redact_payment_method_id(payment_method_id: str | None) -> str:
     """Stripe payment_method ids (pm_...) are tokens, not raw card numbers —
     but mask everything but the last 4 characters before logging anyway."""
@@ -71,13 +84,13 @@ async def charge_outstanding_balance(booking: Booking, *, reason: BookingChargeR
         # overwrite, not a double-count, since failures aren't accumulated.
         booking.last_payment_error = str(exc)
         booking.payment_status = "requires_action" if exc.code == "authentication_required" else "failed"
-        await booking.save()
+        await _record_failure(booking)
         return
     except stripe.StripeError as exc:
         logger.warning("Stripe error charging booking %s: %s", booking.id, exc)
         booking.last_payment_error = str(exc)
         booking.payment_status = "failed"
-        await booking.save()
+        await _record_failure(booking)
         return
     # Deliberately not updating amount_charged/charges/payment_status here on
     # success: the payment_intent.succeeded webhook is the sole writer for a

@@ -33,8 +33,20 @@ def anyio_backend():
 
 @pytest.fixture(autouse=True)
 async def _reset_database():
+    """Empty every collection between tests, rather than dropping the whole
+    database.
+
+    Same isolation, but the collections — and therefore the indexes
+    init_beanie creates from each model's Settings.indexes — survive. That
+    matters twice over: dropping the database made every test pay to rebuild
+    the full index set (roughly 4x the suite's runtime), and it meant tests
+    ran against a database with no unique constraints at all, so a
+    duplicate-key path could never be exercised.
+    """
     mongo_client = AsyncMongoClient(settings.mongo_uri)
-    await mongo_client.drop_database(settings.mongo_db)
+    database = mongo_client[settings.mongo_db]
+    for name in await database.list_collection_names():
+        await database[name].delete_many({})
     await mongo_client.close()
     yield
 

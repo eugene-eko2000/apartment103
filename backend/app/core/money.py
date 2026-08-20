@@ -16,6 +16,13 @@ from pydantic import BeforeValidator, PlainSerializer
 
 TWO_PLACES = Decimal("0.01")
 
+# Amounts within this much of each other count as equal when deciding
+# whether something has been paid off. Rounding across repeated accrual
+# charges and refunds leaves a few hundredths of a unit of drift that should
+# still read as "done" — see app.services.charge_schedule and the
+# fully_charged transition in app.api.routes.payments.
+CHARGE_TOLERANCE = Decimal("0.01")
+
 
 def to_decimal(value) -> Decimal | None:
     """Coerce int/float/str/Decimal/bson.Decimal128 to a Decimal quantized

@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from beanie import Document
 from pydantic import Field
+from pymongo import IndexModel
 
 
 class Image(Document):
@@ -31,3 +32,10 @@ class Image(Document):
 
     class Settings:
         name = "images"
+        # Mirrors migrations/20260731193033_create_images_collection.py and
+        # 20260731211638_add_image_labels_index.py.
+        indexes = [
+            IndexModel([("key", 1)], unique=True),
+            IndexModel([("category", 1), ("sort_order", 1)]),
+            IndexModel([("labels", 1)]),
+        ]

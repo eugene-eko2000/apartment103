@@ -2,6 +2,7 @@ from typing import Literal
 
 from beanie import Document
 from pydantic import BaseModel
+from pymongo import IndexModel
 
 Language = Literal["en", "de", "fr", "it"]
 Currency = Literal["EUR", "CHF", "USD", "GBP"]
@@ -27,3 +28,14 @@ class Guest(Document):
 
     class Settings:
         name = "guests"
+        # Mirrors migrations/20260712000329_create_initial_collections.py.
+        # Declared here too so init_beanie creates them on any fresh
+        # database (including the test one), which is what actually makes
+        # the uniqueness of email/phone_number an enforced constraint
+        # rather than a convention. Migrations stay authoritative for
+        # *changes*; this is the current state.
+        indexes = [
+            IndexModel([("family_name", 1), ("first_name", 1)]),
+            IndexModel([("phone_number", 1)], unique=True),
+            IndexModel([("email", 1)], unique=True),
+        ]

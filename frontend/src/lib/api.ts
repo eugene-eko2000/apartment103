@@ -197,11 +197,22 @@ export interface BookingCharge {
   net_amount_chf?: number | null;
 }
 
+// A reference, not a copy: the raw Stripe payload lives once on the
+// matching PaymentEvent and is fetched on demand via getPaymentEvent (see
+// the backend's app/models/booking.py::BookingWebhookEvent).
 export interface BookingWebhookEvent {
   stripe_event_id: string;
   event_type: string;
-  data: Record<string, unknown>;
   received_at: string;
+}
+
+export interface PaymentEvent {
+  _id: string;
+  stripe_event_id: string;
+  event_type: string;
+  processed_at: string;
+  booking_id?: string | null;
+  data: Record<string, unknown>;
 }
 
 export interface BookingChargeScheduleEntry {
@@ -464,6 +475,12 @@ export function createPaymentIntent(bookingId: string, token: string): Promise<P
 
 export function retryPayment(bookingId: string, token: string): Promise<PaymentIntentResponse> {
   return request(`/bookings/${bookingId}/payment/retry`, { method: "POST", headers: authHeaders(token) });
+}
+
+// Resolves one of a booking's webhook_events references to its raw Stripe
+// payload. Admin-only.
+export function getPaymentEvent(stripeEventId: string, token: string): Promise<PaymentEvent> {
+  return request(`/payment-events/${encodeURIComponent(stripeEventId)}`, { headers: authHeaders(token) });
 }
 
 export function listGuests(token: string): Promise<Guest[]> {

@@ -1,12 +1,13 @@
 from dataclasses import dataclass
 
 import jwt
-from beanie import PydanticObjectId
+from beanie import Link, PydanticObjectId
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.security import SubjectType, decode_access_token
 from app.models.admin import Admin
+from app.models.booking import Booking
 from app.models.guest import Guest
 
 _bearer_scheme = HTTPBearer(auto_error=False)
@@ -91,3 +92,25 @@ async def require_pending_guest(principal: Principal = Depends(get_current_princ
             status_code=status.HTTP_403_FORBIDDEN, detail="A verified but unregistered identifier is required"
         )
     return principal
+
+
+# ── Resource authorization ────────────────────────────────────────────────
+# Who may act on a given booking/guest. Lives here, next to Principal and its
+# owns_guest helper, rather than in a route module — this is authorization
+# policy, not routing, and payments.py previously had to reach into
+# bookings.py for a private name to reuse it.
+
+
+def booking_guest_id(booking: Booking) -> PydanticObjectId:
+    """The booking's guest id, whether or not its Link has been resolved."""
+    return booking.guest.ref.id if isinstance(booking.guest, Link) else booking.guest.id
+
+
+def ensure_can_access_booking(principal: Principal, booking: Booking) -> None:
+    if not principal.is_admin and booking_guest_id(booking) != principal.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized for this booking")
+
+
+def ensure_can_access_guest(principal: Principal, guest_id: PydanticObjectId) -> None:
+    if not principal.is_admin and not principal.owns_guest(guest_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized for this guest")

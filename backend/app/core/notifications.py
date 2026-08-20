@@ -1,6 +1,17 @@
+"""Outbound email (SendGrid) and SMS (Twilio) delivery.
+
+Both vendor clients are synchronous and make blocking HTTPS calls, so every
+send below is pushed onto a worker thread rather than run on the event loop
+— same reasoning (and same mechanism) as app.services.stripe_service.
+Without this, a single OTP request stalls every other request the worker is
+serving for the duration of the round trip.
+"""
+
+import asyncio
 import base64
 import logging
 from dataclasses import dataclass
+from functools import partial
 
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import (
@@ -29,7 +40,7 @@ class EmailAttachment:
     mime_type: str
 
 
-def send_text_email(to_address: str, subject: str, text_content: str) -> None:
+async def send_text_email(to_address: str, subject: str, text_content: str) -> None:
     if not settings.sendgrid_api_key:
         logger.info(
             "Email (SendGrid not configured, logging instead) to=%s subject=%s body=%s",
@@ -45,10 +56,10 @@ def send_text_email(to_address: str, subject: str, text_content: str) -> None:
 
     message = Mail(from_email, to_email, subject, content)
 
-    SendGridAPIClient(settings.sendgrid_api_key).send(message)
+    await asyncio.to_thread(SendGridAPIClient(settings.sendgrid_api_key).send, message)
 
 
-def send_html_email(
+async def send_html_email(
     to_address: str,
     subject: str,
     html_content: str,
@@ -77,10 +88,10 @@ def send_html_email(
             )
         )
 
-    SendGridAPIClient(settings.sendgrid_api_key).send(message)
+    await asyncio.to_thread(SendGridAPIClient(settings.sendgrid_api_key).send, message)
 
 
-def send_sms(to_number: str, body: str) -> None:
+async def send_sms(to_number: str, body: str) -> None:
     if not (
         settings.twilio_account_sid
         and settings.twilio_auth_token
@@ -90,9 +101,12 @@ def send_sms(to_number: str, body: str) -> None:
         return
 
     client = TwilioClient(settings.twilio_account_sid, settings.twilio_auth_token)
-    client.messages.create(
-        to=to_number,
-        messaging_service_sid=settings.twilio_messaging_service_sid,
-        body=body,
-        risk_check=MessageInstance.RiskCheck.DISABLE,
+    await asyncio.to_thread(
+        partial(
+            client.messages.create,
+            to=to_number,
+            messaging_service_sid=settings.twilio_messaging_service_sid,
+            body=body,
+            risk_check=MessageInstance.RiskCheck.DISABLE,
+        )
     )

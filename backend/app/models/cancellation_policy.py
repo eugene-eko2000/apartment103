@@ -1,5 +1,6 @@
 from beanie import Document
 from pydantic import BaseModel, Field
+from pymongo import IndexModel
 
 
 class CancellationRule(BaseModel):
@@ -13,3 +14,5 @@ class CancellationPolicy(Document):
 
     class Settings:
         name = "cancellation_policies"
+        # Mirrors migrations/20260712000329_create_initial_collections.py.
+        indexes = [IndexModel([("name", 1)], unique=True)]

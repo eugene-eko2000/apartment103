@@ -2,15 +2,18 @@
 
 stripe-python makes blocking HTTP calls, so every call that actually talks to
 Stripe is pushed onto a worker thread (asyncio.to_thread) to avoid stalling
-the event loop. This module is the only place in the app that imports
-`stripe` — routes and the reconciliation job go through it rather than
-calling the SDK directly, so Stripe-specific details (minor-unit amounts,
-threading, idempotency keys) stay in one place.
+the event loop. This module is the only place that *configures* Stripe and
+the only place that issues requests to it — routes and the reconciliation
+job go through it rather than calling the SDK directly, so Stripe-specific
+details (minor-unit amounts, threading, idempotency keys) stay in one place.
+(Other modules do import `stripe` for its exception types, which is just
+error handling, not a second way of talking to the API.)
 """
 
 import asyncio
 import logging
 from decimal import Decimal
+from functools import partial
 
 import stripe
 from pydantic import BaseModel
@@ -22,6 +25,29 @@ from app.models.guest import Currency, Guest
 logger = logging.getLogger(__name__)
 
 stripe.api_key = settings.stripe_secret_key
+
+# The module-level `stripe.X.create` helpers below read stripe.api_key set
+# above; the StripeClient is only needed for raw_request. It is built on
+# first use rather than at import so merely importing this module (as tests
+# and the CLI do) doesn't require a configured key.
+_client: stripe.StripeClient | None = None
+
+
+def _get_client() -> stripe.StripeClient:
+    global _client
+    if _client is None:
+        _client = stripe.StripeClient(settings.stripe_secret_key)
+    return _client
+
+
+async def raw_request(method: str, path: str, **params):
+    """Call a Stripe endpoint the installed SDK has no typed resource for.
+
+    Used by app.services.currency_service for the FX Quotes API, which is
+    still in preview. Keeping it here means the API key is configured in
+    exactly one place.
+    """
+    return await asyncio.to_thread(partial(_get_client().raw_request, method, path, **params))
 
 # EUR/CHF/USD/GBP — the only currencies this app supports — all use 2-decimal
 # minor units. If a zero-decimal currency (e.g. JPY) is ever added, this needs

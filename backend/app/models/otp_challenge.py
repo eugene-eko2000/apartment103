@@ -3,6 +3,7 @@ from typing import Literal
 
 from beanie import Document
 from pydantic import Field
+from pymongo import IndexModel
 
 OtpChannel = Literal["email", "sms"]
 
@@ -23,3 +24,10 @@ class OtpChallenge(Document):
 
     class Settings:
         name = "otp_challenges"
+        # Mirrors migrations/20260712000329_create_initial_collections.py:
+        # the latest challenge for an identifier, plus a TTL index that
+        # expires stale challenges automatically.
+        indexes = [
+            IndexModel([("identifier", 1), ("created_at", -1)]),
+            IndexModel([("expires_at", 1)], expireAfterSeconds=0),
+        ]

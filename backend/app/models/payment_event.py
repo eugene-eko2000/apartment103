@@ -2,6 +2,7 @@ from datetime import datetime
 
 from beanie import Document, PydanticObjectId
 from pydantic import Field
+from pymongo import IndexModel
 
 
 class PaymentEvent(Document):
@@ -27,3 +28,7 @@ class PaymentEvent(Document):
 
     class Settings:
         name = "payment_events"
+        # Mirrors migrations/20260723205600_create_payment_events_collection.py.
+        # The unique index is load-bearing: it is what lets the webhook
+        # handler recognize a redelivered event instead of double-applying it.
+        indexes = [IndexModel([("stripe_event_id", 1)], unique=True)]

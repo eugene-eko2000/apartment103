@@ -2,6 +2,7 @@ from datetime import date
 
 from beanie import Document
 from pydantic import BaseModel, Field, field_validator
+from pymongo import IndexModel
 
 from app.core.money import Money
 from app.models.guest import Currency
@@ -31,3 +32,5 @@ class Price(Document):
 
     class Settings:
         name = "prices"
+        # Mirrors migrations/20260712000329_create_initial_collections.py.
+        indexes = [IndexModel([("period.begin_date", 1), ("period.end_date", 1)])]

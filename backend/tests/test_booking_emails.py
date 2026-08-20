@@ -66,7 +66,7 @@ async def test_confirmation_email_escapes_guest_supplied_html(monkeypatch):
     b.guest.first_name = "<script>alert(1)</script>"
     captured = {}
 
-    def fake_send(*, to_address, subject, html_content, attachments):
+    async def fake_send(*, to_address, subject, html_content, attachments):
         captured["to_address"] = to_address
         captured["html_content"] = html_content
         captured["attachments"] = attachments
@@ -90,7 +90,7 @@ async def test_confirmation_email_attaches_invoice_for_existing_charges(monkeypa
     ]
     captured = {}
 
-    def fake_send(*, to_address, subject, html_content, attachments):
+    async def fake_send(*, to_address, subject, html_content, attachments):
         captured["attachments"] = attachments
 
     monkeypatch.setattr(booking_emails, "send_html_email", fake_send)
@@ -115,7 +115,7 @@ async def test_scheduled_payment_email_reports_remaining_payments(monkeypatch):
     ]
     captured = {}
 
-    def fake_send(*, to_address, subject, html_content, attachments):
+    async def fake_send(*, to_address, subject, html_content, attachments):
         captured["html_content"] = html_content
         captured["attachments"] = attachments
 
@@ -134,7 +134,7 @@ async def test_confirmation_email_uses_guest_preferred_language(monkeypatch):
     b.guest.preferred_language = "de"
     captured = {}
 
-    def fake_send(*, to_address, subject, html_content, attachments):
+    async def fake_send(*, to_address, subject, html_content, attachments):
         captured["subject"] = subject
         captured["html_content"] = html_content
 

@@ -18,7 +18,15 @@ class ClosureCreate(BaseModel):
 
 
 class ClosedDateRange(BaseModel):
-    """Public, platform-anonymized view of a closure's date range."""
+    """Public, platform-anonymized view of a closure's date range.
+
+    Doubles as a Beanie projection model (see the `Settings.projection`
+    below), so the public endpoint reads only these two fields rather than
+    whole Closure documents.
+    """
 
     begin_date: date
     end_date: date
+
+    class Settings:
+        projection = {"begin_date": 1, "end_date": 1}

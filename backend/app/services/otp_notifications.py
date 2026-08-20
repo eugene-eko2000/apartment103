@@ -7,13 +7,13 @@ from app.models.guest import Language
 from app.services import email_templates
 
 
-def send_otp_email(to_address: str, code: str, language: Language | None) -> None:
+async def send_otp_email(to_address: str, code: str, language: Language | None) -> None:
     subject, body = email_templates.render_email(
         language=language, name="otp_email.txt", context={"code": code}
     )
-    send_text_email(to_address, subject, body)
+    await send_text_email(to_address, subject, body)
 
 
-def send_otp_sms(to_number: str, code: str, language: Language | None) -> None:
+async def send_otp_sms(to_number: str, code: str, language: Language | None) -> None:
     body = email_templates.render_text(language=language, name="otp_sms.txt", context={"code": code})
-    send_sms(to_number, body)
+    await send_sms(to_number, body)

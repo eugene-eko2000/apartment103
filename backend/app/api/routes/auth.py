@@ -1,9 +1,8 @@
 import math
-import re
 from datetime import datetime, timedelta, timezone
 
 from beanie import PydanticObjectId
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 
 from app.api.deps import Principal, get_current_principal
 from app.core.config import settings
@@ -36,8 +35,14 @@ async def verify_token(principal: Principal = Depends(get_current_principal)) ->
 async def _find_principal(
     identifier: str, kind: str, audience: str
 ) -> tuple[SubjectType, PydanticObjectId] | None:
+    # Exact match, not a case-insensitive regex: `identifier` has already
+    # been through normalize_identifier (which lowercases emails), and every
+    # write path stores the normalized form — guests.py normalizes on
+    # create/update, and `mongo-migrate create-admin` does the same. A
+    # $regex with $options:"i" cannot use the unique email index and would
+    # force a collection scan on every login.
     if kind == "email":
-        query = {"email": {"$regex": f"^{re.escape(identifier)}$", "$options": "i"}}
+        query = {"email": identifier}
     else:
         query = {"phone_number": identifier}
 
@@ -62,7 +67,7 @@ async def _find_principal(
 
 
 @router.post("/otp/request", status_code=status.HTTP_202_ACCEPTED, response_model=OtpRequestResponse)
-async def request_otp(payload: OtpRequest) -> OtpRequestResponse:
+async def request_otp(payload: OtpRequest, background_tasks: BackgroundTasks) -> OtpRequestResponse:
     try:
         kind = classify_identifier(payload.identifier)
     except ValueError as exc:
@@ -97,10 +102,15 @@ async def request_otp(payload: OtpRequest) -> OtpRequestResponse:
     )
     await challenge.insert()
 
+    # Queued rather than awaited: the response deliberately says nothing
+    # about delivery (see _OTP_REQUESTED_MESSAGE), and the challenge is
+    # already durably stored above — so making the caller wait on a
+    # SendGrid/Twilio round trip buys nothing. A delivery failure is logged
+    # by the notification layer; the guest can simply request another code.
     if kind == "email":
-        send_otp_email(identifier, code, payload.language)
+        background_tasks.add_task(send_otp_email, identifier, code, payload.language)
     else:
-        send_otp_sms(identifier, code, payload.language)
+        background_tasks.add_task(send_otp_sms, identifier, code, payload.language)
 
     return OtpRequestResponse(
         message=_OTP_REQUESTED_MESSAGE, retry_after_seconds=settings.otp_resend_cooldown_seconds

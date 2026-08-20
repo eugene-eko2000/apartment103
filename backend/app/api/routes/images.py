@@ -53,9 +53,11 @@ def _slugify(filename: str) -> str:
 
 
 def _storage_dir() -> Path:
-    path = Path(settings.image_storage_path)
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    """The image directory. Created once at startup (see
+    app.main.lifespan) rather than here — this is called on every upload,
+    delete and, in local dev, every image read, and mkdir is a blocking
+    syscall."""
+    return Path(settings.image_storage_path)
 
 
 @public_router.get("", response_model=list[Image])

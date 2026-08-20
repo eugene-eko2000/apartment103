@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from beanie import Document
 from pydantic import Field
+from pymongo import IndexModel
 
 
 class Category(Document):
@@ -17,3 +18,5 @@ class Category(Document):
 
     class Settings:
         name = "categories"
+        # Mirrors migrations/20260801120000_create_categories_collection.py.
+        indexes = [IndexModel([("slug", 1)], unique=True)]

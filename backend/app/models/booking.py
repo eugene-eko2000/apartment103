@@ -1,9 +1,11 @@
+from collections.abc import Iterable
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Literal
 
 from beanie import Document, Link
 from pydantic import BaseModel, Field
+from pymongo import IndexModel
 
 from app.core.money import Money, to_decimal
 from app.models.cancellation_policy import CancellationRule
@@ -34,6 +36,14 @@ class BookingDateRange(BaseModel):
     begin_date: date
     end_date: date
     price: Money = Field(ge=0)
+
+
+def total_price_of(date_ranges: Iterable[BookingDateRange]) -> Decimal:
+    """Sum of a booking's date-range prices. Module-level (rather than only a
+    Booking method) so the read-only projections used by the display
+    endpoints — see app.schemas.booking.BookingDisplaySource — derive the
+    total exactly the same way the stored document does."""
+    return to_decimal(sum((date_range.price for date_range in date_ranges), Decimal("0.00")))
 
 
 class BookingCancellationPolicy(BaseModel):
@@ -85,14 +95,18 @@ class BookingChargeScheduleEntry(BaseModel):
 class BookingWebhookEvent(BaseModel):
     """Per-booking log of every Stripe webhook event that referenced it.
 
-    Kept alongside the global PaymentEvent dedupe ledger so a booking's full
-    payment history (including the raw event payload) is visible directly on
-    the booking, without joining across collections.
+    A *reference*, not a copy: the raw `event.data.object` payload lives on
+    the matching PaymentEvent (the canonical audit trail — see
+    app.models.payment_event.PaymentEvent), and is fetched on demand by
+    stripe_event_id via GET /payment-events/{stripe_event_id}. Storing it
+    here as well made every booking grow without bound with each event, and
+    since Beanie's Document.save() is a full-document replace, made the cost
+    of writing a booking proportional to how many events it had already
+    accumulated.
     """
 
     stripe_event_id: str
     event_type: str
-    data: dict
     received_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
@@ -129,8 +143,15 @@ class Booking(Document):
 
     @property
     def total_price(self) -> Decimal:
-        total = sum((date_range.price for date_range in self.date_ranges), Decimal("0.00"))
-        return to_decimal(total)
+        return total_price_of(self.date_ranges)
 
     class Settings:
         name = "bookings"
+        # Mirrors migrations/20260712000329_create_initial_collections.py:
+        # a guest's own bookings, overlap lookups by stay dates, and
+        # listing by booking date.
+        indexes = [
+            IndexModel([("guest.$id", 1)]),
+            IndexModel([("date_ranges.begin_date", 1), ("date_ranges.end_date", 1)]),
+            IndexModel([("booking_date", 1)]),
+        ]

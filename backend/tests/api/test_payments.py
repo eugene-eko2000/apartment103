@@ -7,6 +7,7 @@ from beanie import PydanticObjectId
 from app.models.booking import Booking, BookingCharge
 from app.models.cancellation_policy import CancellationPolicy, CancellationRule
 from app.models.payment_event import PaymentEvent
+from app.api.routes import payments as payments_routes
 from app.services import stripe_service
 from app.services.stripe_service import ChargeFeeBreakdown
 
@@ -285,6 +286,33 @@ class TestStripeWebhook:
         assert booking.stripe_payment_method_id == "pm_abc"
         assert booking.status == "Active"
 
+    async def test_webhook_event_log_is_capped(
+        self, monkeypatch, client, guest, cancellation_policy, guest_headers
+    ):
+        """webhook_events is $push-ed with $slice, so a chatty PaymentIntent
+        can't grow the booking document without bound."""
+        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers)
+        cap = payments_routes._MAX_WEBHOOK_EVENTS
+
+        for i in range(cap + 5):
+            event = SimpleNamespace(
+                id=f"evt_noise_{i}",
+                # An event type with no handler: exercises the plain
+                # log-only path through _commit.
+                type="payment_intent.created",
+                data=SimpleNamespace(object={"id": f"pi_{i}", "metadata": {"booking_id": booking_id}}),
+            )
+            monkeypatch.setattr(stripe_service, "construct_webhook_event", lambda payload, sig, e=event: e)
+            response = await client.post(
+                "/webhooks/stripe", content=b"{}", headers={"stripe-signature": "sig"}
+            )
+            assert response.status_code == 200
+
+        booking = await Booking.get(PydanticObjectId(booking_id))
+        assert len(booking.webhook_events) == cap
+        # $slice keeps the most recent entries.
+        assert booking.webhook_events[-1].stripe_event_id == f"evt_noise_{cap + 4}"
+
     async def test_payment_intent_succeeded_records_charge(
         self, monkeypatch, client, guest, cancellation_policy, guest_headers
     ):
@@ -316,7 +344,12 @@ class TestStripeWebhook:
         assert booking.charges[0].stripe_payment_intent_id == "pi_1"
         assert len(booking.webhook_events) == 1
         assert booking.webhook_events[0].stripe_event_id == "evt_pi_1"
-        assert booking.webhook_events[0].data["id"] == "pi_1"
+        assert booking.webhook_events[0].event_type == "payment_intent.succeeded"
+        # The booking stores only a reference; the raw payload lives once, on
+        # the PaymentEvent, and is read back via GET /payment-events/{id}.
+        payment_event = await PaymentEvent.find_one(PaymentEvent.stripe_event_id == "evt_pi_1")
+        assert payment_event is not None
+        assert payment_event.data["id"] == "pi_1"
 
         stored_event = await PaymentEvent.find_one(PaymentEvent.stripe_event_id == "evt_pi_1")
         assert stored_event is not None

@@ -40,8 +40,12 @@ async def reconcile_booking_payments() -> None:
                 charged += 1
         except Exception:
             logger.exception("Failed to reconcile payment for booking %s", booking.id)
-        booking.last_payment_check_at = datetime.now(timezone.utc)
-        await booking.save()
+        # A targeted $set, not Document.save(): save() replaces the whole
+        # document, so stamping this timestamp would rewrite every charge,
+        # schedule entry and webhook-event reference on the booking — and
+        # would write back this in-memory copy over anything
+        # charge_outstanding_balance had just persisted.
+        await booking.set({Booking.last_payment_check_at: datetime.now(timezone.utc)})
     logger.info("Payment reconciliation: checked=%d bookings, charged=%d", checked, charged)
 
 

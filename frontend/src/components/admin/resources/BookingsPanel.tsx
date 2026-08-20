@@ -5,6 +5,7 @@ import {
   ApiError,
   deleteBooking,
   getBookingDisplay,
+  getPaymentEvent,
   listBookings,
   listCancellationPolicies,
   listGuests,
@@ -76,8 +77,22 @@ function ReadOnlyField({ label, value }: { label: string; value: React.ReactNode
   );
 }
 
-function WebhookEventItem({ event }: { event: BookingWebhookEvent }) {
+// The booking carries only a reference to each webhook event; the raw
+// payload is fetched from /payment-events/{id} the first time the entry is
+// expanded, so a booking's document doesn't have to carry a copy of every
+// Stripe payload it ever received.
+function WebhookEventItem({ event, token }: { event: BookingWebhookEvent; token: string }) {
   const [open, setOpen] = useState(false);
+  const [payload, setPayload] = useState<Record<string, unknown> | null>(null);
+  const [payloadError, setPayloadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open || payload || payloadError) return;
+    getPaymentEvent(event.stripe_event_id, token)
+      .then((result) => setPayload(result.data))
+      .catch((err) => setPayloadError(err instanceof ApiError ? err.message : String(err)));
+  }, [open, payload, payloadError, event.stripe_event_id, token]);
+
   return (
     <div className="border border-slate-200 dark:border-slate-600 rounded-lg overflow-hidden">
       <button
@@ -97,9 +112,15 @@ function WebhookEventItem({ event }: { event: BookingWebhookEvent }) {
           <ReadOnlyField label="Stripe event ID" value={event.stripe_event_id} />
           <div>
             <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Raw payload</span>
-            <pre className="text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2 overflow-x-auto max-h-64 overflow-y-auto text-slate-700 dark:text-slate-300">
-              {JSON.stringify(event.data, null, 2)}
-            </pre>
+            {payloadError ? (
+              <p className="text-xs text-red-600 dark:text-red-400">{payloadError}</p>
+            ) : payload ? (
+              <pre className="text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2 overflow-x-auto max-h-64 overflow-y-auto text-slate-700 dark:text-slate-300">
+                {JSON.stringify(payload, null, 2)}
+              </pre>
+            ) : (
+              <p className="text-xs text-slate-400 dark:text-slate-500 italic">Loading…</p>
+            )}
           </div>
         </div>
       )}
@@ -455,7 +476,7 @@ export default function BookingsPanel() {
                 ) : (
                   <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
                     {editing.webhook_events.map((event) => (
-                      <WebhookEventItem key={event.stripe_event_id} event={event} />
+                      <WebhookEventItem key={event.stripe_event_id} event={event} token={token} />
                     ))}
                   </div>
                 )}

@@ -20,6 +20,7 @@ report on. The actual wording/markup lives in app.services.email_templates
 this module only assembles the data those templates render.
 """
 
+import asyncio
 from datetime import timedelta
 
 from beanie import Link
@@ -87,24 +88,33 @@ def _booking_context(booking: Booking, guest: Guest) -> dict:
     }
 
 
-def _invoice_attachment(*, booking: Booking, guest: Guest, charge: BookingCharge) -> EmailAttachment:
+async def _invoice_attachment(*, booking: Booking, guest: Guest, charge: BookingCharge) -> EmailAttachment:
+    """Renders one charge's invoice PDF. build_charge_invoice_pdf is pure CPU
+    (FPDF layout) and these run inside the Stripe webhook handler, which
+    Stripe times out — so the render is pushed onto a worker thread rather
+    than blocking the event loop."""
+    content = await asyncio.to_thread(build_charge_invoice_pdf, booking=booking, guest=guest, charge=charge)
     return EmailAttachment(
         filename=f"{invoice_number_for(charge)}.pdf",
-        content=build_charge_invoice_pdf(booking=booking, guest=guest, charge=charge),
+        content=content,
         mime_type="application/pdf",
     )
 
 
 async def send_booking_confirmation_email(booking: Booking) -> None:
     guest = await _resolve_guest(booking)
-    attachments = [_invoice_attachment(booking=booking, guest=guest, charge=charge) for charge in booking.charges]
+    attachments = [
+        await _invoice_attachment(booking=booking, guest=guest, charge=charge) for charge in booking.charges
+    ]
 
     subject, html_content = email_templates.render_email(
         language=guest.preferred_language,
         name="booking_confirmation.html",
         context=_booking_context(booking, guest),
     )
-    send_html_email(to_address=guest.email, subject=subject, html_content=html_content, attachments=attachments)
+    await send_html_email(
+        to_address=guest.email, subject=subject, html_content=html_content, attachments=attachments
+    )
 
 
 async def send_scheduled_payment_email(booking: Booking, charge: BookingCharge) -> None:
@@ -122,9 +132,9 @@ async def send_scheduled_payment_email(booking: Booking, charge: BookingCharge) 
         name="scheduled_payment.html",
         context=context,
     )
-    send_html_email(
+    await send_html_email(
         to_address=guest.email,
         subject=subject,
         html_content=html_content,
-        attachments=[_invoice_attachment(booking=booking, guest=guest, charge=charge)],
+        attachments=[await _invoice_attachment(booking=booking, guest=guest, charge=charge)],
     )

@@ -1,13 +1,16 @@
 import logging
 from datetime import date, datetime, timezone
 from decimal import Decimal
+from typing import Any
 
 import stripe
 from beanie import PydanticObjectId
+from beanie.odm.utils.encoder import Encoder
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from app.api.deps import Principal, get_current_principal
-from app.api.routes.bookings import _ensure_can_access_booking
+from app.api.common import get_or_404
+from app.api.deps import Principal, ensure_can_access_booking, get_current_principal
+from app.core.money import CHARGE_TOLERANCE
 from app.models.booking import Booking, BookingCharge, BookingWebhookEvent
 from app.models.payment_event import PaymentEvent
 from app.schemas.payment import PaymentIntentResponse, UpcomingCharge
@@ -22,25 +25,49 @@ router = APIRouter(tags=["payments"])
 # Mounted separately (no prefix) since it isn't nested under /bookings.
 webhook_router = APIRouter(tags=["payments"])
 
-# A booking is "fully charged" once amount_charged is within a cent of
-# total_price — rounding across repeated accrual charges can leave a few
-# hundredths of a unit of drift that should still count as done.
-_FULLY_CHARGED_EPSILON = Decimal("0.01")
+# Upper bound on the per-booking webhook-event log. Entries are references
+# (no payloads — see app.models.booking.BookingWebhookEvent), so this is a
+# generous ceiling that exists purely to keep the array from growing without
+# limit; the full history always remains in the payment_events collection.
+_MAX_WEBHOOK_EVENTS = 50
+
+_encoder = Encoder()
 
 
-async def _get_booking_or_404(booking_id: PydanticObjectId) -> Booking:
-    booking = await Booking.get(booking_id, fetch_links=True)
-    if booking is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
-    return booking
+async def _commit(booking: Booking, event: BookingWebhookEvent | None = None, **fields: Any) -> None:
+    """Persist a webhook's effect on `booking` as a single atomic update.
+
+    Deliberately not Document.save(): that replaces the whole document, so
+    two webhooks for the same booking racing each other would each write
+    back their own stale copy of everything the other changed. Naming just
+    the fields that actually changed makes concurrent events for one booking
+    compose instead of clobbering, and keeps the write cost independent of
+    how large the booking's history has grown.
+
+    `event` is appended (capped at _MAX_WEBHOOK_EVENTS) in the same write.
+    Handlers are also called directly by tests without one, in which case
+    only the field updates are applied.
+    """
+    update: dict[str, Any] = {}
+    if fields:
+        update["$set"] = {key: _encoder.encode(value) for key, value in fields.items()}
+    if event is not None:
+        update["$push"] = {
+            "webhook_events": {
+                "$each": [_encoder.encode(event)],
+                "$slice": -_MAX_WEBHOOK_EVENTS,
+            }
+        }
+    if update:
+        await booking.update(update)
 
 
 @router.post("/bookings/{booking_id}/payment/intent", response_model=PaymentIntentResponse)
 async def create_payment_intent(
     booking_id: PydanticObjectId, principal: Principal = Depends(get_current_principal)
 ) -> PaymentIntentResponse:
-    booking = await _get_booking_or_404(booking_id)
-    _ensure_can_access_booking(principal, booking)
+    booking = await get_or_404(Booking, booking_id, "Booking", fetch_links=True)
+    ensure_can_access_booking(principal, booking)
     if booking.payment_status != "card_verification_pending":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Payment has already been set up for this booking"
@@ -107,8 +134,8 @@ async def retry_payment(
     issues a fresh on-session PaymentIntent rather than trying to resurrect
     the failed one, so the guest can complete it (and pick a new card if
     needed) from an emailed recovery link."""
-    booking = await _get_booking_or_404(booking_id)
-    _ensure_can_access_booking(principal, booking)
+    booking = await get_or_404(Booking, booking_id, "Booking", fetch_links=True)
+    ensure_can_access_booking(principal, booking)
     if booking.payment_status not in ("requires_action", "failed"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No outstanding payment issue to retry")
 
@@ -171,18 +198,28 @@ async def _send_email_safely(coro) -> None:
         logger.exception("Failed to send booking/payment email")
 
 
-async def _apply_setup_succeeded(booking: Booking, setup_intent: dict) -> None:
+async def _apply_setup_succeeded(
+    booking: Booking, setup_intent: dict, event: BookingWebhookEvent | None = None
+) -> None:
     booking.stripe_payment_method_id = setup_intent["payment_method"]
     booking.payment_status = "card_verified"
     booking.status = "Active"
-    await booking.save()
+    await _commit(
+        booking,
+        event,
+        stripe_payment_method_id=booking.stripe_payment_method_id,
+        payment_status=booking.payment_status,
+        status=booking.status,
+    )
     await _send_email_safely(booking_emails.send_booking_confirmation_email(booking))
 
 
-async def _apply_setup_failed(booking: Booking, setup_intent: dict) -> None:
+async def _apply_setup_failed(
+    booking: Booking, setup_intent: dict, event: BookingWebhookEvent | None = None
+) -> None:
     last_error = setup_intent.get("last_setup_error") or {}
     booking.last_payment_error = last_error.get("message", "Card verification failed")
-    await booking.save()
+    await _commit(booking, event, last_payment_error=booking.last_payment_error)
 
 
 async def _attach_fee_breakdown(booking: Booking, charge: BookingCharge) -> None:
@@ -205,37 +242,73 @@ async def _attach_fee_breakdown(booking: Booking, charge: BookingCharge) -> None
     charge.processing_fee_chf = breakdown.processing_fee_settlement
     charge.conversion_fee_chf = breakdown.conversion_fee_settlement
     charge.net_amount_chf = breakdown.net_settlement
-    await booking.save()
+    # Matched on the PaymentIntent id rather than an array index: the charge
+    # was appended with $push, so its position isn't knowable from here if
+    # another charge landed in between.
+    await Booking.get_pymongo_collection().update_one(
+        {"_id": booking.id, "charges.stripe_payment_intent_id": charge.stripe_payment_intent_id},
+        {
+            "$set": {
+                "charges.$.amount_chf": _encoder.encode(charge.amount_chf),
+                "charges.$.exchange_rate": charge.exchange_rate,
+                "charges.$.processing_fee_chf": _encoder.encode(charge.processing_fee_chf),
+                "charges.$.conversion_fee_chf": _encoder.encode(charge.conversion_fee_chf),
+                "charges.$.net_amount_chf": _encoder.encode(charge.net_amount_chf),
+            }
+        },
+    )
 
 
-async def _apply_successful_charge(booking: Booking, payment_intent: dict) -> None:
+async def _apply_successful_charge(
+    booking: Booking, payment_intent: dict, event: BookingWebhookEvent | None = None
+) -> None:
     amount = stripe_service.from_minor_units(payment_intent["amount"])
     currency = payment_intent["currency"].upper()
     reason = payment_intent.get("metadata", {}).get("reason", "scheduled_accrual")
     payment_method_id = payment_intent.get("payment_method")
     if payment_method_id:
         booking.stripe_payment_method_id = payment_method_id
-    booking.charges.append(
-        BookingCharge(
-            stripe_payment_intent_id=payment_intent["id"],
-            amount=amount,
-            currency=currency,
-            reason=reason,
-            status="succeeded",
-        )
+    charge = BookingCharge(
+        stripe_payment_intent_id=payment_intent["id"],
+        amount=amount,
+        currency=currency,
+        reason=reason,
+        status="succeeded",
     )
+    booking.charges.append(charge)
     booking.amount_charged += amount
     booking.last_payment_error = None
     booking.status = "Active"
     booking.payment_status = (
         "fully_charged"
-        if booking.amount_charged >= booking.total_price - _FULLY_CHARGED_EPSILON
+        if booking.amount_charged >= booking.total_price - CHARGE_TOLERANCE
         else "partially_charged"
     )
     sync_charge_schedule_status(booking)
-    await booking.save()
 
-    charge = booking.charges[-1]
+    # charges is $push-ed and amount_charged $inc-ed (rather than both being
+    # $set from this in-memory copy) so two successful charges landing at
+    # once accumulate instead of one overwriting the other. The derived
+    # fields below are still computed from the in-memory total.
+    update: dict[str, Any] = {
+        "$push": {"charges": _encoder.encode(charge)},
+        "$inc": {"amount_charged": _encoder.encode(amount)},
+        "$set": {
+            "last_payment_error": None,
+            "status": booking.status,
+            "payment_status": booking.payment_status,
+            "charge_schedule": _encoder.encode(booking.charge_schedule),
+        },
+    }
+    if payment_method_id:
+        update["$set"]["stripe_payment_method_id"] = payment_method_id
+    if event is not None:
+        update["$push"]["webhook_events"] = {
+            "$each": [_encoder.encode(event)],
+            "$slice": -_MAX_WEBHOOK_EVENTS,
+        }
+    await booking.update(update)
+
     await _attach_fee_breakdown(booking, charge)
 
     if reason == "initial_charge":
@@ -244,13 +317,20 @@ async def _apply_successful_charge(booking: Booking, payment_intent: dict) -> No
         await _send_email_safely(booking_emails.send_scheduled_payment_email(booking, charge))
 
 
-async def _apply_failed_charge(booking: Booking, payment_intent: dict) -> None:
+async def _apply_failed_charge(
+    booking: Booking, payment_intent: dict, event: BookingWebhookEvent | None = None
+) -> None:
     last_error = payment_intent.get("last_payment_error") or {}
     booking.last_payment_error = last_error.get("message", "Payment failed")
     booking.payment_status = (
         "requires_action" if last_error.get("code") == "authentication_required" else "failed"
     )
-    await booking.save()
+    await _commit(
+        booking,
+        event,
+        last_payment_error=booking.last_payment_error,
+        payment_status=booking.payment_status,
+    )
 
 
 _WEBHOOK_HANDLERS = {
@@ -288,17 +368,18 @@ async def stripe_webhook(request: Request) -> dict[str, str]:
         booking = await Booking.get(PydanticObjectId(booking_id_str))
 
     if booking is not None:
-        # Log every event that references this booking, with its raw payload,
-        # before dispatching — the charge/status update below (if any) is
-        # saved together with this log entry in one write.
-        booking.webhook_events.append(
-            BookingWebhookEvent(stripe_event_id=event.id, event_type=event.type, data=obj)
-        )
+        # Every event that references this booking is logged on it, and the
+        # charge/status update below (if any) is applied in the very same
+        # write. The raw payload is not duplicated here — it is stored once,
+        # on the PaymentEvent inserted below, and read back through
+        # GET /payment-events/{stripe_event_id}.
+        event_ref = BookingWebhookEvent(stripe_event_id=event.id, event_type=event.type)
+        booking.webhook_events.append(event_ref)
         handler = _WEBHOOK_HANDLERS.get(event.type)
         if handler is not None:
-            await handler(booking, obj)
+            await handler(booking, obj, event_ref)
         else:
-            await booking.save()
+            await _commit(booking, event_ref)
 
     await PaymentEvent(
         stripe_event_id=event.id,

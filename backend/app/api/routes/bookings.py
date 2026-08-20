@@ -1,8 +1,15 @@
-from beanie import Link, PydanticObjectId
+from decimal import Decimal
+
+from beanie import PydanticObjectId
 from beanie.operators import In
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.deps import Principal, get_current_principal
+from app.api.common import get_or_404
+from app.api.deps import (
+    Principal,
+    ensure_can_access_booking,
+    get_current_principal,
+)
 from app.models.booking import Booking, BookingCancellationPolicy, BookingDateRange
 from app.models.cancellation_policy import CancellationPolicy
 from app.models.guest import Currency, Guest
@@ -11,12 +18,14 @@ from app.schemas.booking import (
     BookingChargeDisplay,
     BookingCreate,
     BookingDateRangeInput,
+    BookingDateRangesProjection,
     BookingDisplay,
+    BookingDisplaySource,
     BookingRangeDisplay,
     BookingScheduleDisplay,
 )
 from app.services.charge_schedule import build_charge_schedule
-from app.services.currency_service import convert_amount
+from app.services.currency_service import convert_amount, convert_amount_with_rates, rates_for
 from app.services.payment_reconciliation import settle_cancellation
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
@@ -29,26 +38,13 @@ public_router = APIRouter(prefix="/bookings", tags=["bookings"])
 
 @public_router.get("/public/date-ranges", response_model=list[BookedDateRange])
 async def list_public_booked_date_ranges() -> list[BookedDateRange]:
-    bookings = await Booking.find(Booking.status == "Active").to_list()
-    return [
-        BookedDateRange(begin_date=date_range.begin_date, end_date=date_range.end_date)
-        for booking in bookings
-        for date_range in booking.date_ranges
-    ]
-
-
-async def _get_guest_or_404(guest_id: PydanticObjectId) -> Guest:
-    guest = await Guest.get(guest_id)
-    if guest is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Guest not found")
-    return guest
-
-
-async def _get_cancellation_policy_or_404(policy_id: PydanticObjectId) -> CancellationPolicy:
-    policy = await CancellationPolicy.get(policy_id)
-    if policy is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cancellation policy not found")
-    return policy
+    # Projected to `date_ranges` only: this is anonymous and hit on every
+    # calendar open, so it must not drag whole Booking documents (charges,
+    # charge_schedule, webhook_events) across the wire to return two dates.
+    bookings = await Booking.find(
+        Booking.status == "Active", projection_model=BookingDateRangesProjection
+    ).to_list()
+    return [date_range for booking in bookings for date_range in booking.date_ranges]
 
 
 async def _get_pending_booking_for_guest(guest_id: PydanticObjectId) -> Booking | None:
@@ -57,15 +53,6 @@ async def _get_pending_booking_for_guest(guest_id: PydanticObjectId) -> Booking 
 
 def _snapshot_cancellation_policy(policy: CancellationPolicy) -> BookingCancellationPolicy:
     return BookingCancellationPolicy(name=policy.name, rules=policy.rules)
-
-
-def _booking_guest_id(booking: Booking) -> PydanticObjectId:
-    return booking.guest.ref.id if isinstance(booking.guest, Link) else booking.guest.id
-
-
-def _ensure_can_access_booking(principal: Principal, booking: Booking) -> None:
-    if not principal.is_admin and _booking_guest_id(booking) != principal.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized for this booking")
 
 
 async def _date_ranges_in_currency(
@@ -90,39 +77,47 @@ async def _date_ranges_in_currency(
     ]
 
 
-async def _build_display(booking: Booking, currency: Currency) -> BookingDisplay:
+async def _build_display(booking: Booking | BookingDisplaySource, currency: Currency) -> BookingDisplay:
     """Currency-converted view of `booking`'s money fields — computed on
     demand, never persisted. Powers GET /bookings/{id}/display and
     GET /bookings/display; never used by the admin-facing plain Booking
-    endpoints, which always show raw, un-converted figures."""
-    date_ranges = [
-        BookingRangeDisplay(
-            price=await convert_amount(r.price, booking.currency, currency),
-            price_chf=await convert_amount(r.price, booking.currency, "CHF"),
-        )
-        for r in booking.date_ranges
-    ]
-    charges = [
-        BookingChargeDisplay(
-            amount=await convert_amount(c.amount, c.currency, currency),
-            amount_chf=await convert_amount(c.amount, c.currency, "CHF"),
-        )
-        for c in booking.charges
-    ]
-    charge_schedule = [
-        BookingScheduleDisplay(
-            amount=await convert_amount(e.amount, booking.currency, currency),
-            amount_chf=await convert_amount(e.amount, booking.currency, "CHF"),
-        )
-        for e in booking.charge_schedule
-    ]
+    endpoints, which always show raw, un-converted figures.
+
+    Rates are fetched once and every amount converted against that one
+    snapshot: a booking has upwards of a dozen money fields, and awaiting a
+    coroutine per field (times every booking, for the list endpoint) is pure
+    overhead once the arithmetic itself is synchronous.
+    """
+    rates = await rates_for({booking.currency, *(c.currency for c in booking.charges)}, currency, "CHF")
+
+    def convert(amount, from_currency) -> Decimal:
+        return convert_amount_with_rates(amount, from_currency, currency, rates)
+
+    def convert_chf(amount, from_currency) -> Decimal:
+        return convert_amount_with_rates(amount, from_currency, "CHF", rates)
+
     return BookingDisplay(
         currency=currency,
-        total_price=await convert_amount(booking.total_price, booking.currency, currency),
-        total_price_chf=await convert_amount(booking.total_price, booking.currency, "CHF"),
-        date_ranges=date_ranges,
-        charges=charges,
-        charge_schedule=charge_schedule,
+        total_price=convert(booking.total_price, booking.currency),
+        total_price_chf=convert_chf(booking.total_price, booking.currency),
+        date_ranges=[
+            BookingRangeDisplay(
+                price=convert(r.price, booking.currency),
+                price_chf=convert_chf(r.price, booking.currency),
+            )
+            for r in booking.date_ranges
+        ],
+        charges=[
+            BookingChargeDisplay(amount=convert(c.amount, c.currency), amount_chf=convert_chf(c.amount, c.currency))
+            for c in booking.charges
+        ],
+        charge_schedule=[
+            BookingScheduleDisplay(
+                amount=convert(e.amount, booking.currency),
+                amount_chf=convert_chf(e.amount, booking.currency),
+            )
+            for e in booking.charge_schedule
+        ],
     )
 
 
@@ -132,7 +127,7 @@ async def create_booking(
 ) -> Booking:
     if not principal.is_admin and payload.guest_id != principal.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Guests may only book for themselves")
-    guest = await _get_guest_or_404(payload.guest_id)
+    guest = await get_or_404(Guest, payload.guest_id, "Guest")
     # Only one Pending booking per guest at a time — a returning guest with
     # one already stored is meant to resume straight into paying for it
     # (see the frontend's post-login lookup) rather than start another.
@@ -141,7 +136,7 @@ async def create_booking(
             status_code=status.HTTP_409_CONFLICT,
             detail="You already have a pending booking. Complete or cancel it before starting a new one.",
         )
-    cancellation_policy = await _get_cancellation_policy_or_404(payload.cancellation_policy_id)
+    cancellation_policy = await get_or_404(CancellationPolicy, payload.cancellation_policy_id, "Cancellation policy")
     booking = Booking(
         guest=guest,
         currency=payload.currency,
@@ -170,10 +165,11 @@ async def list_bookings(principal: Principal = Depends(get_current_principal)) -
 async def list_bookings_display(
     currency: Currency, principal: Principal = Depends(get_current_principal)
 ) -> dict[str, BookingDisplay]:
-    if principal.is_admin:
-        bookings = await Booking.find_all().to_list()
-    else:
-        bookings = await Booking.find({"guest.$id": principal.id}).to_list()
+    # Only the money-bearing fields are needed to build a display (and the
+    # non-admin case is already scoped by the query, so no per-document
+    # authorization check needs the guest link).
+    query = Booking.find_all() if principal.is_admin else Booking.find({"guest.$id": principal.id})
+    bookings = await query.project(BookingDisplaySource).to_list()
     return {str(booking.id): await _build_display(booking, currency) for booking in bookings}
 
 
@@ -181,10 +177,8 @@ async def list_bookings_display(
 async def get_booking(
     booking_id: PydanticObjectId, principal: Principal = Depends(get_current_principal)
 ) -> Booking:
-    booking = await Booking.get(booking_id, fetch_links=True)
-    if booking is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
-    _ensure_can_access_booking(principal, booking)
+    booking = await get_or_404(Booking, booking_id, "Booking", fetch_links=True)
+    ensure_can_access_booking(principal, booking)
     return booking
 
 
@@ -192,10 +186,8 @@ async def get_booking(
 async def get_booking_display(
     booking_id: PydanticObjectId, currency: Currency, principal: Principal = Depends(get_current_principal)
 ) -> BookingDisplay:
-    booking = await Booking.get(booking_id)
-    if booking is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
-    _ensure_can_access_booking(principal, booking)
+    booking = await get_or_404(Booking, booking_id, "Booking")
+    ensure_can_access_booking(principal, booking)
     return await _build_display(booking, currency)
 
 
@@ -203,10 +195,8 @@ async def get_booking_display(
 async def cancel_booking(
     booking_id: PydanticObjectId, principal: Principal = Depends(get_current_principal)
 ) -> Booking:
-    booking = await Booking.get(booking_id, fetch_links=True)
-    if booking is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
-    _ensure_can_access_booking(principal, booking)
+    booking = await get_or_404(Booking, booking_id, "Booking", fetch_links=True)
+    ensure_can_access_booking(principal, booking)
     if booking.status == "Cancelled":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Booking is already cancelled")
     await settle_cancellation(booking)
@@ -219,14 +209,12 @@ async def cancel_booking(
 async def update_booking(
     booking_id: PydanticObjectId, payload: BookingCreate, principal: Principal = Depends(get_current_principal)
 ) -> Booking:
-    booking = await Booking.get(booking_id)
-    if booking is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
-    _ensure_can_access_booking(principal, booking)
+    booking = await get_or_404(Booking, booking_id, "Booking")
+    ensure_can_access_booking(principal, booking)
     if not principal.is_admin and payload.guest_id != principal.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Guests may only book for themselves")
-    guest = await _get_guest_or_404(payload.guest_id)
-    cancellation_policy = await _get_cancellation_policy_or_404(payload.cancellation_policy_id)
+    guest = await get_or_404(Guest, payload.guest_id, "Guest")
+    cancellation_policy = await get_or_404(CancellationPolicy, payload.cancellation_policy_id, "Cancellation policy")
     booking.guest = guest
     booking.currency = payload.currency
     booking.date_ranges = await _date_ranges_in_currency(payload.date_ranges, payload.currency)
@@ -240,10 +228,8 @@ async def update_booking(
 async def delete_booking(
     booking_id: PydanticObjectId, principal: Principal = Depends(get_current_principal)
 ) -> None:
-    booking = await Booking.get(booking_id)
-    if booking is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
-    _ensure_can_access_booking(booking=booking, principal=principal)
+    booking = await get_or_404(Booking, booking_id, "Booking")
+    ensure_can_access_booking(principal, booking)
     # A guest can only outright delete a still-Pending booking (e.g.
     # cancelling out of checkout before paying) — an Active/Cancelled one
     # has payment/audit history and must go through /cancel instead. Admins

@@ -13,14 +13,9 @@ money.
 from datetime import date, timedelta
 from decimal import Decimal
 
-from app.core.money import to_decimal
+from app.core.money import CHARGE_TOLERANCE, to_decimal
 from app.models.booking import Booking, BookingChargeScheduleEntry
 from app.services.cancellation import applicable_refund_percentage
-
-# Rounding across repeated charges/refunds can leave a few hundredths of a
-# unit of drift; treat amount_charged as having "covered" a schedule entry
-# once it's within a cent of it.
-_STATUS_SYNC_EPSILON = Decimal("0.01")
 
 
 def build_charge_schedule(booking: Booking) -> list[BookingChargeScheduleEntry]:
@@ -93,4 +88,4 @@ def sync_charge_schedule_status(booking: Booking) -> None:
     cumulative = Decimal("0.00")
     for entry in sorted(booking.charge_schedule, key=lambda entry: entry.charge_date):
         cumulative += entry.amount
-        entry.status = "done" if booking.amount_charged >= cumulative - _STATUS_SYNC_EPSILON else "pending"
+        entry.status = "done" if booking.amount_charged >= cumulative - CHARGE_TOLERANCE else "pending"

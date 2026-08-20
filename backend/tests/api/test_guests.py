@@ -66,6 +66,24 @@ class TestCreateGuest:
         response = await client.post("/guests", json=payload, headers=admin_headers)
         assert response.status_code == 409
 
+    async def test_unique_index_rejects_a_duplicate_that_slips_past_the_precheck(
+        self, monkeypatch, client, guest, admin_headers
+    ):
+        """The pre-check can't stop two concurrent registrations for the same
+        address; the unique index is what actually does, and the resulting
+        DuplicateKeyError must surface as the same 409, not a 500."""
+        from app.api.routes import guests as guests_routes
+
+        async def no_op_precheck(*args, **kwargs):
+            return None
+
+        monkeypatch.setattr(guests_routes, "_ensure_unique_contact", no_op_precheck)
+
+        payload = _guest_payload(email=guest.email, phone_number="+15559991111")
+        response = await client.post("/guests", json=payload, headers=admin_headers)
+        assert response.status_code == 409
+        assert response.json()["detail"] == "Email already in use"
+
     async def test_rejects_duplicate_phone_number(self, client, guest, admin_headers):
         payload = _guest_payload(email="brandnew@example.com", phone_number=guest.phone_number)
         response = await client.post("/guests", json=payload, headers=admin_headers)

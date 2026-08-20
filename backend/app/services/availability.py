@@ -8,9 +8,12 @@ intent is requested first wins; the loser is caught here instead of being
 allowed to pay for dates someone else already secured.
 """
 
-from beanie.operators import NE
+from beanie.odm.utils.encoder import Encoder
 
 from app.models.booking import Booking, BookingDateRange
+from app.schemas.booking import BookingOverlapProjection
+
+_encoder = Encoder()
 
 
 def _ranges_overlap(a: BookingDateRange, b: BookingDateRange) -> bool:
@@ -23,7 +26,37 @@ def _ranges_overlap(a: BookingDateRange, b: BookingDateRange) -> bool:
 async def find_overlapping_ranges(booking: Booking) -> list[BookingDateRange]:
     """Date ranges, from other Active bookings, that overlap this booking's
     own date ranges. Empty if the dates are still free."""
-    others = await Booking.find(Booking.status == "Active", NE(Booking.id, booking.id)).to_list()
+    if not booking.date_ranges:
+        return []
+
+    # Let MongoDB do the filtering, against the (begin_date, end_date) index
+    # created in migrations/20260712000329_create_initial_collections.py,
+    # instead of scanning every Active booking into Python. $elemMatch is
+    # per stored range, so one clause per range of *this* booking, or-ed
+    # together. Projected to ids and dates: this is on the hot path of
+    # payment-intent creation.
+    #
+    # Dates round-trip through Mongo as datetimes, so the bounds have to be
+    # encoded the same way the stored values were.
+    overlaps_any = [
+        {
+            "date_ranges": {
+                "$elemMatch": {
+                    "begin_date": {"$lt": _encoder.encode(own_range.end_date)},
+                    "end_date": {"$gt": _encoder.encode(own_range.begin_date)},
+                }
+            }
+        }
+        for own_range in booking.date_ranges
+    ]
+    others = await Booking.find(
+        {
+            "status": "Active",
+            "_id": {"$ne": booking.id},
+            "$or": overlaps_any,
+        },
+        projection_model=BookingOverlapProjection,
+    ).to_list()
     return [
         other_range
         for other in others

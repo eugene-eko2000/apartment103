@@ -5,6 +5,12 @@ from beanie import PydanticObjectId
 from pydantic import BaseModel, Field
 
 from app.core.money import Money
+from app.models.booking import (
+    BookingCharge,
+    BookingChargeScheduleEntry,
+    BookingDateRange,
+    total_price_of,
+)
 from app.models.guest import Currency
 
 
@@ -43,6 +49,52 @@ class BookedDateRange(BaseModel):
 
     begin_date: date
     end_date: date
+
+
+# ── Projections ───────────────────────────────────────────────────────────
+# Read-only views used with Beanie's `projection_model=`, so endpoints that
+# only need a few fields don't pull whole Booking documents (charges,
+# charge_schedule, webhook_events, ...) over the wire just to discard them.
+# These are deliberately NOT Documents: a partially-loaded Booking that got
+# saved back would erase the fields it never read.
+
+
+class BookingDateRangesProjection(BaseModel):
+    """Just the stay dates — powers the public availability calendar."""
+
+    date_ranges: list[BookedDateRange] = Field(default_factory=list)
+
+    class Settings:
+        projection = {"date_ranges": 1}
+
+
+class BookingOverlapProjection(BaseModel):
+    """Stay dates plus id, for the pre-payment overlap check."""
+
+    id: PydanticObjectId = Field(alias="_id")
+    date_ranges: list[BookingDateRange] = Field(default_factory=list)
+
+    class Settings:
+        projection = {"_id": 1, "date_ranges": 1}
+
+
+class BookingDisplaySource(BaseModel):
+    """The money-bearing subset a BookingDisplay is computed from. Mirrors
+    the same-named fields on Booking, and derives `total_price` through the
+    same helper the document itself uses."""
+
+    id: PydanticObjectId = Field(alias="_id")
+    currency: Currency = "CHF"
+    date_ranges: list[BookingDateRange] = Field(default_factory=list)
+    charges: list[BookingCharge] = Field(default_factory=list)
+    charge_schedule: list[BookingChargeScheduleEntry] = Field(default_factory=list)
+
+    @property
+    def total_price(self) -> Decimal:
+        return total_price_of(self.date_ranges)
+
+    class Settings:
+        projection = {"_id": 1, "currency": 1, "date_ranges": 1, "charges": 1, "charge_schedule": 1}
 
 
 class BookingRangeDisplay(BaseModel):
