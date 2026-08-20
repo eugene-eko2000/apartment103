@@ -9,9 +9,11 @@ from app.api.routes import (
     admins,
     auth,
     bookings,
+    calendar_feed,
     cancellation_policies,
     categories,
     closures,
+    external_calendars,
     guests,
     health,
     images,
@@ -22,7 +24,7 @@ from app.api.routes import (
 )
 from app.core.config import settings
 from app.db.mongo import init_mongo
-from app.jobs.reconcile_payments import scheduler, start_scheduler
+from app.jobs.scheduler import scheduler, start_scheduler
 
 logging.basicConfig(level=logging.INFO)
 
@@ -62,6 +64,10 @@ app.include_router(bookings.public_router)
 app.include_router(bookings.router)
 app.include_router(closures.public_router)
 app.include_router(closures.router)
+app.include_router(external_calendars.router)
+# Anonymous by design — the unguessable token in the path is the credential
+# (see app.api.routes.calendar_feed).
+app.include_router(calendar_feed.router)
 app.include_router(payments.router)
 app.include_router(payments.webhook_router)
 app.include_router(payment_events.router)

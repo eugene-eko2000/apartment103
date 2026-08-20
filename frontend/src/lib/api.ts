@@ -305,6 +305,39 @@ export interface ClosedDateRange {
   end_date: string;
 }
 
+export interface ExternalCalendar {
+  _id: string;
+  name: string;
+  /** The other platform's .ics export link, polled by the sync job. */
+  url: string;
+  /**
+   * Path segment of the feed we publish back to that platform
+   * (`${API_URL}/calendar/${export_token}.ics`). Unguessable on purpose —
+   * an .ics consumer can't send an auth header, so the URL is the
+   * credential. Server-generated; never sent on create/update.
+   */
+  export_token: string;
+  last_synced_at: string | null;
+  last_sync_status: "ok" | "error" | null;
+  last_sync_error: string | null;
+  last_sync_block_count: number | null;
+}
+
+export interface ExternalCalendarInput {
+  name: string;
+  url: string;
+}
+
+export interface CalendarSyncResult {
+  calendar_id: string;
+  calendar_name: string;
+  status: "ok" | "error";
+  created: number;
+  updated: number;
+  deleted: number;
+  error: string | null;
+}
+
 export interface BookingInput {
   guest_id: string;
   cancellation_policy_id: string;
@@ -604,6 +637,47 @@ export function updateClosure(closureId: string, token: string, data: ClosureInp
 
 export function deleteClosure(closureId: string, token: string): Promise<void> {
   return request(`/closures/${closureId}`, { method: "DELETE", headers: authHeaders(token) });
+}
+
+export function listExternalCalendars(token: string): Promise<ExternalCalendar[]> {
+  return request("/external-calendars", { headers: authHeaders(token) });
+}
+
+export function createExternalCalendar(token: string, data: ExternalCalendarInput): Promise<ExternalCalendar> {
+  return request("/external-calendars", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateExternalCalendar(
+  calendarId: string,
+  token: string,
+  data: ExternalCalendarInput,
+): Promise<ExternalCalendar> {
+  return request(`/external-calendars/${calendarId}`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteExternalCalendar(calendarId: string, token: string): Promise<void> {
+  return request(`/external-calendars/${calendarId}`, { method: "DELETE", headers: authHeaders(token) });
+}
+
+export function syncExternalCalendar(calendarId: string, token: string): Promise<CalendarSyncResult> {
+  return request(`/external-calendars/${calendarId}/sync`, { method: "POST", headers: authHeaders(token) });
+}
+
+export function syncAllExternalCalendars(token: string): Promise<CalendarSyncResult[]> {
+  return request("/external-calendars/sync", { method: "POST", headers: authHeaders(token) });
+}
+
+/** The feed URL to paste into this platform's "sync calendars" setting. */
+export function calendarExportUrl(exportToken: string): string {
+  return `${API_URL}/calendar/${exportToken}.ics`;
 }
 
 export function listAdmins(token: string): Promise<Admin[]> {

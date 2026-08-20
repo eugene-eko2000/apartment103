@@ -7,6 +7,7 @@ from app.models.booking import Booking
 from app.models.cancellation_policy import CancellationPolicy
 from app.models.category import Category
 from app.models.closure import Closure
+from app.models.external_calendar import ExternalCalendar
 from app.models.guest import Guest
 from app.models.image import Image
 from app.models.otp_challenge import OtpChallenge
@@ -34,5 +35,6 @@ async def init_mongo() -> None:
             PaymentEvent,
             Image,
             Category,
+            ExternalCalendar,
         ],
     )

@@ -12,6 +12,7 @@ import PricesPanel from "@/components/admin/resources/PricesPanel";
 import BookingsPanel from "@/components/admin/resources/BookingsPanel";
 import CalendarPanel from "@/components/admin/resources/CalendarPanel";
 import ClosuresPanel from "@/components/admin/resources/ClosuresPanel";
+import SyncCalendarsPanel from "@/components/admin/resources/SyncCalendarsPanel";
 import PhotosPanel from "@/components/admin/resources/PhotosPanel";
 
 export default function AdminPage() {
@@ -26,6 +27,7 @@ export default function AdminPage() {
       {tab === "bookings" && <BookingsPanel />}
       {tab === "calendar" && <CalendarPanel />}
       {tab === "closures" && <ClosuresPanel />}
+      {tab === "sync-calendars" && <SyncCalendarsPanel />}
       {tab === "guests" && <GuestsPanel />}
       {tab === "plans" && <PlansPanel />}
       {tab === "prices" && <PricesPanel />}

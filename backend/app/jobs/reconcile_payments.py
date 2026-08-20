@@ -1,15 +1,16 @@
 """Daily job: keep each active booking's amount_charged in sync with what's
 currently accrued as non-refundable under its cancellation policy.
 
-Runs in-process via APScheduler (no separate worker/cron infra exists yet —
-see docs/stripe-payment-design.md for the scaling note if this ever runs on
-more than one backend instance, which would fire the job once per instance).
+Runs in-process via APScheduler on the shared scheduler in
+app.jobs.scheduler (no separate worker/cron infra exists yet — see
+docs/stripe-payment-design.md for the scaling note if this ever runs on more
+than one backend instance, which would fire the job once per instance).
 """
 
 import logging
 from datetime import date, datetime, timezone
 
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.schedulers.base import BaseScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from app.models.booking import Booking
@@ -17,7 +18,7 @@ from app.services.payment_reconciliation import charge_outstanding_balance
 
 logger = logging.getLogger(__name__)
 
-scheduler = AsyncIOScheduler()
+JOB_ID = "reconcile_booking_payments"
 
 
 async def reconcile_booking_payments() -> None:
@@ -49,13 +50,10 @@ async def reconcile_booking_payments() -> None:
     logger.info("Payment reconciliation: checked=%d bookings, charged=%d", checked, charged)
 
 
-def start_scheduler() -> None:
-    if scheduler.running:
-        return
+def register(scheduler: BaseScheduler) -> None:
     scheduler.add_job(
         reconcile_booking_payments,
         CronTrigger(hour=6, minute=0),
-        id="reconcile_booking_payments",
+        id=JOB_ID,
         replace_existing=True,
     )
-    scheduler.start()

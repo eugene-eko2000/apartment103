@@ -1,4 +1,4 @@
-"""find_overlapping_ranges: which Active bookings clash with a candidate.
+"""find_overlapping_ranges: what clashes with a candidate booking.
 
 Guards the boundary condition the whole calendar depends on — end_date is an
 exclusive checkout day, so checking out on the morning another stay checks in
@@ -12,6 +12,7 @@ import pytest
 
 from app.models.booking import Booking, BookingCancellationPolicy, BookingDateRange
 from app.models.cancellation_policy import CancellationRule
+from app.models.closure import Closure
 from app.services.availability import find_overlapping_ranges
 
 pytestmark = pytest.mark.anyio
@@ -104,5 +105,55 @@ class TestFindOverlappingRanges:
     async def test_returns_empty_for_a_booking_with_no_dates(self, client, guest, other_guest):
         await _booking(guest, ("2026-09-01", "2026-09-05"))
         candidate = await _booking(other_guest, status="Pending")
+
+        assert await find_overlapping_ranges(candidate) == []
+
+
+class TestClosuresBlockBookings:
+    """Dates taken on Airbnb/Booking.com (synced in as closures) or blocked
+    by the host are as unavailable as another site booking — the public
+    calendar greys them out, but the page may predate the last sync pass."""
+
+    async def _closure(self, begin: str, end: str, **kwargs) -> Closure:
+        closure = Closure(
+            platform="Airbnb",
+            begin_date=date.fromisoformat(begin),
+            end_date=date.fromisoformat(end),
+            **kwargs,
+        )
+        await closure.insert()
+        return closure
+
+    async def test_detects_an_overlapping_closure(self, client, guest):
+        await self._closure("2026-09-01", "2026-09-05")
+        candidate = await _booking(guest, ("2026-09-03", "2026-09-08"), status="Pending")
+
+        overlapping = await find_overlapping_ranges(candidate)
+
+        assert len(overlapping) == 1
+        assert overlapping[0].begin_date == date(2026, 9, 1)
+        assert overlapping[0].end_date == date(2026, 9, 5)
+
+    async def test_detects_an_imported_closure(self, client, guest, external_calendar):
+        await self._closure(
+            "2026-09-01",
+            "2026-09-05",
+            external_calendar_id=external_calendar.id,
+            external_uid="a@airbnb.com",
+        )
+        candidate = await _booking(guest, ("2026-09-02", "2026-09-04"), status="Pending")
+
+        assert len(await find_overlapping_ranges(candidate)) == 1
+
+    async def test_closure_checkout_day_may_be_a_checkin(self, client, guest):
+        """Same exclusive-end convention as bookings."""
+        await self._closure("2026-09-01", "2026-09-05")
+        candidate = await _booking(guest, ("2026-09-05", "2026-09-09"), status="Pending")
+
+        assert await find_overlapping_ranges(candidate) == []
+
+    async def test_ignores_closures_on_other_dates(self, client, guest):
+        await self._closure("2026-09-01", "2026-09-05")
+        candidate = await _booking(guest, ("2026-10-01", "2026-10-05"), status="Pending")
 
         assert await find_overlapping_ranges(candidate) == []

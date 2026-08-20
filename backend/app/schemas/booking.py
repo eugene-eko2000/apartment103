@@ -68,6 +68,21 @@ class BookingDateRangesProjection(BaseModel):
         projection = {"date_ranges": 1}
 
 
+class BookingExportProjection(BaseModel):
+    """Stay dates plus id, for the outbound .ics feed.
+
+    Projected through BookedDateRange rather than BookingDateRange, so the
+    per-range price is dropped here and can't reach a feed we hand to
+    Airbnb/Booking.com.
+    """
+
+    id: PydanticObjectId = Field(alias="_id")
+    date_ranges: list[BookedDateRange] = Field(default_factory=list)
+
+    class Settings:
+        projection = {"_id": 1, "date_ranges": 1}
+
+
 class BookingOverlapProjection(BaseModel):
     """Stay dates plus id, for the pre-payment overlap check."""
 

@@ -253,3 +253,36 @@ worthwhile for a single listing today; the `CalendarConnection`/
 `CalendarBlock` split above is deliberately shaped so it could later be fed by
 a real API webhook instead of ICS polling without changing the booking-side
 overlap logic.
+
+## Implementation notes (as built)
+
+The design above was implemented with three deliberate deviations, all in the
+data model; the sync mechanics are as described.
+
+1. **`Closure` instead of a new `CalendarBlock`.** The `closures` collection
+   already existed for exactly this ("blocked because it's booked
+   elsewhere"), and the guest calendar already consumed it. Rather than add a
+   second collection meaning the same thing, `Closure` gained the three
+   fields an imported block needs — `external_calendar_id`, `external_uid`,
+   `last_seen_at` — and the manual/imported split is `external_calendar_id is
+   None`. `Booking` is untouched, which was the point of the original split.
+2. **`ExternalCalendar` instead of `CalendarConnection`,** with a free-text
+   `name` rather than a `BlockSource` enum. Nothing in the sync path
+   branches on which platform a feed belongs to, and an enum would have
+   meant a code change to sync a fourth calendar (a personal Google
+   calendar, a second OTA). The name is what imported closures are labelled
+   with, so it shows up as the closure's `platform`.
+3. **One export token per calendar, not one per environment.** Each
+   `ExternalCalendar` carries its own `export_token`, and the feed served for
+   it omits the closures imported *from* it. That stops a platform
+   re-importing its own reservations (which, given the propagation delay on
+   both sides, can leave a cancelled block bouncing between them) and lets a
+   Booking.com reservation reach Airbnb through us, so the host pastes one
+   URL per platform instead of cross-pasting every platform into every
+   other. `settings.calendar_export_token` remains as an optional
+   site-wide feed carrying everything — that's the one to point Google
+   Calendar at for step 2 of the rollout plan below.
+
+The overlap check in `app/services/availability.py` now covers closures as
+well as Active bookings, which is the "booking-creation flow changes"
+section above.

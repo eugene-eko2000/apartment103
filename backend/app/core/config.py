@@ -56,6 +56,27 @@ class Settings(BaseSettings):
     twilio_auth_token: str | None = None
     twilio_messaging_service_sid: str | None = None
 
+    # Calendar sync (iCalendar/RFC 5545 — see docs/calendar-sync-design.md).
+    # How often the inbound job re-polls every ExternalCalendar's feed.
+    # Airbnb/Booking.com only regenerate their exports a few times a day, so
+    # polling tighter than this buys nothing; polling much looser widens the
+    # window in which a reservation taken there is still bookable here.
+    calendar_sync_interval_minutes: int = 30
+    calendar_sync_timeout_seconds: float = 30.0
+
+    # Right-hand side of the UIDs in our outbound feed. Only has to be a
+    # stable domain-shaped string; it is never resolved.
+    calendar_uid_domain: str = "apartment103.example"
+
+    # Optional site-wide export feed at /calendar/{token}.ics, carrying every
+    # booking and closure. Each ExternalCalendar already has its own token
+    # (ExternalCalendar.export_token); this one is for everything else — a
+    # personal Google/Apple calendar, or verifying the feed format before
+    # handing a URL to an OTA. Unset (the default) disables it. The URL is
+    # the only credential an ICS consumer can present, so treat the value
+    # like a secret.
+    calendar_export_token: str | None = None
+
     # Markup applied on top of Stripe's FX rate when converting a CHF price
     # into a guest-facing non-CHF currency (see app/services/currency_service.py).
     commission_rate: Decimal = Decimal("0.06")

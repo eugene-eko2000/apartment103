@@ -22,6 +22,7 @@ from app.models.admin import Admin  # noqa: E402
 from app.models.cancellation_policy import CancellationPolicy, CancellationRule  # noqa: E402
 from app.models.category import Category  # noqa: E402
 from app.models.closure import Closure  # noqa: E402
+from app.models.external_calendar import ExternalCalendar  # noqa: E402
 from app.models.guest import Guest, ResidenceAddress  # noqa: E402
 from app.models.image import Image  # noqa: E402
 
@@ -134,6 +135,28 @@ async def closure(client) -> Closure:
     closure = Closure(platform="airbnb", begin_date=date(2026, 8, 1), end_date=date(2026, 8, 5))
     await closure.insert()
     return closure
+
+
+@pytest.fixture
+async def external_calendar(client) -> ExternalCalendar:
+    calendar = ExternalCalendar(
+        name="Airbnb",
+        url="https://www.airbnb.com/calendar/ical/12345.ics?s=secret",
+        export_token="test-export-token-airbnb",
+    )
+    await calendar.insert()
+    return calendar
+
+
+@pytest.fixture
+async def other_external_calendar(client) -> ExternalCalendar:
+    calendar = ExternalCalendar(
+        name="Booking.com",
+        url="https://admin.booking.com/hotel/hoteladmin/ical.html?t=secret",
+        export_token="test-export-token-booking",
+    )
+    await calendar.insert()
+    return calendar
 
 
 @pytest.fixture

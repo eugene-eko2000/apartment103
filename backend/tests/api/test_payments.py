@@ -6,6 +6,7 @@ from beanie import PydanticObjectId
 
 from app.models.booking import Booking, BookingCharge
 from app.models.cancellation_policy import CancellationPolicy, CancellationRule
+from app.models.closure import Closure
 from app.models.payment_event import PaymentEvent
 from app.api.routes import payments as payments_routes
 from app.services import stripe_service
@@ -177,6 +178,27 @@ class TestCreatePaymentIntent:
         response = await client.post(f"/bookings/{booking_id}/payment/intent", headers=guest_headers)
         assert response.status_code == 409
         assert _future(200) in response.json()["detail"]
+
+        follow_up = await client.get(f"/bookings/{booking_id}", headers=guest_headers)
+        assert follow_up.status_code == 404
+
+    async def test_rejects_and_deletes_booking_colliding_with_a_closure(
+        self, client, guest, cancellation_policy, guest_headers
+    ):
+        # The dates are taken on another platform (an imported closure, or
+        # one the host entered by hand). The guest calendar greys those days
+        # out, but a page loaded before the last sync pass wouldn't have —
+        # so the block has to hold here too, before money moves.
+        await Closure(
+            platform="Airbnb",
+            begin_date=date.fromisoformat(_future(202)),
+            end_date=date.fromisoformat(_future(206)),
+        ).insert()
+
+        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers)
+
+        response = await client.post(f"/bookings/{booking_id}/payment/intent", headers=guest_headers)
+        assert response.status_code == 409
 
         follow_up = await client.get(f"/bookings/{booking_id}", headers=guest_headers)
         assert follow_up.status_code == 404
