@@ -614,7 +614,14 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   // the guest actually saw on this fresh page anyway, so skipping the
   // animation and opening straight into the natural extended layout is both
   // safer and correct.
-  const handleVerified = async (identity: VerifiedIdentity, animate = true) => {
+  // checkInOverride exists for the locale-switch resume below: that caller
+  // runs on a freshly mounted widget and has the restored check-in date in
+  // hand, while this closure's own `range` is still at its initial value.
+  const handleVerified = async (
+    identity: VerifiedIdentity,
+    animate = true,
+    checkInOverride?: Date
+  ) => {
     const preferredLanguage = identity.guestForm.preferred_language;
     if (preferredLanguage && preferredLanguage !== lang) {
       // The guest's saved language differs from the page they're on — their
@@ -662,7 +669,20 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     // guest's), and the admin is starting a fresh booking for whichever
     // guest they just picked, not resuming their own checkout.
     if (!identity.isAdminBooking && (await resumePendingBooking(identity))) return;
-    setSelectedPlanId(visiblePlans[0]?._id ?? null);
+
+    // Preselect the default rate. On the locale-switch resume this runs on a
+    // fresh mount, in the same commit as the effect that fetches the plans —
+    // so reading the `plans`/`range` state here would see both at their
+    // initial (empty) values, preselect nothing, and leave the plan step
+    // with a permanently disabled Next button. Fetch the plans the same way
+    // resumePendingBooking does, and take the check-in date from the caller.
+    const availablePlans = plans.length > 0 ? plans : await listPublicPlans().catch(() => plans);
+    if (availablePlans !== plans) setPlans(availablePlans);
+    const checkIn = checkInOverride ?? range?.from;
+    const selectablePlans = checkIn
+      ? cheapestPerCancellationFee(availablePlans, differenceInCalendarDays(checkIn, today))
+      : availablePlans;
+    setSelectedPlanId(selectablePlans[0]?._id ?? null);
     setGuestStep("plan");
   };
 
@@ -818,15 +838,19 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
         adults: number;
         children: (number | null)[];
       };
-      if (resume.checkIn && resume.checkOut) {
+      const resumedCheckIn = resume.checkIn ? parse(resume.checkIn, "yyyy-MM-dd", new Date()) : undefined;
+      if (resumedCheckIn && resume.checkOut) {
         setRange({
-          from: parse(resume.checkIn, "yyyy-MM-dd", new Date()),
+          from: resumedCheckIn,
           to: parse(resume.checkOut, "yyyy-MM-dd", new Date()),
         });
       }
       setAdults(resume.adults);
       setChildren(resume.children.map((age) => ({ age })));
-      handleVerified(resume.identity, false);
+      // The restored check-in goes in explicitly: setRange above only takes
+      // effect on the next render, so handleVerified's own `range` is still
+      // empty and it would otherwise pick the rate for no dates at all.
+      handleVerified(resume.identity, false, resumedCheckIn);
     } catch {
       // Malformed/stale payload — nothing to restore.
     }
