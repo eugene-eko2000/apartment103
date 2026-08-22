@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -25,6 +26,9 @@ from app.models.closure import Closure  # noqa: E402
 from app.models.external_calendar import ExternalCalendar  # noqa: E402
 from app.models.guest import Guest, ResidenceAddress  # noqa: E402
 from app.models.image import Image  # noqa: E402
+from app.models.plan import Plan  # noqa: E402
+from app.models.price import DateRangeRate, Period, Price  # noqa: E402
+from app.services import currency_service  # noqa: E402
 
 
 @pytest.fixture
@@ -50,6 +54,35 @@ async def _reset_database():
         await database[name].delete_many({})
     await mongo_client.close()
     yield
+
+
+@pytest.fixture(autouse=True)
+def fixed_currency_conversion(monkeypatch):
+    """Make every currency conversion in a route test deterministic.
+
+    Booking prices are derived server-side now (see
+    app.services.booking_pricing), so any non-CHF booking performs a real
+    conversion — which without this would mean a live Stripe FX Quotes call
+    from the suite. The rates are deliberately round rather than realistic,
+    so a converted amount can be verified by hand; they mirror the table in
+    tests/test_currency_service.py.
+
+    commission_rate is pinned alongside them because it is a deployment
+    setting read from .env, and a converted amount asserted in a test would
+    otherwise depend on whatever the machine running it happens to have
+    configured.
+    """
+
+    async def fake_get_exchange_rates():
+        return {
+            "CHF": Decimal("1"),
+            "EUR": Decimal("2"),
+            "USD": Decimal("4"),
+            "GBP": Decimal("0.8"),
+        }
+
+    monkeypatch.setattr(currency_service, "get_exchange_rates", fake_get_exchange_rates)
+    monkeypatch.setattr(settings, "commission_rate", Decimal("0.06"))
 
 
 @pytest.fixture
@@ -128,6 +161,41 @@ async def cancellation_policy(client) -> CancellationPolicy:
     )
     await policy.insert()
     return policy
+
+
+@pytest.fixture
+async def price(client) -> Price:
+    """A nightly rate covering the dates the booking tests use. This is the
+    server's authority for what a stay costs (see
+    app.services.booking_pricing), so any test creating a booking through
+    the guest/plan path needs it in place."""
+    price = Price(
+        period=Period(
+            begin_date=date(2026, 1, 1),
+            end_date=date(2026, 12, 31),
+            currency="CHF",
+            date_ranges=[
+                DateRangeRate(
+                    begin_date=date(2026, 1, 1),
+                    end_date=date(2026, 12, 31),
+                    daily_rate=Decimal("200.00"),
+                    min_stay_days=1,
+                )
+            ],
+        )
+    )
+    await price.insert()
+    return price
+
+
+@pytest.fixture
+async def plan(client, cancellation_policy) -> Plan:
+    """A plan at half the nightly rate — deliberately not 1.0, so a test
+    asserting a computed price can tell "the ratio was applied" apart from
+    "the raw rate was used"."""
+    plan = Plan(name="Half Price", cancellation_policy=cancellation_policy, price_ratio=0.5)
+    await plan.insert()
+    return plan
 
 
 @pytest.fixture

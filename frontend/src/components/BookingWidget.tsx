@@ -892,24 +892,27 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
 
   const submitBooking = async (finalGuestId: string, token: string, bookingCurrency: Currency = currency) => {
     if (!selectedPlan || !range?.from || !range?.to) return;
-    const matchedRate = findDailyRate(prices, format(range.from, "yyyy-MM-dd"));
-    if (!matchedRate) return;
+    // Not used to compute anything any more — the backend does that. It
+    // stays as a pre-flight check: dates with no configured rate are the
+    // one case the backend answers with a 400, and bailing here keeps the
+    // guest on the form instead of dropping them into the error screen.
+    if (!findDailyRate(prices, format(range.from, "yyyy-MM-dd"))) return;
     setGuestStep("submitting");
     try {
-      // matchedRate.dailyRateChf is the CHF baseline (see /prices/public);
-      // the backend converts it into `currency` server-side when the
-      // booking is stored (see backend/app/api/routes/bookings.py).
-      const priceChf = nights * matchedRate.dailyRateChf * selectedPlan.price_ratio;
+      // No amount is sent: the backend prices the stay from the stored
+      // nightly rates and the named plan's ratio, and takes the
+      // cancellation policy from that same plan (see
+      // backend/app/services/booking_pricing.py). The figures shown above
+      // are a quote computed from the same rates via /prices/public, not an
+      // input to what is charged.
       const bookingInput = {
         guest_id: finalGuestId,
-        cancellation_policy_id: selectedPlan.cancellation_policy.id,
+        plan_name: selectedPlan.name,
         currency: bookingCurrency,
         date_ranges: [
           {
             begin_date: format(range.from, "yyyy-MM-dd"),
             end_date: format(range.to, "yyyy-MM-dd"),
-            price: 0,
-            price_chf: priceChf,
           },
         ],
       };

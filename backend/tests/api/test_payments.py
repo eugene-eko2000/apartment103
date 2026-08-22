@@ -20,7 +20,17 @@ def _future(days: int) -> str:
     return (date.today() + timedelta(days=days)).isoformat()
 
 
-async def _create_booking(client, guest, policy, headers, begin_offset=200, price=1000.0):
+async def _create_booking(client, guest, policy, admin_headers, begin_offset=200, price=1000.0):
+    """Create a Pending booking for `guest` with an exact, hand-set price.
+
+    Posted with admin credentials on purpose: a hand-set price is the admin
+    manual-override path, and POST /bookings refuses it for a guest
+    principal (a guest names a plan and the server derives the price from
+    stored rates — see app.services.booking_pricing). These are payment
+    tests that need one specific total to assert charge arithmetic against,
+    not whatever the rate table would yield, so they take the admin path
+    while the booking still belongs to `guest`.
+    """
     response = await client.post(
         "/bookings",
         json={
@@ -31,7 +41,7 @@ async def _create_booking(client, guest, policy, headers, begin_offset=200, pric
                 {"begin_date": _future(begin_offset), "end_date": _future(begin_offset + 4), "price": price}
             ],
         },
-        headers=headers,
+        headers=admin_headers,
     )
     assert response.status_code == 201
     return response.json()["_id"]
@@ -46,9 +56,8 @@ async def _flat_fee_policy(refund_percentage: float = 0.5) -> CancellationPolicy
 
 class TestCreatePaymentIntent:
     async def test_free_cancellation_zone_returns_setup_intent(
-        self, monkeypatch, client, guest, cancellation_policy, guest_headers
-    ):
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers, begin_offset=200)
+        self, monkeypatch, client, guest, cancellation_policy, guest_headers, admin_headers):
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers, begin_offset=200)
 
         async def fake_get_or_create_customer(guest_arg):
             return "cus_test"
@@ -71,9 +80,9 @@ class TestCreatePaymentIntent:
         # thus chargeable) right at check-in per the "Flexible" policy.
         assert body["upcoming_charges"] == [{"charge_date": _future(200), "amount": 1000.0}]
 
-    async def test_partial_fee_zone_returns_payment_intent(self, monkeypatch, client, guest, guest_headers):
+    async def test_partial_fee_zone_returns_payment_intent(self, monkeypatch, client, guest, guest_headers, admin_headers):
         policy = await _flat_fee_policy(0.5)
-        booking_id = await _create_booking(client, guest, policy, guest_headers, begin_offset=30, price=1000.0)
+        booking_id = await _create_booking(client, guest, policy, admin_headers, begin_offset=30, price=1000.0)
 
         async def fake_get_or_create_customer(guest_arg):
             return "cus_test"
@@ -102,7 +111,7 @@ class TestCreatePaymentIntent:
         # 50% already due now, so nothing further is scheduled.
         assert body["upcoming_charges"] == []
 
-    async def test_includes_upcoming_charges_from_schedule(self, monkeypatch, client, guest, guest_headers):
+    async def test_includes_upcoming_charges_from_schedule(self, monkeypatch, client, guest, guest_headers, admin_headers):
         # Two-stage policy: 50% becomes non-refundable (and due now) as soon
         # as the booking is made, and the remaining 50% becomes non-refundable
         # (and thus due) at the 14-days-before-checkin threshold.
@@ -113,7 +122,7 @@ class TestCreatePaymentIntent:
                 CancellationRule(days_before_checkin=14, refund_percentage=0.0),
             ],
         ).insert()
-        booking_id = await _create_booking(client, guest, policy, guest_headers, begin_offset=300, price=1000.0)
+        booking_id = await _create_booking(client, guest, policy, admin_headers, begin_offset=300, price=1000.0)
 
         async def fake_get_or_create_customer(guest_arg):
             return "cus_test"
@@ -134,9 +143,8 @@ class TestCreatePaymentIntent:
         assert body["upcoming_charges"] == [{"charge_date": _future(101), "amount": 500.0}]
 
     async def test_returns_400_if_already_set_up(
-        self, client, guest, cancellation_policy, guest_headers
-    ):
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers)
+        self, client, guest, cancellation_policy, guest_headers, admin_headers):
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers)
         booking = await Booking.get(PydanticObjectId(booking_id))
         booking.payment_status = "card_verified"
         await booking.save()
@@ -144,15 +152,14 @@ class TestCreatePaymentIntent:
         response = await client.post(f"/bookings/{booking_id}/payment/intent", headers=guest_headers)
         assert response.status_code == 400
 
-    async def test_requires_authentication(self, client, guest, cancellation_policy, guest_headers):
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers)
+    async def test_requires_authentication(self, client, guest, cancellation_policy, guest_headers, admin_headers):
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers)
         response = await client.post(f"/bookings/{booking_id}/payment/intent")
         assert response.status_code == 401
 
     async def test_guest_cannot_access_other_guest_booking(
-        self, client, guest, cancellation_policy, guest_headers, other_guest_headers
-    ):
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers)
+        self, client, guest, cancellation_policy, guest_headers, other_guest_headers, admin_headers):
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers)
         response = await client.post(f"/bookings/{booking_id}/payment/intent", headers=other_guest_headers)
         assert response.status_code == 403
 
@@ -163,18 +170,17 @@ class TestCreatePaymentIntent:
         assert response.status_code == 404
 
     async def test_rejects_and_cancels_booking_colliding_with_active_booking(
-        self, client, guest, other_guest, cancellation_policy, guest_headers, other_guest_headers
-    ):
+        self, client, guest, other_guest, cancellation_policy, guest_headers, other_guest_headers, admin_headers):
         # An Active booking already occupies these dates (e.g. another guest
         # paid first); this Pending one was allowed to be stored (Pending
         # bookings don't block the calendar) but must be rejected, and
         # cancelled, the moment it tries to actually pay.
-        occupying_id = await _create_booking(client, other_guest, cancellation_policy, other_guest_headers)
+        occupying_id = await _create_booking(client, other_guest, cancellation_policy, admin_headers)
         occupying = await Booking.get(PydanticObjectId(occupying_id))
         occupying.status = "Active"
         await occupying.save()
 
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers)
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers)
 
         response = await client.post(f"/bookings/{booking_id}/payment/intent", headers=guest_headers)
         assert response.status_code == 409
@@ -192,8 +198,7 @@ class TestCreatePaymentIntent:
         assert retry.status_code == 409
 
     async def test_rejects_and_cancels_booking_colliding_with_a_closure(
-        self, client, guest, cancellation_policy, guest_headers
-    ):
+        self, client, guest, cancellation_policy, guest_headers, admin_headers):
         # The dates are taken on another platform (an imported closure, or
         # one the host entered by hand). The guest calendar greys those days
         # out, but a page loaded before the last sync pass wouldn't have —
@@ -204,7 +209,7 @@ class TestCreatePaymentIntent:
             end_date=date.fromisoformat(_future(206)),
         ).insert()
 
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers)
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers)
 
         response = await client.post(f"/bookings/{booking_id}/payment/intent", headers=guest_headers)
         assert response.status_code == 409
@@ -213,13 +218,12 @@ class TestCreatePaymentIntent:
         assert rejected.status == "Cancelled"
 
     async def test_ignores_other_pending_bookings_for_the_same_dates(
-        self, monkeypatch, client, guest, other_guest, cancellation_policy, guest_headers, other_guest_headers
-    ):
+        self, monkeypatch, client, guest, other_guest, cancellation_policy, guest_headers, other_guest_headers, admin_headers):
         # Another guest also has a Pending (unpaid) booking for the same
         # dates — that alone must not block this guest from paying; only an
         # Active booking should.
-        await _create_booking(client, other_guest, cancellation_policy, other_guest_headers)
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers)
+        await _create_booking(client, other_guest, cancellation_policy, admin_headers)
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers)
 
         async def fake_get_or_create_customer(guest_arg):
             return "cus_test"
@@ -233,12 +237,11 @@ class TestCreatePaymentIntent:
         assert response.status_code == 200
 
     async def test_returns_404_when_booking_was_removed(
-        self, client, guest, cancellation_policy, guest_headers
-    ):
+        self, client, guest, cancellation_policy, guest_headers, admin_headers):
         # A Pending booking that was removed (e.g. by another guest's
         # activation) can no longer be paid for — the "is it still there"
         # check 404s, which the frontend surfaces as "dates were taken".
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers)
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers)
         booking = await Booking.get(PydanticObjectId(booking_id))
         await booking.delete()
 
@@ -247,12 +250,12 @@ class TestCreatePaymentIntent:
 
 
 class TestRetryPayment:
-    async def test_retries_when_requires_action(self, monkeypatch, client, guest, guest_headers):
+    async def test_retries_when_requires_action(self, monkeypatch, client, guest, guest_headers, admin_headers):
         # This booking is still Pending: its opening charge needed 3DS and so
         # never went through, which is why the retry below is labelled the
         # initial charge rather than an accrual.
         policy = await _flat_fee_policy(0.5)
-        booking_id = await _create_booking(client, guest, policy, guest_headers, begin_offset=30, price=1000.0)
+        booking_id = await _create_booking(client, guest, policy, admin_headers, begin_offset=30, price=1000.0)
         booking = await Booking.get(PydanticObjectId(booking_id))
         booking.payment_status = "requires_action"
         booking.stripe_payment_method_id = "pm_test"
@@ -280,15 +283,14 @@ class TestRetryPayment:
         assert body["client_secret"] == "pi_retry_secret"
 
     async def test_returns_400_when_not_in_recoverable_state(
-        self, client, guest, cancellation_policy, guest_headers
-    ):
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers)
+        self, client, guest, cancellation_policy, guest_headers, admin_headers):
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers)
         response = await client.post(f"/bookings/{booking_id}/payment/retry", headers=guest_headers)
         assert response.status_code == 400
 
-    async def test_returns_400_when_nothing_outstanding(self, client, guest, guest_headers):
+    async def test_returns_400_when_nothing_outstanding(self, client, guest, guest_headers, admin_headers):
         policy = await _flat_fee_policy(0.5)
-        booking_id = await _create_booking(client, guest, policy, guest_headers, begin_offset=30, price=1000.0)
+        booking_id = await _create_booking(client, guest, policy, admin_headers, begin_offset=30, price=1000.0)
         booking = await Booking.get(PydanticObjectId(booking_id))
         booking.payment_status = "failed"
         booking.stripe_payment_method_id = "pm_test"
@@ -300,15 +302,14 @@ class TestRetryPayment:
 
 
     async def test_retry_of_an_unpaid_booking_activates_it(
-        self, monkeypatch, client, guest, guest_headers
-    ):
+        self, monkeypatch, client, guest, guest_headers, admin_headers):
         # A declined opening charge leaves the booking Pending (see
         # _apply_failed_charge). Recovering it through the retry endpoint is
         # still that opening payment, so the resulting charge must activate
         # the booking and claim its nights — a booking cannot be left paid-for
         # but Pending, invisible to the calendar and unprotected by the index.
         policy = await _flat_fee_policy(0.5)
-        booking_id = await _create_booking(client, guest, policy, guest_headers, begin_offset=30, price=1000.0)
+        booking_id = await _create_booking(client, guest, policy, admin_headers, begin_offset=30, price=1000.0)
         booking = await Booking.get(PydanticObjectId(booking_id))
         await booking.set(
             {Booking.payment_status: "failed", Booking.stripe_payment_method_id: "pm_test"}
@@ -346,13 +347,12 @@ class TestRetryPayment:
         assert len(after.booked_nights) == 4
 
     async def test_retry_on_an_active_booking_stays_an_accrual(
-        self, monkeypatch, client, guest, guest_headers
-    ):
+        self, monkeypatch, client, guest, guest_headers, admin_headers):
         # The other side of the same rule: retrying a *scheduled* charge on an
         # already-Active booking must stay labelled an accrual, so it doesn't
         # re-run activation or re-send the booking confirmation.
         policy = await _flat_fee_policy(0.5)
-        booking_id = await _create_booking(client, guest, policy, guest_headers, begin_offset=30, price=1000.0)
+        booking_id = await _create_booking(client, guest, policy, admin_headers, begin_offset=30, price=1000.0)
         booking = await Booking.get(PydanticObjectId(booking_id))
         await booking.set(
             {
@@ -394,9 +394,8 @@ class TestStripeWebhook:
         assert response.status_code == 400
 
     async def test_setup_intent_succeeded_marks_card_verified(
-        self, monkeypatch, client, guest, cancellation_policy, guest_headers
-    ):
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers)
+        self, monkeypatch, client, guest, cancellation_policy, guest_headers, admin_headers):
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers)
         event = SimpleNamespace(
             id="evt_setup_1",
             type="setup_intent.succeeded",
@@ -415,11 +414,10 @@ class TestStripeWebhook:
         assert booking.status == "Active"
 
     async def test_webhook_event_log_is_capped(
-        self, monkeypatch, client, guest, cancellation_policy, guest_headers
-    ):
+        self, monkeypatch, client, guest, cancellation_policy, guest_headers, admin_headers):
         """webhook_events is $push-ed with $slice, so a chatty PaymentIntent
         can't grow the booking document without bound."""
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers)
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers)
         cap = payments_routes._MAX_WEBHOOK_EVENTS
 
         for i in range(cap + 5):
@@ -442,9 +440,8 @@ class TestStripeWebhook:
         assert booking.webhook_events[-1].stripe_event_id == f"evt_noise_{cap + 4}"
 
     async def test_payment_intent_succeeded_records_charge(
-        self, monkeypatch, client, guest, cancellation_policy, guest_headers
-    ):
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers, price=1000.0)
+        self, monkeypatch, client, guest, cancellation_policy, guest_headers, admin_headers):
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers, price=1000.0)
         event = SimpleNamespace(
             id="evt_pi_1",
             type="payment_intent.succeeded",
@@ -484,9 +481,8 @@ class TestStripeWebhook:
         assert stored_event.data["id"] == "pi_1"
 
     async def test_payment_intent_succeeded_attaches_fee_breakdown(
-        self, monkeypatch, client, guest, cancellation_policy, guest_headers
-    ):
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers, price=1000.0)
+        self, monkeypatch, client, guest, cancellation_policy, guest_headers, admin_headers):
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers, price=1000.0)
         event = SimpleNamespace(
             id="evt_pi_fees_1",
             type="payment_intent.succeeded",
@@ -526,9 +522,8 @@ class TestStripeWebhook:
         assert charge.net_amount_chf == pytest.approx(946.00)
 
     async def test_payment_intent_succeeded_tolerates_fee_breakdown_failure(
-        self, monkeypatch, client, guest, cancellation_policy, guest_headers
-    ):
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers, price=1000.0)
+        self, monkeypatch, client, guest, cancellation_policy, guest_headers, admin_headers):
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers, price=1000.0)
         event = SimpleNamespace(
             id="evt_pi_fees_2",
             type="payment_intent.succeeded",
@@ -556,9 +551,8 @@ class TestStripeWebhook:
         assert booking.charges[0].amount_chf is None
 
     async def test_payment_intent_failed_marks_requires_action(
-        self, monkeypatch, client, guest, cancellation_policy, guest_headers
-    ):
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers)
+        self, monkeypatch, client, guest, cancellation_policy, guest_headers, admin_headers):
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers)
         event = SimpleNamespace(
             id="evt_pi_fail_1",
             type="payment_intent.payment_failed",
@@ -580,9 +574,8 @@ class TestStripeWebhook:
         assert booking.last_payment_error == "3DS needed"
 
     async def test_setup_intent_failed_records_error_without_changing_status(
-        self, monkeypatch, client, guest, cancellation_policy, guest_headers
-    ):
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers)
+        self, monkeypatch, client, guest, cancellation_policy, guest_headers, admin_headers):
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers)
         event = SimpleNamespace(
             id="evt_setup_fail_1",
             type="setup_intent.setup_failed",
@@ -604,9 +597,8 @@ class TestStripeWebhook:
         assert booking.last_payment_error == "Card was declined"
 
     async def test_duplicate_event_is_not_double_counted(
-        self, monkeypatch, client, guest, cancellation_policy, guest_headers
-    ):
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers, price=1000.0)
+        self, monkeypatch, client, guest, cancellation_policy, guest_headers, admin_headers):
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers, price=1000.0)
         event = SimpleNamespace(
             id="evt_dup_1",
             type="payment_intent.succeeded",
@@ -632,14 +624,13 @@ class TestStripeWebhook:
         assert len(booking.charges) == 1
 
     async def test_payment_activation_cancels_overlapping_pending_booking(
-        self, monkeypatch, client, guest, other_guest, cancellation_policy, guest_headers, other_guest_headers
-    ):
+        self, monkeypatch, client, guest, other_guest, cancellation_policy, guest_headers, other_guest_headers, admin_headers):
         # Two guests both have Pending bookings for the same dates. When one
         # pays and goes Active, the other's Pending booking is cancelled so
         # they can't also pay for the same dates later — but it stays on
         # record, since that guest may still confirm a payment.
-        winner_id = await _create_booking(client, guest, cancellation_policy, guest_headers, price=1000.0)
-        loser_id = await _create_booking(client, other_guest, cancellation_policy, other_guest_headers, price=1000.0)
+        winner_id = await _create_booking(client, guest, cancellation_policy, admin_headers, price=1000.0)
+        loser_id = await _create_booking(client, other_guest, cancellation_policy, admin_headers, price=1000.0)
 
         event = SimpleNamespace(
             id="evt_win_1",
@@ -667,11 +658,10 @@ class TestStripeWebhook:
         assert loser.booked_nights == []
 
     async def test_setup_activation_cancels_overlapping_pending_booking(
-        self, monkeypatch, client, guest, other_guest, cancellation_policy, guest_headers, other_guest_headers
-    ):
+        self, monkeypatch, client, guest, other_guest, cancellation_policy, guest_headers, other_guest_headers, admin_headers):
         # Same as above, but on the SetupIntent (card-verification) path.
-        winner_id = await _create_booking(client, guest, cancellation_policy, guest_headers)
-        loser_id = await _create_booking(client, other_guest, cancellation_policy, other_guest_headers)
+        winner_id = await _create_booking(client, guest, cancellation_policy, admin_headers)
+        loser_id = await _create_booking(client, other_guest, cancellation_policy, admin_headers)
 
         event = SimpleNamespace(
             id="evt_setup_win_1",
@@ -693,12 +683,11 @@ class TestStripeWebhook:
         assert loser.booked_nights == []
 
     async def test_payment_for_missing_booking_is_refunded(
-        self, monkeypatch, client, guest, cancellation_policy, guest_headers
-    ):
+        self, monkeypatch, client, guest, cancellation_policy, guest_headers, admin_headers):
         # The guest paid, but their Pending booking was removed by another
         # guest's overlapping activation before this webhook arrived. The
         # charge must be refunded so they don't pay for a booking that's gone.
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers, price=1000.0)
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers, price=1000.0)
         booking = await Booking.get(PydanticObjectId(booking_id))
         await booking.delete()
 
@@ -729,8 +718,7 @@ class TestStripeWebhook:
         assert refunded == ["pi_missing"]
 
     async def test_simultaneous_activation_is_rejected_by_unique_index(
-        self, monkeypatch, client, guest, other_guest, cancellation_policy, guest_headers, other_guest_headers
-    ):
+        self, monkeypatch, client, guest, other_guest, cancellation_policy, guest_headers, other_guest_headers, admin_headers):
         # Simulate the truly-simultaneous interleaving the proactive
         # cancellation cannot catch on its own: disable it so both Pending
         # bookings survive, then run both activation handlers back-to-back.
@@ -740,8 +728,8 @@ class TestStripeWebhook:
 
         monkeypatch.setattr(payments_routes, "cancel_overlapping_pending_bookings", noop_cancel)
 
-        first_id = await _create_booking(client, guest, cancellation_policy, guest_headers, price=1000.0)
-        second_id = await _create_booking(client, other_guest, cancellation_policy, other_guest_headers, price=1000.0)
+        first_id = await _create_booking(client, guest, cancellation_policy, admin_headers, price=1000.0)
+        second_id = await _create_booking(client, other_guest, cancellation_policy, admin_headers, price=1000.0)
 
         refunded: list[str] = []
 
@@ -808,8 +796,7 @@ class TestStripeWebhook:
         assert refunded == []
 
     async def test_cancellation_settlement_is_kept_and_does_not_resurrect(
-        self, monkeypatch, client, guest, cancellation_policy, guest_headers
-    ):
+        self, monkeypatch, client, guest, cancellation_policy, guest_headers, admin_headers):
         # Cancelling settles whatever is still owed by charging off-session,
         # and the webhook for that charge is its sole writer (see
         # app.services.payment_reconciliation). Recording it must not flip the
@@ -823,7 +810,7 @@ class TestStripeWebhook:
 
         monkeypatch.setattr(stripe_service, "refund_payment_intent", fake_refund)
 
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers, price=1000.0)
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers, price=1000.0)
         booking = await Booking.get(PydanticObjectId(booking_id))
         await payments_routes._apply_successful_charge(booking, {
             "id": "pi_initial",
@@ -853,8 +840,7 @@ class TestStripeWebhook:
         assert [charge.stripe_payment_intent_id for charge in settled.charges] == ["pi_initial", "pi_settlement"]
 
     async def test_cancelled_booking_does_not_reclaim_released_nights(
-        self, monkeypatch, client, guest, other_guest, cancellation_policy, guest_headers, other_guest_headers
-    ):
+        self, monkeypatch, client, guest, other_guest, cancellation_policy, guest_headers, other_guest_headers, admin_headers):
         # The nights a cancellation released are genuinely free: another guest
         # takes them, and the first booking's late settlement webhook must not
         # fight them for it (which would refund a fee that is owed, and leave
@@ -868,7 +854,7 @@ class TestStripeWebhook:
 
         monkeypatch.setattr(stripe_service, "refund_payment_intent", fake_refund)
 
-        first_id = await _create_booking(client, guest, cancellation_policy, guest_headers, price=1000.0)
+        first_id = await _create_booking(client, guest, cancellation_policy, admin_headers, price=1000.0)
         first = await Booking.get(PydanticObjectId(first_id))
         await payments_routes._apply_successful_charge(first, {
             "id": "pi_first", "amount": 100000, "currency": "chf",
@@ -877,7 +863,7 @@ class TestStripeWebhook:
         await client.post(f"/bookings/{first_id}/cancel", headers=guest_headers)
 
         # The freed dates are taken by someone else.
-        second_id = await _create_booking(client, other_guest, cancellation_policy, other_guest_headers, price=1000.0)
+        second_id = await _create_booking(client, other_guest, cancellation_policy, admin_headers, price=1000.0)
         second = await Booking.get(PydanticObjectId(second_id))
         await payments_routes._apply_successful_charge(second, {
             "id": "pi_second", "amount": 100000, "currency": "chf",
@@ -900,8 +886,7 @@ class TestStripeWebhook:
         assert len((await Booking.get(PydanticObjectId(second_id))).booked_nights) == 4
 
     async def test_opening_payment_for_cancelled_booking_is_refunded(
-        self, monkeypatch, client, guest, cancellation_policy, guest_headers
-    ):
+        self, monkeypatch, client, guest, cancellation_policy, guest_headers, admin_headers):
         # The mirror case: a booking cancelled by a lost race (or by the
         # guest) whose *opening* payment lands anyway. Here the guest really
         # is paying for dates they won't get, so it must be handed back.
@@ -913,7 +898,7 @@ class TestStripeWebhook:
 
         monkeypatch.setattr(stripe_service, "refund_payment_intent", fake_refund)
 
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers, price=1000.0)
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers, price=1000.0)
         booking = await Booking.get(PydanticObjectId(booking_id))
         await booking.set({Booking.status: "Cancelled"})
 
@@ -930,12 +915,11 @@ class TestStripeWebhook:
         assert after.charges == []
 
     async def test_setup_intent_does_not_resurrect_cancelled_booking(
-        self, monkeypatch, client, guest, cancellation_policy, guest_headers
-    ):
+        self, monkeypatch, client, guest, cancellation_policy, guest_headers, admin_headers):
         # A SetupIntent only verifies a card, so there is nothing to refund —
         # but it must still not reactivate a booking that is already off the
         # table, nor re-claim its nights.
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers)
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers)
         booking = await Booking.get(PydanticObjectId(booking_id))
         await booking.set({Booking.status: "Cancelled"})
 

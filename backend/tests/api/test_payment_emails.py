@@ -24,7 +24,17 @@ def _future(days: int) -> str:
     return (date.today() + timedelta(days=days)).isoformat()
 
 
-async def _create_booking(client, guest, policy, headers, begin_offset=200, price=1000.0):
+async def _create_booking(client, guest, policy, admin_headers, begin_offset=200, price=1000.0):
+    """Create a Pending booking for `guest` with an exact, hand-set price.
+
+    Posted with admin credentials on purpose: a hand-set price is the admin
+    manual-override path, and POST /bookings refuses it for a guest
+    principal (a guest names a plan and the server derives the price from
+    stored rates — see app.services.booking_pricing). These are payment
+    tests that need one specific total to assert charge arithmetic against,
+    not whatever the rate table would yield, so they take the admin path
+    while the booking still belongs to `guest`.
+    """
     response = await client.post(
         "/bookings",
         json={
@@ -35,7 +45,7 @@ async def _create_booking(client, guest, policy, headers, begin_offset=200, pric
                 {"begin_date": _future(begin_offset), "end_date": _future(begin_offset + 4), "price": price}
             ],
         },
-        headers=headers,
+        headers=admin_headers,
     )
     assert response.status_code == 201
     return response.json()["_id"]
@@ -43,9 +53,8 @@ async def _create_booking(client, guest, policy, headers, begin_offset=200, pric
 
 class TestConfirmationEmailTrigger:
     async def test_setup_intent_succeeded_sends_confirmation_email(
-        self, monkeypatch, client, guest, cancellation_policy, guest_headers
-    ):
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers)
+        self, monkeypatch, client, guest, cancellation_policy, guest_headers, admin_headers):
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers)
         booking = await Booking.get(PydanticObjectId(booking_id))
 
         confirmation_calls = []
@@ -61,9 +70,8 @@ class TestConfirmationEmailTrigger:
         assert booking.payment_status == "card_verified"
 
     async def test_initial_charge_sends_confirmation_email_not_scheduled_email(
-        self, monkeypatch, client, guest, cancellation_policy, guest_headers
-    ):
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers, price=1000.0)
+        self, monkeypatch, client, guest, cancellation_policy, guest_headers, admin_headers):
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers, price=1000.0)
         booking = await Booking.get(PydanticObjectId(booking_id))
 
         confirmation_calls = []
@@ -93,9 +101,8 @@ class TestConfirmationEmailTrigger:
         assert scheduled_calls == []
 
     async def test_scheduled_accrual_sends_scheduled_payment_email_not_confirmation(
-        self, monkeypatch, client, guest, cancellation_policy, guest_headers
-    ):
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers, price=1000.0)
+        self, monkeypatch, client, guest, cancellation_policy, guest_headers, admin_headers):
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers, price=1000.0)
         booking = await Booking.get(PydanticObjectId(booking_id))
 
         confirmation_calls = []
@@ -125,9 +132,8 @@ class TestConfirmationEmailTrigger:
         assert scheduled_calls == [("scheduled_accrual", "pi_accrual")]
 
     async def test_email_failure_does_not_break_payment_state_update(
-        self, monkeypatch, client, guest, cancellation_policy, guest_headers
-    ):
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers)
+        self, monkeypatch, client, guest, cancellation_policy, guest_headers, admin_headers):
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers)
         booking = await Booking.get(PydanticObjectId(booking_id))
 
         async def failing_confirmation(b):

@@ -150,12 +150,18 @@ export interface BookingDateRange {
   begin_date: string;
   end_date: string;
   price: number;
-  // Write-only, used by BookingInput: when set, the backend ignores `price`
-  // (send 0 as a placeholder) and computes the stored price by converting
-  // this CHF amount into the booking's currency (see
-  // backend/app/schemas/booking.py::BookingDateRangeInput). Never present
-  // on a Booking read back from the API.
-  price_chf?: number;
+}
+
+// Write shape for BookingInput.date_ranges. The guest flow sends dates only:
+// the backend prices the stay itself, from the stored nightly rates and the
+// ratio of the plan named in `plan_name` (see
+// backend/app/services/booking_pricing.py), so a `price` sent alongside a
+// plan is ignored outright. `price` exists for the admin editor's
+// manual-override flow, which is admin-only and rejected for a guest.
+export interface BookingDateRangeInput {
+  begin_date: string;
+  end_date: string;
+  price?: number;
 }
 
 // Nested inside a Booking's "guest" Link field, which Beanie serializes with
@@ -338,11 +344,17 @@ export interface CalendarSyncResult {
   error: string | null;
 }
 
+// Exactly one of plan_name / cancellation_policy_id is sent, mirroring the
+// backend's two shapes (backend/app/schemas/booking.py::BookingCreate):
+// the guest flow names the chosen plan and the backend derives both the
+// price and the cancellation policy from it; the admin editor names a
+// policy directly and sets prices by hand.
 export interface BookingInput {
   guest_id: string;
-  cancellation_policy_id: string;
+  plan_name?: string;
+  cancellation_policy_id?: string;
   currency: Currency;
-  date_ranges: BookingDateRange[];
+  date_ranges: BookingDateRangeInput[];
 }
 
 export type ImageCategory = string;

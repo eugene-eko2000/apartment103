@@ -15,7 +15,17 @@ def _future(days: int) -> str:
     return (date.today() + timedelta(days=days)).isoformat()
 
 
-async def _create_booking(client, guest, policy, headers, begin_offset=30, price=1000.0):
+async def _create_booking(client, guest, policy, admin_headers, begin_offset=30, price=1000.0):
+    """Create a Pending booking for `guest` with an exact, hand-set price.
+
+    Posted with admin credentials on purpose: a hand-set price is the admin
+    manual-override path, and POST /bookings refuses it for a guest
+    principal (a guest names a plan and the server derives the price from
+    stored rates — see app.services.booking_pricing). These are payment
+    tests that need one specific total to assert charge arithmetic against,
+    not whatever the rate table would yield, so they take the admin path
+    while the booking still belongs to `guest`.
+    """
     response = await client.post(
         "/bookings",
         json={
@@ -26,7 +36,7 @@ async def _create_booking(client, guest, policy, headers, begin_offset=30, price
                 {"begin_date": _future(begin_offset), "end_date": _future(begin_offset + 4), "price": price}
             ],
         },
-        headers=headers,
+        headers=admin_headers,
     )
     assert response.status_code == 201
     return response.json()["_id"]
@@ -40,9 +50,9 @@ async def _flat_fee_policy(refund_percentage: float = 0.5) -> CancellationPolicy
 
 
 class TestCancellationSettlement:
-    async def test_cancel_charges_outstanding_amount(self, monkeypatch, client, guest, guest_headers):
+    async def test_cancel_charges_outstanding_amount(self, monkeypatch, client, guest, guest_headers, admin_headers):
         policy = await _flat_fee_policy(0.5)
-        booking_id = await _create_booking(client, guest, policy, guest_headers, price=1000.0)
+        booking_id = await _create_booking(client, guest, policy, admin_headers, price=1000.0)
         booking = await Booking.get(PydanticObjectId(booking_id))
         booking.stripe_payment_method_id = "pm_test"
         booking.payment_status = "card_verified"
@@ -65,20 +75,19 @@ class TestCancellationSettlement:
         assert response.json()["status"] == "Cancelled"
 
     async def test_cancel_with_no_saved_card_still_cancels(
-        self, client, guest, cancellation_policy, guest_headers
-    ):
-        booking_id = await _create_booking(client, guest, cancellation_policy, guest_headers)
+        self, client, guest, cancellation_policy, guest_headers, admin_headers):
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers)
         response = await client.post(f"/bookings/{booking_id}/cancel", headers=guest_headers)
         assert response.status_code == 200
         assert response.json()["status"] == "Cancelled"
 
-    async def test_cancel_does_not_charge_when_nothing_outstanding(self, monkeypatch, client, guest, guest_headers):
+    async def test_cancel_does_not_charge_when_nothing_outstanding(self, monkeypatch, client, guest, guest_headers, admin_headers):
         # A booking is expected to already be charged for whatever it owes
         # by the time it's cancelled, so cancellation is a no-op charge-wise
         # once amount_charged already covers what the schedule says is due —
         # there's no refund path, only "charge the outstanding balance, if any".
         policy = await _flat_fee_policy(0.0)
-        booking_id = await _create_booking(client, guest, policy, guest_headers, price=1000.0)
+        booking_id = await _create_booking(client, guest, policy, admin_headers, price=1000.0)
         booking = await Booking.get(PydanticObjectId(booking_id))
         booking.stripe_payment_method_id = "pm_test"
         booking.amount_charged = 1000.0

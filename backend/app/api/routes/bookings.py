@@ -14,19 +14,20 @@ from app.api.deps import (
 from app.models.booking import Booking, BookingCancellationPolicy, BookingDateRange, nights_of_ranges
 from app.models.cancellation_policy import CancellationPolicy
 from app.models.guest import Currency, Guest
+from app.models.plan import Plan
 from app.schemas.booking import (
     BookedDateRange,
     BookingChargeDisplay,
     BookingCreate,
-    BookingDateRangeInput,
     BookingDateRangesProjection,
     BookingDisplay,
     BookingDisplaySource,
     BookingRangeDisplay,
     BookingScheduleDisplay,
 )
+from app.services.booking_pricing import UnpricedDatesError, price_date_ranges
 from app.services.charge_schedule import build_charge_schedule
-from app.services.currency_service import convert_amount, convert_amount_with_rates, rates_for
+from app.services.currency_service import convert_amount_with_rates, rates_for
 from app.services.payment_reconciliation import settle_cancellation
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
@@ -62,26 +63,63 @@ def _snapshot_cancellation_policy(policy: CancellationPolicy) -> BookingCancella
     return BookingCancellationPolicy(name=policy.name, rules=policy.rules)
 
 
-async def _date_ranges_in_currency(
-    date_ranges: list[BookingDateRangeInput], currency: Currency
-) -> list[BookingDateRange]:
-    """Resolves each input range's stored `price`: if `price_chf` is set
-    (the booking widget's guest flow), it's converted to `currency` here —
-    the one place a booking's authoritative charge amount is produced from a
-    CHF figure. Otherwise `price` is used exactly as given (the admin
-    editor's manual-override flow), untouched by currency conversion."""
-    return [
+async def _resolve_terms(
+    payload: BookingCreate, principal: Principal
+) -> tuple[list[BookingDateRange], CancellationPolicy]:
+    """The date ranges (priced) and cancellation policy a booking is stored
+    with — both resolved from the database, never taken on the client's word.
+
+    Two mutually exclusive paths, matching BookingCreate's two shapes:
+
+    * `plan_name` (the guest flow): the named Plan supplies the price ratio
+      and, through its link, the policy to snapshot. Prices are computed
+      from stored nightly rates by booking_pricing.price_date_ranges — any
+      `price` in the payload is discarded. Deriving *both* from the one plan
+      is deliberate: it leaves no way to combine a cheap plan's ratio with
+      another plan's more lenient cancellation terms.
+    * `cancellation_policy_id` (the admin editor): prices are taken from the
+      payload verbatim, as a manual override. Admin-only — for a guest
+      principal this is exactly the "name your own price" hole the plan path
+      exists to close, so it is refused rather than silently repriced.
+    """
+    if payload.plan_name is not None:
+        plan = await Plan.find_one(Plan.name == payload.plan_name, fetch_links=True)
+        if plan is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
+        # fetch_links leaves a dangling reference as an unresolved Link
+        # rather than raising, and a booking must not be written with a
+        # half-resolved policy snapshot.
+        if not isinstance(plan.cancellation_policy, CancellationPolicy):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This plan's cancellation policy is missing",
+            )
+        try:
+            date_ranges = await price_date_ranges(payload.date_ranges, plan, payload.currency)
+        except UnpricedDatesError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        return date_ranges, plan.cancellation_policy
+
+    if not principal.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="A plan must be chosen for the booking",
+        )
+    if payload.cancellation_policy_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Either plan_name or cancellation_policy_id is required",
+        )
+    policy = await get_or_404(CancellationPolicy, payload.cancellation_policy_id, "Cancellation policy")
+    date_ranges = [
         BookingDateRange(
             begin_date=date_range.begin_date,
             end_date=date_range.end_date,
-            price=(
-                await convert_amount(date_range.price_chf, "CHF", currency)
-                if date_range.price_chf is not None
-                else date_range.price
-            ),
+            price=date_range.price,
         )
-        for date_range in date_ranges
+        for date_range in payload.date_ranges
     ]
+    return date_ranges, policy
 
 
 async def _build_display(booking: Booking | BookingDisplaySource, currency: Currency) -> BookingDisplay:
@@ -148,11 +186,11 @@ async def create_booking(
             status_code=status.HTTP_409_CONFLICT,
             detail="You already have a pending booking. Complete or cancel it before starting a new one.",
         )
-    cancellation_policy = await get_or_404(CancellationPolicy, payload.cancellation_policy_id, "Cancellation policy")
+    date_ranges, cancellation_policy = await _resolve_terms(payload, principal)
     booking = Booking(
         guest=guest,
         currency=payload.currency,
-        date_ranges=await _date_ranges_in_currency(payload.date_ranges, payload.currency),
+        date_ranges=date_ranges,
         cancellation_policy=_snapshot_cancellation_policy(cancellation_policy),
     )
     booking.charge_schedule = build_charge_schedule(booking)
@@ -228,10 +266,10 @@ async def update_booking(
     if not principal.is_admin and payload.guest_id != principal.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Guests may only book for themselves")
     guest = await get_or_404(Guest, payload.guest_id, "Guest")
-    cancellation_policy = await get_or_404(CancellationPolicy, payload.cancellation_policy_id, "Cancellation policy")
+    date_ranges, cancellation_policy = await _resolve_terms(payload, principal)
     booking.guest = guest
     booking.currency = payload.currency
-    booking.date_ranges = await _date_ranges_in_currency(payload.date_ranges, payload.currency)
+    booking.date_ranges = date_ranges
     booking.cancellation_policy = _snapshot_cancellation_policy(cancellation_policy)
     booking.charge_schedule = build_charge_schedule(booking)
     # Only an Active booking may hold nights; recompute them in the same write

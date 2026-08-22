@@ -64,7 +64,16 @@ function checkOutDate(b: Booking): string | null {
   return b.date_ranges.reduce((max, r) => (r.end_date > max ? r.end_date : max), b.date_ranges[0].end_date);
 }
 
-function emptyForm(guestId: string, policyId: string): BookingInput {
+// The admin editor only ever uses the manual path — a cancellation policy
+// chosen by id and hand-entered prices, never a plan_name — so both fields
+// stay required here even though BookingInput leaves them optional to
+// accommodate the guest flow's plan-driven shape.
+type BookingFormState = Omit<BookingInput, "cancellation_policy_id" | "date_ranges"> & {
+  cancellation_policy_id: string;
+  date_ranges: BookingDateRange[];
+};
+
+function emptyForm(guestId: string, policyId: string): BookingFormState {
   return { guest_id: guestId, cancellation_policy_id: policyId, currency: "CHF", date_ranges: [] };
 }
 
@@ -205,7 +214,7 @@ export default function BookingsPanel() {
 
   const [editing, setEditing] = useState<Booking | null>(null);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState<BookingInput>(emptyForm("", ""));
+  const [form, setForm] = useState<BookingFormState>(emptyForm("", ""));
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   // Estimated CHF equivalent of the booking's whole total price, from the

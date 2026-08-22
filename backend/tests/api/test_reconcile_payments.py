@@ -17,7 +17,17 @@ def _future(days: int) -> str:
     return (date.today() + timedelta(days=days)).isoformat()
 
 
-async def _create_booking(client, guest, policy, headers, begin_offset=30, price=1000.0):
+async def _create_booking(client, guest, policy, admin_headers, begin_offset=30, price=1000.0):
+    """Create a Pending booking for `guest` with an exact, hand-set price.
+
+    Posted with admin credentials on purpose: a hand-set price is the admin
+    manual-override path, and POST /bookings refuses it for a guest
+    principal (a guest names a plan and the server derives the price from
+    stored rates — see app.services.booking_pricing). These are payment
+    tests that need one specific total to assert charge arithmetic against,
+    not whatever the rate table would yield, so they take the admin path
+    while the booking still belongs to `guest`.
+    """
     response = await client.post(
         "/bookings",
         json={
@@ -28,7 +38,7 @@ async def _create_booking(client, guest, policy, headers, begin_offset=30, price
                 {"begin_date": _future(begin_offset), "end_date": _future(begin_offset + 4), "price": price}
             ],
         },
-        headers=headers,
+        headers=admin_headers,
     )
     assert response.status_code == 201
     return response.json()["_id"]
@@ -42,9 +52,9 @@ async def _flat_fee_policy(refund_percentage: float = 0.5) -> CancellationPolicy
 
 
 class TestReconcileBookingPayments:
-    async def test_charges_outstanding_amount_for_verified_booking(self, monkeypatch, client, guest, guest_headers):
+    async def test_charges_outstanding_amount_for_verified_booking(self, monkeypatch, client, guest, guest_headers, admin_headers):
         policy = await _flat_fee_policy(0.5)
-        booking_id = await _create_booking(client, guest, policy, guest_headers, price=1000.0)
+        booking_id = await _create_booking(client, guest, policy, admin_headers, price=1000.0)
         booking = await Booking.get(PydanticObjectId(booking_id))
         booking.stripe_payment_method_id = "pm_test"
         booking.payment_status = "card_verified"
@@ -80,9 +90,9 @@ class TestReconcileBookingPayments:
         assert refreshed.amount_charged == 0.0
         assert refreshed.last_payment_check_at is not None
 
-    async def test_skips_booking_without_saved_card(self, monkeypatch, client, guest, guest_headers):
+    async def test_skips_booking_without_saved_card(self, monkeypatch, client, guest, guest_headers, admin_headers):
         policy = await _flat_fee_policy(0.5)
-        booking_id = await _create_booking(client, guest, policy, guest_headers, price=1000.0)
+        booking_id = await _create_booking(client, guest, policy, admin_headers, price=1000.0)
         booking = await Booking.get(PydanticObjectId(booking_id))
         booking.status = "Active"
         await booking.save()
@@ -97,9 +107,9 @@ class TestReconcileBookingPayments:
         refreshed = await Booking.get(PydanticObjectId(booking_id))
         assert refreshed.amount_charged == 0.0
 
-    async def test_skips_booking_already_fully_charged(self, monkeypatch, client, guest, guest_headers):
+    async def test_skips_booking_already_fully_charged(self, monkeypatch, client, guest, guest_headers, admin_headers):
         policy = await _flat_fee_policy(0.5)
-        booking_id = await _create_booking(client, guest, policy, guest_headers, price=1000.0)
+        booking_id = await _create_booking(client, guest, policy, admin_headers, price=1000.0)
         booking = await Booking.get(PydanticObjectId(booking_id))
         booking.stripe_payment_method_id = "pm_test"
         booking.amount_charged = 500.0  # already equals the accrued 50% for this flat policy
@@ -114,9 +124,9 @@ class TestReconcileBookingPayments:
 
         await reconcile_booking_payments()
 
-    async def test_records_failure_without_raising(self, monkeypatch, client, guest, guest_headers):
+    async def test_records_failure_without_raising(self, monkeypatch, client, guest, guest_headers, admin_headers):
         policy = await _flat_fee_policy(0.5)
-        booking_id = await _create_booking(client, guest, policy, guest_headers, price=1000.0)
+        booking_id = await _create_booking(client, guest, policy, admin_headers, price=1000.0)
         booking = await Booking.get(PydanticObjectId(booking_id))
         booking.stripe_payment_method_id = "pm_test"
         booking.payment_status = "card_verified"

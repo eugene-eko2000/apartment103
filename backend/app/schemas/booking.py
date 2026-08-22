@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 
 from beanie import PydanticObjectId
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.core.money import Money
 from app.models.booking import (
@@ -18,28 +18,51 @@ class BookingDateRangeInput(BaseModel):
     """Input shape for a date range on BookingCreate — deliberately not the
     same as the stored app.models.booking.BookingDateRange.
 
-    The booking widget (guest flow) sets `price_chf`, computed the same way
-    it always has — nights x CHF daily rate from /prices/public x plan
-    ratio, i.e. plain arithmetic, no FX — and leaves `price` at its default;
-    the backend then computes the actually-stored `price` by converting
-    price_chf into the booking's currency (see
-    app.api.routes.bookings._date_ranges_in_currency).
+    Carries dates only for the guest flow. What a stay costs is never taken
+    from the client: with `BookingCreate.plan_name` set, the backend derives
+    every price from the stored nightly rates and the plan's ratio (see
+    app.services.booking_pricing.price_date_ranges), and `price` here is
+    ignored entirely.
 
-    The admin editor (BookingsPanel.tsx) never sets price_chf — it sets
-    `price` directly as the literal final charge amount in the booking's own
-    currency (a legitimate manual-override workflow), which is then stored
-    exactly as given, completely unaffected by currency conversion.
+    `price` survives solely for the admin editor's manual-override flow
+    (BookingsPanel.tsx), which sets the literal final charge amount in the
+    booking's own currency and stores it exactly as given, unaffected by
+    currency conversion. That path is admin-only and is rejected for a guest
+    principal — see app.api.routes.bookings._resolve_date_ranges.
     """
 
     begin_date: date
     end_date: date
     price: Money = Field(default=Decimal("0"), ge=0)
-    price_chf: Money | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def _check_checkout_after_check_in(self) -> "BookingDateRangeInput":
+        # end_date is the exclusive checkout day, so a stay is at least one
+        # night. Enforced here rather than left to the pricing code, where a
+        # zero/negative night count would otherwise produce a zero or
+        # negative price (the latter failing BookingDateRange's own ge=0 as
+        # a 500 instead of a 422).
+        if self.end_date <= self.begin_date:
+            raise ValueError("end_date must be after begin_date")
+        return self
 
 
 class BookingCreate(BaseModel):
+    """Create/replace payload for a booking.
+
+    Exactly one of `plan_name` / `cancellation_policy_id` drives the terms:
+
+    * `plan_name` — the guest flow. The named Plan supplies both the price
+      ratio and, through its link, the cancellation policy to snapshot, so
+      the two can't be mixed and matched by a crafted request (picking the
+      cheapest plan's ratio while claiming the most lenient policy).
+    * `cancellation_policy_id` — the admin editor, which has no plan concept
+      and sets prices by hand. Admin-only.
+    """
+
     guest_id: PydanticObjectId
-    cancellation_policy_id: PydanticObjectId
+    plan_name: str | None = None
+    cancellation_policy_id: PydanticObjectId | None = None
     currency: Currency = "CHF"
     date_ranges: list[BookingDateRangeInput] = Field(default_factory=list)
 
