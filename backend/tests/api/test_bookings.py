@@ -453,3 +453,72 @@ class TestDeleteBooking:
 
         response = await client.delete(f"/bookings/{booking_id}", headers=admin_headers)
         assert response.status_code == 204
+
+
+class TestBookedNightsAreInternal:
+    """booked_nights backs the unique index that prevents double-booking. It
+    is derived entirely from date_ranges and of no use to any client, so it
+    must never appear in a Booking response — while still being persisted."""
+
+    async def test_absent_from_single_booking_responses(
+        self, client, guest, cancellation_policy, admin_headers
+    ):
+        created = await client.post(
+            "/bookings", json=_booking_payload(guest.id, cancellation_policy.id), headers=admin_headers
+        )
+        assert created.status_code == 201
+        assert "booked_nights" not in created.json()
+
+        booking_id = created.json()["_id"]
+        fetched = await client.get(f"/bookings/{booking_id}", headers=admin_headers)
+        assert fetched.status_code == 200
+        assert "booked_nights" not in fetched.json()
+
+        cancelled = await client.post(f"/bookings/{booking_id}/cancel", headers=admin_headers)
+        assert cancelled.status_code == 200
+        assert "booked_nights" not in cancelled.json()
+
+    async def test_absent_from_the_list_response(
+        self, client, guest, cancellation_policy, admin_headers
+    ):
+        # Regression guard for the "__all__" exclude form: on a list response
+        # model a plain {"booked_nights"} key set is read as sequence indices
+        # and silently excludes nothing.
+        await client.post(
+            "/bookings", json=_booking_payload(guest.id, cancellation_policy.id), headers=admin_headers
+        )
+        listed = await client.get("/bookings", headers=admin_headers)
+        assert listed.status_code == 200
+        assert listed.json()
+        assert all("booked_nights" not in item for item in listed.json())
+
+    async def test_still_persisted_for_an_active_booking(
+        self, client, guest, cancellation_policy, admin_headers
+    ):
+        # Excluding it from responses must not mean excluding it from writes:
+        # an update on an Active booking still has to keep the index in sync.
+        created = await client.post(
+            "/bookings", json=_booking_payload(guest.id, cancellation_policy.id), headers=admin_headers
+        )
+        booking_id = created.json()["_id"]
+        booking = await Booking.get(PydanticObjectId(booking_id))
+        await booking.set({Booking.status: "Active"})
+
+        updated = await client.put(
+            f"/bookings/{booking_id}",
+            json=_booking_payload(
+                guest.id,
+                cancellation_policy.id,
+                date_ranges=[{"begin_date": "2026-08-01", "end_date": "2026-08-04", "price": 300.0}],
+            ),
+            headers=admin_headers,
+        )
+        assert updated.status_code == 200
+        assert "booked_nights" not in updated.json()
+
+        stored = await Booking.get(PydanticObjectId(booking_id))
+        assert [night.isoformat() for night in stored.booked_nights] == [
+            "2026-08-01",
+            "2026-08-02",
+            "2026-08-03",
+        ]

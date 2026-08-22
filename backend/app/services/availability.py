@@ -1,14 +1,14 @@
-"""Overlap check run right before a payment/setup intent is created for a
-Pending booking (see app.api.routes.payments.create_payment_intent).
+"""Overlap checks around the Pending→Active booking lifecycle.
 
 Two things can make a candidate's dates unavailable:
 
 * another Active booking on this site. Pending bookings never block the
   public calendar (only Active ones do — see
   app.api.routes.bookings.list_public_booked_date_ranges), so two guests can
-  legitimately reach checkout for the same dates at once. Whoever's payment
-  intent is requested first wins; the loser is caught here instead of being
-  allowed to pay for dates someone else already secured.
+  legitimately reach checkout for the same dates at once. The guest who pays
+  first wins: their activation cancels the other guests' overlapping Pending
+  bookings (see cancel_overlapping_pending_bookings), and any loser who tries
+  to pay afterwards is caught in app.api.routes.payments.create_payment_intent.
 * a Closure — the stay is booked on Airbnb/Booking.com (imported by
   app.services.calendar_sync) or the host blocked the dates by hand. The
   guest calendar already greys those days out, but it may be working from a
@@ -24,6 +24,10 @@ from app.schemas.booking import BookedDateRange, BookingOverlapProjection
 from app.schemas.closure import ClosedDateRange
 
 _encoder = Encoder()
+
+# Recorded on a booking whose nights another guest secured first. Mirrored by
+# app.api.routes.payments, which reports it to the guest as a 409 detail.
+DATES_TAKEN_MESSAGE = "Selected dates are no longer available"
 
 
 def _ranges_overlap(
@@ -102,3 +106,41 @@ async def find_overlapping_ranges(booking: Booking) -> list[BookedDateRange]:
         *await _overlapping_booking_ranges(booking),
         *await _overlapping_closure_ranges(booking),
     ]
+
+
+async def cancel_overlapping_pending_bookings(booking: Booking) -> int:
+    """Cancel every Pending booking whose stay overlaps `booking`'s dates.
+
+    Called right after `booking` becomes Active: the guest who paid first owns
+    the dates, so any other guest still mid-checkout on the same nights must
+    be stopped. Otherwise they could pay for the same dates moments later and
+    double-book.
+
+    Cancelled, deliberately not deleted. These bookings are unpaid, but a
+    losing guest may still confirm a payment on a client secret they obtained
+    moments earlier; app.api.routes.payments then needs the booking on record
+    to refund against, to report the reason on, and to leave an audit trail if
+    that refund itself fails. A Cancelled booking blocks nothing: only Active
+    ones reach the public calendar, and booked_nights stays empty so the
+    unique index ignores it.
+
+    One atomic update_many rather than a read plus a save per document, so
+    losers can't slip through between the two.
+    """
+    if not booking.date_ranges:
+        return 0
+    overlaps_any = [
+        {"date_ranges": {"$elemMatch": clause}}
+        for clause in _overlaps_any_clause(booking, "begin_date", "end_date")
+    ]
+    result = await Booking.get_pymongo_collection().update_many(
+        {"status": "Pending", "_id": {"$ne": booking.id}, "$or": overlaps_any},
+        {
+            "$set": {
+                "status": "Cancelled",
+                "last_payment_error": DATES_TAKEN_MESSAGE,
+                "booked_nights": [],
+            }
+        },
+    )
+    return result.modified_count

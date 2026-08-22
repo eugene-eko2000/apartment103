@@ -3,6 +3,7 @@ from decimal import Decimal
 from beanie import PydanticObjectId
 from beanie.operators import In
 from fastapi import APIRouter, Depends, HTTPException, status
+from pymongo.errors import DuplicateKeyError
 
 from app.api.common import get_or_404
 from app.api.deps import (
@@ -10,7 +11,7 @@ from app.api.deps import (
     ensure_can_access_booking,
     get_current_principal,
 )
-from app.models.booking import Booking, BookingCancellationPolicy, BookingDateRange
+from app.models.booking import Booking, BookingCancellationPolicy, BookingDateRange, nights_of_ranges
 from app.models.cancellation_policy import CancellationPolicy
 from app.models.guest import Currency, Guest
 from app.schemas.booking import (
@@ -29,6 +30,12 @@ from app.services.currency_service import convert_amount, convert_amount_with_ra
 from app.services.payment_reconciliation import settle_cancellation
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
+
+# Server-side bookkeeping that backs the unique booked_nights index — derived
+# entirely from date_ranges, and of no use to any client. Stripped from every
+# Booking response rather than hidden on the model, since Beanie's encoder
+# honours Field(exclude=True) and would stop persisting it.
+_INTERNAL_FIELDS = {"booked_nights"}
 
 # Unauthenticated: lets the booking widget disable already-booked days in the
 # calendar without a guest/admin session. Mounted ahead of `router` in
@@ -121,7 +128,12 @@ async def _build_display(booking: Booking | BookingDisplaySource, currency: Curr
     )
 
 
-@router.post("", response_model=Booking, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=Booking,
+    response_model_exclude=_INTERNAL_FIELDS,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_booking(
     payload: BookingCreate, principal: Principal = Depends(get_current_principal)
 ) -> Booking:
@@ -148,7 +160,7 @@ async def create_booking(
     return booking
 
 
-@router.get("", response_model=list[Booking])
+@router.get("", response_model=list[Booking], response_model_exclude={"__all__": _INTERNAL_FIELDS})
 async def list_bookings(principal: Principal = Depends(get_current_principal)) -> list[Booking]:
     if principal.is_admin:
         return await Booking.find_all(fetch_links=True).to_list()
@@ -173,7 +185,7 @@ async def list_bookings_display(
     return {str(booking.id): await _build_display(booking, currency) for booking in bookings}
 
 
-@router.get("/{booking_id}", response_model=Booking)
+@router.get("/{booking_id}", response_model=Booking, response_model_exclude=_INTERNAL_FIELDS)
 async def get_booking(
     booking_id: PydanticObjectId, principal: Principal = Depends(get_current_principal)
 ) -> Booking:
@@ -191,7 +203,7 @@ async def get_booking_display(
     return await _build_display(booking, currency)
 
 
-@router.post("/{booking_id}/cancel", response_model=Booking)
+@router.post("/{booking_id}/cancel", response_model=Booking, response_model_exclude=_INTERNAL_FIELDS)
 async def cancel_booking(
     booking_id: PydanticObjectId, principal: Principal = Depends(get_current_principal)
 ) -> Booking:
@@ -201,11 +213,13 @@ async def cancel_booking(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Booking is already cancelled")
     await settle_cancellation(booking)
     booking.status = "Cancelled"
+    # Release the nights so the dates become bookable again.
+    booking.booked_nights = []
     await booking.save()
     return booking
 
 
-@router.put("/{booking_id}", response_model=Booking)
+@router.put("/{booking_id}", response_model=Booking, response_model_exclude=_INTERNAL_FIELDS)
 async def update_booking(
     booking_id: PydanticObjectId, payload: BookingCreate, principal: Principal = Depends(get_current_principal)
 ) -> Booking:
@@ -220,7 +234,17 @@ async def update_booking(
     booking.date_ranges = await _date_ranges_in_currency(payload.date_ranges, payload.currency)
     booking.cancellation_policy = _snapshot_cancellation_policy(cancellation_policy)
     booking.charge_schedule = build_charge_schedule(booking)
-    await booking.save()
+    # Only an Active booking may hold nights; recompute them in the same write
+    # so a date edit on an already-paid booking keeps the unique constraint
+    # (and therefore the public calendar) in sync with the new dates.
+    booking.booked_nights = nights_of_ranges(booking.date_ranges) if booking.status == "Active" else []
+    try:
+        await booking.save()
+    except DuplicateKeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="These dates overlap an existing booking",
+        ) from exc
     return booking
 
 

@@ -127,6 +127,7 @@
     "back": "Retour",
     "noCharge": "Aucun paiement pour l'instant — vous vérifierez avant de confirmer",
     "resumePendingBookingPrompt": "Vous avez une réservation en cours. Souhaitez-vous la reprendre pour finaliser le paiement ? En choisissant Annuler, elle sera supprimée.",
+    "datesTakenMessage": "Ces dates viennent d'être réservées par quelqu'un d'autre. Veuillez choisir d'autres dates.",
     "modal": {
       "close": "Fermer",
       "identifierTitle": "Saisissez vos coordonnées",

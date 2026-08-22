@@ -127,6 +127,7 @@
     "back": "Zurück",
     "noCharge": "Noch keine Abbuchung — Sie prüfen alles vor der Bestätigung",
     "resumePendingBookingPrompt": "Sie haben eine laufende Buchung. Möchten Sie sie fortsetzen, um die Zahlung abzuschließen? Bei „Abbrechen“ wird sie gelöscht.",
+    "datesTakenMessage": "Diese Daten wurden soeben von jemand anderem gebucht. Bitte wählen Sie andere Daten.",
     "modal": {
       "close": "Schließen",
       "identifierTitle": "Geben Sie Ihre Kontaktdaten ein",

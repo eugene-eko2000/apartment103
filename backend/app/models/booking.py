@@ -1,5 +1,5 @@
 from collections.abc import Iterable
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Literal
 
@@ -44,6 +44,24 @@ def total_price_of(date_ranges: Iterable[BookingDateRange]) -> Decimal:
     endpoints — see app.schemas.booking.BookingDisplaySource — derive the
     total exactly the same way the stored document does."""
     return to_decimal(sum((date_range.price for date_range in date_ranges), Decimal("0.00")))
+
+
+def nights_of_ranges(date_ranges: Iterable[BookingDateRange]) -> list[date]:
+    """Every calendar night a stay occupies, ascending and de-duplicated.
+
+    `end_date` is an exclusive checkout day, so the nights are the half-open
+    interval [begin_date, end_date). This is the authoritative source for
+    Booking.booked_nights, whose unique multikey index makes two Active
+    bookings sharing a night impossible — the atomic backstop behind the
+    proactive deletion in app.services.availability.
+    """
+    nights: set[date] = set()
+    for date_range in date_ranges:
+        night = date_range.begin_date
+        while night < date_range.end_date:
+            nights.add(night)
+            night += timedelta(days=1)
+    return sorted(nights)
 
 
 class BookingCancellationPolicy(BaseModel):
@@ -115,6 +133,11 @@ class Booking(Document):
     booking_date: date = Field(default_factory=date.today)
     currency: Currency = "CHF"
     date_ranges: list[BookingDateRange] = Field(default_factory=list)
+    # Every night the stay occupies. Written only in the same atomic update
+    # that flips a booking to Active; the unique multikey index below is what
+    # closes the simultaneous-payment race. Pending bookings keep it empty
+    # (they deliberately don't block the calendar).
+    booked_nights: list[date] = Field(default_factory=list)
     cancellation_policy: BookingCancellationPolicy
     charge_schedule: list[BookingChargeScheduleEntry] = Field(default_factory=list)
     # A booking starts Pending (stored, but payment neither charged nor
@@ -154,4 +177,16 @@ class Booking(Document):
             IndexModel([("guest.$id", 1)]),
             IndexModel([("date_ranges.begin_date", 1), ("date_ranges.end_date", 1)]),
             IndexModel([("booking_date", 1)]),
+            # Unique multikey: no two Active bookings may share a night. The
+            # partial filter indexes only documents with at least one night —
+            # Pending/Cancelled bookings (empty array) are excluded, since a
+            # unique index would otherwise treat every empty array as the same
+            # null value and allow only one such booking to exist. This is the
+            # atomic backstop; the claim happens in app.api.routes.payments.
+            IndexModel(
+                [("booked_nights", 1)],
+                unique=True,
+                partialFilterExpression={"booked_nights.0": {"$exists": True}},
+                name="booked_nights_unique",
+            ),
         ]

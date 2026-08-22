@@ -7,15 +7,20 @@ import stripe
 from beanie import PydanticObjectId
 from beanie.odm.utils.encoder import Encoder
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pymongo.errors import DuplicateKeyError
 
 from app.api.common import get_or_404
 from app.api.deps import Principal, ensure_can_access_booking, get_current_principal
 from app.core.money import CHARGE_TOLERANCE
-from app.models.booking import Booking, BookingCharge, BookingWebhookEvent
+from app.models.booking import Booking, BookingCharge, BookingWebhookEvent, nights_of_ranges
 from app.models.payment_event import PaymentEvent
 from app.schemas.payment import PaymentIntentResponse, UpcomingCharge
 from app.services import booking_emails, stripe_service
-from app.services.availability import find_overlapping_ranges
+from app.services.availability import (
+    DATES_TAKEN_MESSAGE,
+    cancel_overlapping_pending_bookings,
+    find_overlapping_ranges,
+)
 from app.services.charge_schedule import outstanding_amount, sync_charge_schedule_status, upcoming_charges
 
 logger = logging.getLogger(__name__)
@@ -62,6 +67,43 @@ async def _commit(booking: Booking, event: BookingWebhookEvent | None = None, **
         await booking.update(update)
 
 
+async def _refund_safely(payment_intent_id: str, context: str) -> None:
+    """Hand back a charge this booking flow can't honour.
+
+    Never raises: the booking-side rejection it accompanies is already
+    persisted, and a refund failure must not fail the webhook response
+    (Stripe would keep redelivering an event whose effect has already been
+    applied). A failure is logged for a human to reconcile instead.
+    """
+    try:
+        await stripe_service.refund_payment_intent(payment_intent_id)
+        logger.warning("Refunded %s: %s", payment_intent_id, context)
+    except stripe.StripeError:
+        logger.exception("Failed to refund %s: %s", payment_intent_id, context)
+
+
+async def _reject_dates_taken(
+    booking: Booking, event: BookingWebhookEvent | None, *, payment_intent_id: str | None = None
+) -> None:
+    """This booking can't have the dates it was just paid for.
+
+    Either the unique multikey index on Booking.booked_nights rejected the
+    atomic Pending→Active write (another Active booking already owns one of
+    these nights), or the booking was already Cancelled before its payment
+    landed — by an earlier lost race, or by the guest.
+
+    The rejection is persisted *before* the refund is attempted: if the
+    refund then fails, the booking is still on record as Cancelled with the
+    reason, so the stray charge can be reconciled against it. The other order
+    would leave a refunded charge on a booking that still looks payable.
+    """
+    booking.status = "Cancelled"
+    booking.last_payment_error = DATES_TAKEN_MESSAGE
+    await _commit(booking, event, status=booking.status, last_payment_error=booking.last_payment_error)
+    if payment_intent_id is not None:
+        await _refund_safely(payment_intent_id, "the booking lost the availability race")
+
+
 @router.post("/bookings/{booking_id}/payment/intent", response_model=PaymentIntentResponse)
 async def create_payment_intent(
     booking_id: PydanticObjectId, principal: Principal = Depends(get_current_principal)
@@ -72,6 +114,15 @@ async def create_payment_intent(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Payment has already been set up for this booking"
         )
+    if booking.status == "Cancelled":
+        # Another guest's activation already claimed these nights and
+        # cancelled this booking (see
+        # app.services.availability.cancel_overlapping_pending_bookings).
+        # There is nothing to pay for, so refuse before any money moves.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=DATES_TAKEN_MESSAGE,
+        )
 
     # A Pending booking doesn't block the calendar, so another guest may have
     # since paid for (and gone Active on) an overlapping range. Catch that
@@ -79,7 +130,10 @@ async def create_payment_intent(
     # once the Stripe confirmation itself fails.
     overlapping = await find_overlapping_ranges(booking)
     if overlapping:
-        await booking.delete()
+        # Cancelled rather than deleted: if the guest confirms a payment
+        # anyway (on a client secret obtained moments earlier), the webhook
+        # needs this booking on record to refund against and to report on.
+        await booking.set({Booking.status: "Cancelled", Booking.last_payment_error: DATES_TAKEN_MESSAGE})
         dates = ", ".join(f"{r.begin_date.isoformat()} to {r.end_date.isoformat()}" for r in overlapping)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -130,10 +184,10 @@ async def retry_payment(
     booking_id: PydanticObjectId, principal: Principal = Depends(get_current_principal)
 ) -> PaymentIntentResponse:
     """Recovery path for a booking left in "requires_action" (needs guest-side
-    3DS) or "failed" (declined) after an off-session accrual charge. Always
-    issues a fresh on-session PaymentIntent rather than trying to resurrect
-    the failed one, so the guest can complete it (and pick a new card if
-    needed) from an emailed recovery link."""
+    3DS) or "failed" (declined) after a charge. Always issues a fresh
+    on-session PaymentIntent rather than trying to resurrect the failed one,
+    so the guest can complete it (and pick a new card if needed) from an
+    emailed recovery link."""
     booking = await get_or_404(Booking, booking_id, "Booking", fetch_links=True)
     ensure_can_access_booking(principal, booking)
     if booking.payment_status not in ("requires_action", "failed"):
@@ -144,12 +198,20 @@ async def retry_payment(
     if outstanding <= 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nothing outstanding to charge")
 
+    # A booking still Pending here never completed its opening payment (its
+    # initial charge was declined or needed 3DS — see _apply_failed_charge,
+    # which records the failure but leaves the booking Pending). This retry is
+    # therefore that opening payment, and has to be labelled as one: the
+    # reason is what tells _apply_successful_charge to activate the booking
+    # and claim its nights, and what selects the booking-confirmation email
+    # over a scheduled-payment one.
+    reason = "initial_charge" if booking.status == "Pending" else "scheduled_accrual"
     customer_id = await stripe_service.get_or_create_customer(booking.guest)
     intent = await stripe_service.create_on_session_payment_intent(
         customer_id=customer_id,
         amount=outstanding,
         currency=booking.currency,
-        metadata={"booking_id": str(booking.id), "reason": "scheduled_accrual"},
+        metadata={"booking_id": str(booking.id), "reason": reason},
     )
     return PaymentIntentResponse(
         mode="payment",
@@ -201,16 +263,38 @@ async def _send_email_safely(coro) -> None:
 async def _apply_setup_succeeded(
     booking: Booking, setup_intent: dict, event: BookingWebhookEvent | None = None
 ) -> None:
+    if booking.status == "Cancelled":
+        # Cancelled before this confirmation landed — an earlier lost race, or
+        # the guest cancelling mid-flow. Activating now would resurrect the
+        # booking and re-block nights it has already released. A SetupIntent
+        # only verifies a card, so there is no charge to hand back.
+        logger.warning("Setup intent for cancelled booking %s ignored", booking.id)
+        await _commit(booking, event)
+        return
     booking.stripe_payment_method_id = setup_intent["payment_method"]
     booking.payment_status = "card_verified"
     booking.status = "Active"
-    await _commit(
-        booking,
-        event,
-        stripe_payment_method_id=booking.stripe_payment_method_id,
-        payment_status=booking.payment_status,
-        status=booking.status,
-    )
+    # Claim the nights atomically with the activation: the unique multikey
+    # index on booked_nights makes this write fail if another Active booking
+    # already owns one of them — closing the simultaneous-payment race.
+    booking.booked_nights = nights_of_ranges(booking.date_ranges)
+    try:
+        await _commit(
+            booking,
+            event,
+            stripe_payment_method_id=booking.stripe_payment_method_id,
+            payment_status=booking.payment_status,
+            status=booking.status,
+            booked_nights=booking.booked_nights,
+        )
+    except DuplicateKeyError:
+        # Card verified, nothing charged — just reject the booking.
+        logger.warning("Booking %s lost the availability race (setup intent)", booking.id)
+        await _reject_dates_taken(booking, event)
+        return
+    # This booking now owns its dates: cancel any other guest's still-Pending
+    # booking for the same nights so they can't pay for them afterwards.
+    await cancel_overlapping_pending_bookings(booking)
     await _send_email_safely(booking_emails.send_booking_confirmation_email(booking))
 
 
@@ -265,6 +349,20 @@ async def _apply_successful_charge(
     amount = stripe_service.from_minor_units(payment_intent["amount"])
     currency = payment_intent["currency"].upper()
     reason = payment_intent.get("metadata", {}).get("reason", "scheduled_accrual")
+    # Only the guest's opening payment activates a booking and claims its
+    # nights. Later charges (scheduled_accrual, cancellation_settlement) are
+    # money owed on a booking whose lifecycle is already settled: recording
+    # one must never flip status or re-claim nights, or cancelling a booking
+    # would resurrect it the moment its settlement charge landed — and
+    # re-block dates it had just released.
+    activating = reason == "initial_charge"
+    if activating and booking.status == "Cancelled":
+        # The opening payment arrived for a booking that is already off the
+        # table (an earlier lost race, or the guest cancelling mid-checkout).
+        # The guest must not be left paying for dates they can't have.
+        logger.warning("Opening payment for cancelled booking %s rejected", booking.id)
+        await _reject_dates_taken(booking, event, payment_intent_id=payment_intent["id"])
+        return
     payment_method_id = payment_intent.get("payment_method")
     if payment_method_id:
         booking.stripe_payment_method_id = payment_method_id
@@ -278,7 +376,13 @@ async def _apply_successful_charge(
     booking.charges.append(charge)
     booking.amount_charged += amount
     booking.last_payment_error = None
-    booking.status = "Active"
+    if activating:
+        booking.status = "Active"
+        # Claim the nights atomically with the activation: the unique multikey
+        # index on booked_nights makes this write fail if another Active
+        # booking already owns one of them — closing the simultaneous-payment
+        # race.
+        booking.booked_nights = nights_of_ranges(booking.date_ranges)
     booking.payment_status = (
         "fully_charged"
         if booking.amount_charged >= booking.total_price - CHARGE_TOLERANCE
@@ -295,11 +399,13 @@ async def _apply_successful_charge(
         "$inc": {"amount_charged": _encoder.encode(amount)},
         "$set": {
             "last_payment_error": None,
-            "status": booking.status,
             "payment_status": booking.payment_status,
             "charge_schedule": _encoder.encode(booking.charge_schedule),
         },
     }
+    if activating:
+        update["$set"]["status"] = booking.status
+        update["$set"]["booked_nights"] = _encoder.encode(booking.booked_nights)
     if payment_method_id:
         update["$set"]["stripe_payment_method_id"] = payment_method_id
     if event is not None:
@@ -307,7 +413,21 @@ async def _apply_successful_charge(
             "$each": [_encoder.encode(event)],
             "$slice": -_MAX_WEBHOOK_EVENTS,
         }
-    await booking.update(update)
+    try:
+        await booking.update(update)
+    except DuplicateKeyError:
+        # The $set of booked_nights hit the unique index: another Active
+        # booking already owns one of these nights. The whole update failed
+        # atomically, so no charge was recorded — refund the guest and reject.
+        logger.warning("Booking %s lost the availability race (payment intent)", booking.id)
+        await _reject_dates_taken(booking, event, payment_intent_id=payment_intent["id"])
+        return
+
+    if activating:
+        # This booking now owns its dates: cancel any other guest's
+        # still-Pending booking for the same nights so they can't pay for
+        # them afterwards.
+        await cancel_overlapping_pending_bookings(booking)
 
     await _attach_fee_breakdown(booking, charge)
 
@@ -380,6 +500,21 @@ async def stripe_webhook(request: Request) -> dict[str, str]:
             await handler(booking, obj, event_ref)
         else:
             await _commit(booking, event_ref)
+    elif booking_id_str and event.type in ("payment_intent.succeeded", "setup_intent.succeeded"):
+        # This payment named a booking that no longer exists — deleted by an
+        # admin, or by an older release that removed the loser of a date race
+        # outright. Unwind the charge so the guest isn't left paying for a
+        # booking that isn't there. A verified card (setup_intent) carries no
+        # charge, so there is nothing to refund on that path.
+        #
+        # Gated on booking_id_str: without it, *any* succeeded PaymentIntent
+        # on this Stripe account that this app didn't create — a dashboard
+        # payment link, an invoice, a manual charge — would land here with
+        # booking None and be refunded.
+        if event.type == "payment_intent.succeeded":
+            await _refund_safely(obj["id"], f"booking {booking_id_str} no longer exists")
+        else:
+            logger.warning("Setup intent %s arrived for missing booking %s", obj.get("id"), booking_id_str)
 
     await PaymentEvent(
         stripe_event_id=event.id,

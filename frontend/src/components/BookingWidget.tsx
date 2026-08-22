@@ -107,6 +107,7 @@ export interface BookingDict {
   back: string;
   noCharge: string;
   resumePendingBookingPrompt: string;
+  datesTakenMessage: string;
   total: string;
   modal: BookingModalDict;
 }
@@ -923,13 +924,17 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
       setPaymentIntent(intent);
       setGuestStep("payment");
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        // The dates were taken by another guest's payment between this
-        // booking being stored (Pending) and payment being attempted — the
-        // backend has already deleted the now-invalid Pending booking, so
-        // there's nothing left to retry into; just tell the guest and close
-        // the widget instead of offering a "Try again" that would 404.
-        window.alert(err.message);
+      if (err instanceof ApiError && (err.status === 409 || err.status === 404)) {
+        // 409: another guest's booking already holds these dates — either
+        // detected here, or already recorded by their activation cancelling
+        // this booking. 404: this booking is gone entirely (deleted by an
+        // admin). Either way the dates are unavailable and there is nothing
+        // left to retry into, so tell the guest and close the widget.
+        //
+        // The message is taken from the dictionary rather than from
+        // err.message: the backend's detail is English-only, and this widget
+        // is served in four languages.
+        window.alert(dict.datesTakenMessage);
         fetchAvailability();
         handleDone();
         return;

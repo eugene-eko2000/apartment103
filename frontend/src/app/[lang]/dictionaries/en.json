@@ -127,6 +127,7 @@
     "back": "Back",
     "noCharge": "No charge yet — you'll review before confirming",
     "resumePendingBookingPrompt": "You have a booking in progress. Resume it to complete payment? Choosing Cancel will delete it.",
+    "datesTakenMessage": "These dates have just been booked by someone else. Please choose different dates.",
     "modal": {
       "close": "Close",
       "identifierTitle": "Enter your contact data",

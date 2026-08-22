@@ -141,6 +141,20 @@ def construct_webhook_event(payload: bytes, sig_header: str) -> stripe.Event:
     return stripe.Webhook.construct_event(payload, sig_header, settings.stripe_webhook_secret)
 
 
+async def refund_payment_intent(payment_intent_id: str) -> stripe.Refund:
+    """Refund a PaymentIntent in full.
+
+    Used to unwind a charge whose booking was removed before the payment's
+    webhook arrived — the guest paid, but another guest's overlapping booking
+    activated first and deleted their still-Pending booking (see
+    app.api.routes.payments.stripe_webhook).
+    """
+    return await asyncio.to_thread(
+        stripe.Refund.create,
+        payment_intent=payment_intent_id,
+    )
+
+
 class ChargeFeeBreakdown(BaseModel):
     """Stripe's settlement-currency (CHF) view of one charge, read from its
     balance transaction."""

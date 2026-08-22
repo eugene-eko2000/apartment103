@@ -127,6 +127,7 @@
     "back": "Indietro",
     "noCharge": "Nessun addebito per ora — potrai rivedere tutto prima di confermare",
     "resumePendingBookingPrompt": "Hai una prenotazione in corso. Vuoi riprenderla per completare il pagamento? Scegliendo Annulla verrà eliminata.",
+    "datesTakenMessage": "Queste date sono appena state prenotate da qualcun altro. Scegli date diverse.",
     "modal": {
       "close": "Chiudi",
       "identifierTitle": "Inserisci i tuoi dati di contatto",
