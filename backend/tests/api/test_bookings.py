@@ -1,9 +1,13 @@
+from datetime import date
+from decimal import Decimal
+
 import pytest
 from beanie import PydanticObjectId
 
-from app.models.booking import Booking
+from app.models.booking import Booking, nights_of_ranges
 from app.models.cancellation_policy import CancellationPolicy, CancellationRule
 from app.models.plan import Plan
+from app.services.charge_schedule import outstanding_amount
 
 pytestmark = pytest.mark.anyio
 
@@ -324,6 +328,274 @@ class TestUpdateBooking:
             headers=admin_headers,
         )
         assert response.status_code == 404
+
+
+class TestUpdateBookingKeepsTheMoneyStraight:
+    """A booking's charges, its stored charge schedule and its total price
+    have to keep describing the same stay. PUT replaces the terms wholesale —
+    dates, prices, cancellation policy — so anything it recomputes must be
+    reconciled against money that has already moved, and anything that can't
+    be reconciled must be refused.
+    """
+
+    async def _charged_booking(self, client, guest, cancellation_policy, admin_headers, amount="400.00"):
+        """An Active booking, fully charged for its 400.00 CHF stay — the
+        state the daily accrual job leaves a paid booking in."""
+        created = await client.post(
+            "/bookings", json=_booking_payload(guest.id, cancellation_policy.id), headers=admin_headers
+        )
+        booking = await Booking.get(PydanticObjectId(created.json()["_id"]))
+        await booking.set(
+            {
+                Booking.status: "Active",
+                Booking.amount_charged: Decimal(amount),
+                Booking.payment_status: "fully_charged",
+            }
+        )
+        return created.json()["_id"]
+
+    async def test_guest_cannot_edit_a_booking_that_has_been_paid_for(
+        self, client, guest, cancellation_policy, guest_headers, admin_headers, plan, price
+    ):
+        booking_id = await self._charged_booking(client, guest, cancellation_policy, admin_headers)
+
+        response = await client.put(
+            f"/bookings/{booking_id}", json=_plan_payload(guest.id, plan.name), headers=guest_headers
+        )
+        assert response.status_code == 400
+
+        stored = await Booking.get(PydanticObjectId(booking_id))
+        assert stored.total_price == Decimal("400.00")
+
+    async def test_a_cancelled_booking_cannot_be_edited(
+        self, client, guest, cancellation_policy, admin_headers
+    ):
+        created = await client.post(
+            "/bookings", json=_booking_payload(guest.id, cancellation_policy.id), headers=admin_headers
+        )
+        booking_id = created.json()["_id"]
+        await client.post(f"/bookings/{booking_id}/cancel", headers=admin_headers)
+
+        response = await client.put(
+            f"/bookings/{booking_id}",
+            json=_booking_payload(guest.id, cancellation_policy.id),
+            headers=admin_headers,
+        )
+        assert response.status_code == 400
+
+    async def test_total_cannot_be_dropped_below_what_was_already_charged(
+        self, client, guest, cancellation_policy, admin_headers
+    ):
+        # The overpayment this would strand has nowhere to go: nothing in the
+        # app refunds, so the edit is refused instead of stored.
+        booking_id = await self._charged_booking(client, guest, cancellation_policy, admin_headers)
+
+        response = await client.put(
+            f"/bookings/{booking_id}",
+            json=_booking_payload(
+                guest.id,
+                cancellation_policy.id,
+                date_ranges=[{"begin_date": "2026-07-01", "end_date": "2026-07-03", "price": 150.0}],
+            ),
+            headers=admin_headers,
+        )
+        assert response.status_code == 400
+
+        stored = await Booking.get(PydanticObjectId(booking_id))
+        assert stored.total_price == Decimal("400.00")
+        assert stored.amount_charged == Decimal("400.00")
+        assert stored.payment_status == "fully_charged"
+
+    async def test_currency_cannot_be_changed_once_money_has_moved(
+        self, client, guest, cancellation_policy, admin_headers
+    ):
+        # amount_charged carries no currency of its own — it is denominated in
+        # booking.currency, so re-denominating the stay would leave the two
+        # sides of the invariant in different currencies.
+        booking_id = await self._charged_booking(client, guest, cancellation_policy, admin_headers)
+
+        response = await client.put(
+            f"/bookings/{booking_id}",
+            json=_booking_payload(guest.id, cancellation_policy.id, currency="USD"),
+            headers=admin_headers,
+        )
+        assert response.status_code == 400
+
+        stored = await Booking.get(PydanticObjectId(booking_id))
+        assert stored.currency == "CHF"
+
+    async def test_raising_the_total_reopens_the_booking_for_accrual(
+        self, client, guest, cancellation_policy, admin_headers
+    ):
+        booking_id = await self._charged_booking(client, guest, cancellation_policy, admin_headers)
+
+        response = await client.put(
+            f"/bookings/{booking_id}",
+            json=_booking_payload(
+                guest.id,
+                cancellation_policy.id,
+                date_ranges=[{"begin_date": "2026-07-01", "end_date": "2026-07-06", "price": 600.0}],
+            ),
+            headers=admin_headers,
+        )
+        assert response.status_code == 200
+
+        stored = await Booking.get(PydanticObjectId(booking_id))
+        assert stored.total_price == Decimal("600.00")
+        # The 400.00 already captured no longer covers the stay, so the
+        # booking goes back to partially charged and the rebuilt schedule
+        # entry is pending again for the accrual job to pick up.
+        assert stored.payment_status == "partially_charged"
+        assert [entry.status for entry in stored.charge_schedule] == ["pending"]
+        assert outstanding_amount(stored, date(2026, 7, 1)) == Decimal("200.00")
+
+    async def test_an_edit_that_still_covers_the_charges_stays_settled(
+        self, client, guest, cancellation_policy, admin_headers
+    ):
+        booking_id = await self._charged_booking(client, guest, cancellation_policy, admin_headers)
+
+        response = await client.put(
+            f"/bookings/{booking_id}",
+            json=_booking_payload(
+                guest.id,
+                cancellation_policy.id,
+                # Same total, later dates: the rebuilt schedule moves with the
+                # stay but is still fully covered by what was charged.
+                date_ranges=[{"begin_date": "2026-07-20", "end_date": "2026-07-24", "price": 400.0}],
+            ),
+            headers=admin_headers,
+        )
+        assert response.status_code == 200
+
+        stored = await Booking.get(PydanticObjectId(booking_id))
+        assert stored.payment_status == "fully_charged"
+        assert [entry.status for entry in stored.charge_schedule] == ["done"]
+        assert outstanding_amount(stored, date(2026, 7, 24)) == Decimal("0.00")
+
+    async def test_an_unpaid_booking_keeps_its_card_verified_status(
+        self, client, guest, cancellation_policy, admin_headers
+    ):
+        # A free-cancellation booking is Active with a verified card and
+        # nothing charged; re-deriving payment_status from a zero
+        # amount_charged would wrongly read as partially charged.
+        created = await client.post(
+            "/bookings", json=_booking_payload(guest.id, cancellation_policy.id), headers=admin_headers
+        )
+        booking_id = created.json()["_id"]
+        booking = await Booking.get(PydanticObjectId(booking_id))
+        await booking.set({Booking.status: "Active", Booking.payment_status: "card_verified"})
+
+        response = await client.put(
+            f"/bookings/{booking_id}",
+            json=_booking_payload(
+                guest.id,
+                cancellation_policy.id,
+                date_ranges=[{"begin_date": "2026-07-01", "end_date": "2026-07-06", "price": 500.0}],
+            ),
+            headers=admin_headers,
+        )
+        assert response.status_code == 200
+
+        stored = await Booking.get(PydanticObjectId(booking_id))
+        assert stored.payment_status == "card_verified"
+        assert [entry.status for entry in stored.charge_schedule] == ["pending"]
+
+
+class TestUpdateBookingRechecksAvailability:
+    """A Pending booking blocks nothing, so its dates can go stale while it
+    sits in checkout. Moving it has to be checked against what is actually
+    booked or closed — the unique index on booked_nights only catches Active
+    bookings clashing with each other."""
+
+    async def _active_booking(self, client, guest, cancellation_policy, admin_headers, date_ranges):
+        created = await client.post(
+            "/bookings",
+            json=_booking_payload(guest.id, cancellation_policy.id, date_ranges=date_ranges),
+            headers=admin_headers,
+        )
+        booking = await Booking.get(PydanticObjectId(created.json()["_id"]))
+        await booking.set(
+            {Booking.status: "Active", Booking.booked_nights: nights_of_ranges(booking.date_ranges)}
+        )
+        return booking
+
+    async def test_moving_a_pending_booking_onto_taken_nights_is_refused(
+        self, client, guest, other_guest, cancellation_policy, admin_headers, other_guest_headers, plan, price
+    ):
+        await self._active_booking(
+            client,
+            guest,
+            cancellation_policy,
+            admin_headers,
+            [{"begin_date": "2026-07-10", "end_date": "2026-07-15", "price": 500.0}],
+        )
+        created = await client.post(
+            "/bookings", json=_plan_payload(other_guest.id, plan.name), headers=other_guest_headers
+        )
+        booking_id = created.json()["_id"]
+
+        response = await client.put(
+            f"/bookings/{booking_id}",
+            json=_plan_payload(
+                other_guest.id,
+                plan.name,
+                date_ranges=[{"begin_date": "2026-07-12", "end_date": "2026-07-14"}],
+            ),
+            headers=other_guest_headers,
+        )
+        assert response.status_code == 409
+
+        stored = await Booking.get(PydanticObjectId(booking_id))
+        assert stored.date_ranges[0].begin_date == date(2026, 7, 1)
+
+    async def test_moving_a_pending_booking_onto_a_closure_is_refused(
+        self, client, guest, cancellation_policy, guest_headers, closure, plan, price
+    ):
+        created = await client.post(
+            "/bookings", json=_plan_payload(guest.id, plan.name), headers=guest_headers
+        )
+        booking_id = created.json()["_id"]
+
+        # The closure fixture blocks 2026-08-01 to 2026-08-05.
+        response = await client.put(
+            f"/bookings/{booking_id}",
+            json=_plan_payload(
+                guest.id,
+                plan.name,
+                date_ranges=[{"begin_date": "2026-08-02", "end_date": "2026-08-04"}],
+            ),
+            headers=guest_headers,
+        )
+        assert response.status_code == 409
+
+    async def test_free_dates_are_still_accepted(
+        self, client, guest, other_guest, cancellation_policy, admin_headers, guest_headers, plan, price
+    ):
+        await self._active_booking(
+            client,
+            other_guest,
+            cancellation_policy,
+            admin_headers,
+            [{"begin_date": "2026-07-10", "end_date": "2026-07-15", "price": 500.0}],
+        )
+        created = await client.post(
+            "/bookings", json=_plan_payload(guest.id, plan.name), headers=guest_headers
+        )
+        booking_id = created.json()["_id"]
+
+        response = await client.put(
+            f"/bookings/{booking_id}",
+            json=_plan_payload(
+                guest.id,
+                plan.name,
+                # Checkout on the other booking's check-in day: end_date is
+                # exclusive, so these do not overlap.
+                date_ranges=[{"begin_date": "2026-07-06", "end_date": "2026-07-10"}],
+            ),
+            headers=guest_headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["date_ranges"][0]["end_date"] == "2026-07-10"
 
 
 class TestCancelBooking:

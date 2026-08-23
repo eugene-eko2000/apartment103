@@ -11,7 +11,14 @@ from app.api.deps import (
     ensure_can_access_booking,
     get_current_principal,
 )
-from app.models.booking import Booking, BookingCancellationPolicy, BookingDateRange, nights_of_ranges
+from app.core.money import CHARGE_TOLERANCE, format_money
+from app.models.booking import (
+    Booking,
+    BookingCancellationPolicy,
+    BookingDateRange,
+    nights_of_ranges,
+    total_price_of,
+)
 from app.models.cancellation_policy import CancellationPolicy
 from app.models.guest import Currency, Guest
 from app.models.plan import Plan
@@ -25,8 +32,9 @@ from app.schemas.booking import (
     BookingRangeDisplay,
     BookingScheduleDisplay,
 )
+from app.services.availability import find_overlapping_ranges
 from app.services.booking_pricing import UnpricedDatesError, price_date_ranges
-from app.services.charge_schedule import build_charge_schedule
+from app.services.charge_schedule import build_charge_schedule, sync_charge_schedule_status
 from app.services.currency_service import convert_amount_with_rates, rates_for
 from app.services.payment_reconciliation import settle_cancellation
 
@@ -265,17 +273,85 @@ async def update_booking(
     ensure_can_access_booking(principal, booking)
     if not principal.is_admin and payload.guest_id != principal.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Guests may only book for themselves")
+    # A guest may only edit a booking that hasn't been paid for yet — the same
+    # rule delete_booking applies. The guest-facing edit is the booking widget
+    # re-submitting a still-Pending booking after a Back out of checkout; once
+    # money has moved, re-pricing a stay is an admin action, and one that has
+    # to leave the charges reconciled (see below).
+    if not principal.is_admin and booking.status != "Pending":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only a pending booking can be edited; cancel it instead.",
+        )
+    # A Cancelled booking is settled: its charges and their schedule are the
+    # record of what was owed for the stay that was called off, and rebuilding
+    # the schedule from new terms would leave them describing a stay nobody
+    # was charged for.
+    if booking.status == "Cancelled":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A cancelled booking cannot be edited")
     guest = await get_or_404(Guest, payload.guest_id, "Guest")
     date_ranges, cancellation_policy = await _resolve_terms(payload, principal)
+    # Everything already captured is denominated in the booking's currency, so
+    # re-denominating the stay under it would compare (and accrue against)
+    # amounts in two different currencies.
+    if booking.amount_charged > 0 and payload.currency != booking.currency:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"This booking has already been charged in {booking.currency}; its currency cannot be changed.",
+        )
+    # There is no refund path anywhere in this app (see
+    # app.services.payment_reconciliation.settle_cancellation): money only
+    # ever accrues towards the total. An edit that drops the total below what
+    # has already been captured would strand an overpayment, so it is refused
+    # rather than silently stored.
+    new_total = total_price_of(date_ranges)
+    if booking.amount_charged > new_total + CHARGE_TOLERANCE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"{format_money(booking.amount_charged, booking.currency)} has already been charged for this "
+                f"booking; the new total of {format_money(new_total, booking.currency)} would be lower. "
+                "Cancel the booking instead."
+            ),
+        )
+    dates_changed = [(r.begin_date, r.end_date) for r in date_ranges] != [
+        (r.begin_date, r.end_date) for r in booking.date_ranges
+    ]
     booking.guest = guest
     booking.currency = payload.currency
     booking.date_ranges = date_ranges
     booking.cancellation_policy = _snapshot_cancellation_policy(cancellation_policy)
     booking.charge_schedule = build_charge_schedule(booking)
+    # The schedule was just rebuilt from new terms, so the entries covered by
+    # what has already been captured have to be re-marked done, and the
+    # payment status re-derived against the new total — an edit that raises it
+    # reopens a fully_charged booking for the accrual job to top up, one that
+    # lowers it (to no less than amount_charged, per the guard above) closes
+    # it off.
+    sync_charge_schedule_status(booking)
+    if booking.amount_charged > 0:
+        booking.payment_status = (
+            "fully_charged"
+            if booking.amount_charged >= booking.total_price - CHARGE_TOLERANCE
+            else "partially_charged"
+        )
     # Only an Active booking may hold nights; recompute them in the same write
     # so a date edit on an already-paid booking keeps the unique constraint
     # (and therefore the public calendar) in sync with the new dates.
     booking.booked_nights = nights_of_ranges(booking.date_ranges) if booking.status == "Active" else []
+    if dates_changed:
+        # New dates are re-checked the same way payment does it: the unique
+        # index below only catches other *Active* bookings, and only once this
+        # booking is Active itself, so a Pending booking could otherwise be
+        # moved onto nights another guest has already paid for, or onto a
+        # closure imported from Airbnb/Booking.com.
+        overlapping = await find_overlapping_ranges(booking)
+        if overlapping:
+            dates = ", ".join(f"{r.begin_date.isoformat()} to {r.end_date.isoformat()}" for r in overlapping)
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Dates {dates} are no longer available. Please choose different dates.",
+            )
     try:
         await booking.save()
     except DuplicateKeyError as exc:
