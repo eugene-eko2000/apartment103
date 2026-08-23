@@ -64,7 +64,11 @@ class BookingCreate(BaseModel):
     plan_name: str | None = None
     cancellation_policy_id: PydanticObjectId | None = None
     currency: Currency = "CHF"
-    date_ranges: list[BookingDateRangeInput] = Field(default_factory=list)
+    # Required and non-empty: a booking with no nights has no check-in date,
+    # and build_charge_schedule derives one with min() over these ranges — an
+    # empty list would surface as a 500 from deep in the pricing code rather
+    # than as a rejected payload. Every real caller sends at least one range.
+    date_ranges: list[BookingDateRangeInput] = Field(min_length=1)
 
 
 class BookedDateRange(BaseModel):

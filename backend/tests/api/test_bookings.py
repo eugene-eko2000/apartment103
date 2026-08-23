@@ -285,6 +285,25 @@ class TestUpdateBooking:
         assert response.status_code == 200
         assert response.json()["currency"] == "USD"
 
+    async def test_rejects_an_update_that_empties_the_date_ranges(
+        self, client, guest, guest_headers, plan, price
+    ):
+        create_response = await client.post(
+            "/bookings",
+            json=_plan_payload(guest.id, plan.name),
+            headers=guest_headers,
+        )
+        booking_id = create_response.json()["_id"]
+
+        # The update path rebuilds the charge schedule too, so it needs the
+        # same guarantee of at least one range that create does.
+        response = await client.put(
+            f"/bookings/{booking_id}",
+            json=_plan_payload(guest.id, plan.name, date_ranges=[]),
+            headers=guest_headers,
+        )
+        assert response.status_code == 422
+
     async def test_guest_cannot_update_other_guest_booking(
         self, client, guest, other_guest, cancellation_policy, admin_headers, other_guest_headers, plan, price):
         create_response = await client.post(
@@ -770,6 +789,40 @@ class TestPricesAreServerSide:
                 guest.id,
                 plan.name,
                 date_ranges=[{"begin_date": "2026-07-05", "end_date": "2026-07-01"}],
+            ),
+            headers=guest_headers,
+        )
+        assert response.status_code == 422
+
+    async def test_rejects_a_stay_with_no_date_ranges(
+        self, client, guest, plan, price, guest_headers
+    ):
+        # Without this an empty list reaches build_charge_schedule, whose
+        # min() over the ranges raises ValueError as an unhandled 500.
+        response = await client.post(
+            "/bookings",
+            json=_plan_payload(guest.id, plan.name, date_ranges=[]),
+            headers=guest_headers,
+        )
+        assert response.status_code == 422
+
+    async def test_rejects_a_payload_omitting_date_ranges_entirely(
+        self, client, guest, plan, price, guest_headers
+    ):
+        payload = _plan_payload(guest.id, plan.name)
+        del payload["date_ranges"]
+        response = await client.post("/bookings", json=payload, headers=guest_headers)
+        assert response.status_code == 422
+
+    async def test_rejects_a_zero_night_stay(
+        self, client, guest, plan, price, guest_headers
+    ):
+        response = await client.post(
+            "/bookings",
+            json=_plan_payload(
+                guest.id,
+                plan.name,
+                date_ranges=[{"begin_date": "2026-07-01", "end_date": "2026-07-01"}],
             ),
             headers=guest_headers,
         )
