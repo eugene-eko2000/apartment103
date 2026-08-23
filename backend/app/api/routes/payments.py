@@ -414,13 +414,33 @@ async def _apply_successful_charge(
             "$slice": -_MAX_WEBHOOK_EVENTS,
         }
     try:
-        await booking.update(update)
+        result = await Booking.get_pymongo_collection().update_one(
+            {
+                "_id": booking.id,
+                # This is the idempotency guard for the charge itself: two
+                # in-flight deliveries of the same event can both pass the
+                # PaymentEvent duplicate check in stripe_webhook, so the $push
+                # + $inc must not run for a PaymentIntent whose charge is
+                # already on the booking. The $ne makes the whole write a
+                # no-op for the loser instead of double-applying the charge.
+                "charges.stripe_payment_intent_id": {"$ne": payment_intent["id"]},
+            },
+            update,
+        )
     except DuplicateKeyError:
         # The $set of booked_nights hit the unique index: another Active
         # booking already owns one of these nights. The whole update failed
         # atomically, so no charge was recorded — refund the guest and reject.
         logger.warning("Booking %s lost the availability race (payment intent)", booking.id)
         await _reject_dates_taken(booking, event, payment_intent_id=payment_intent["id"])
+        return
+
+    if result.modified_count == 0:
+        # The charge for this PaymentIntent is already recorded (the $ne
+        # filter above didn't match), so this is a redelivery or a concurrent
+        # duplicate. Applying again would double the charge — and re-run the
+        # activation/email side effects — so stop here. The event still gets
+        # its canonical PaymentEvent row in stripe_webhook below.
         return
 
     if activating:
@@ -516,11 +536,18 @@ async def stripe_webhook(request: Request) -> dict[str, str]:
         else:
             logger.warning("Setup intent %s arrived for missing booking %s", obj.get("id"), booking_id_str)
 
-    await PaymentEvent(
-        stripe_event_id=event.id,
-        event_type=event.type,
-        processed_at=datetime.now(timezone.utc),
-        booking_id=booking.id if booking else None,
-        data=obj,
-    ).insert()
+    try:
+        await PaymentEvent(
+            stripe_event_id=event.id,
+            event_type=event.type,
+            processed_at=datetime.now(timezone.utc),
+            booking_id=booking.id if booking else None,
+            data=obj,
+        ).insert()
+    except DuplicateKeyError:
+        # Another in-flight delivery already claimed this event. The charge
+        # side was deduped atomically in _apply_successful_charge, so there is
+        # nothing left to do but ack the redelivery — 500ing on the unique
+        # stripe_event_id index would only make Stripe retry it again.
+        return {"status": "duplicate"}
     return {"status": "ok"}

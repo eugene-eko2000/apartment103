@@ -623,6 +623,45 @@ class TestStripeWebhook:
         assert booking.amount_charged == pytest.approx(1000.0)
         assert len(booking.charges) == 1
 
+    async def test_concurrent_duplicate_delivery_is_not_double_charged(
+        self, monkeypatch, client, guest, cancellation_policy, guest_headers, admin_headers):
+        # Two in-flight deliveries of the same event can both pass the
+        # PaymentEvent.find_one precheck before either inserts the ledger row.
+        # Force that window by making the precheck always miss: the charge
+        # dedupe in _apply_successful_charge must prevent the double charge,
+        # and the unique stripe_event_id index must turn the loser into a
+        # clean "duplicate" ack rather than a 500.
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers, price=1000.0)
+        event = SimpleNamespace(
+            id="evt_race_1",
+            type="payment_intent.succeeded",
+            data=SimpleNamespace(
+                object={
+                    "id": "pi_race",
+                    "amount": 100000,
+                    "currency": "chf",
+                    "metadata": {"booking_id": booking_id, "reason": "initial_charge"},
+                }
+            ),
+        )
+        monkeypatch.setattr(stripe_service, "construct_webhook_event", lambda payload, sig: event)
+
+        async def always_miss(_query):
+            return None
+
+        monkeypatch.setattr(PaymentEvent, "find_one", always_miss)
+
+        first = await client.post("/webhooks/stripe", content=b"{}", headers={"stripe-signature": "sig"})
+        second = await client.post("/webhooks/stripe", content=b"{}", headers={"stripe-signature": "sig"})
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert second.json()["status"] == "duplicate"
+
+        booking = await Booking.get(PydanticObjectId(booking_id))
+        assert booking.amount_charged == pytest.approx(1000.0)
+        assert len(booking.charges) == 1
+        assert len(booking.webhook_events) == 1
+
     async def test_payment_activation_cancels_overlapping_pending_booking(
         self, monkeypatch, client, guest, other_guest, cancellation_policy, guest_headers, other_guest_headers, admin_headers):
         # Two guests both have Pending bookings for the same dates. When one
