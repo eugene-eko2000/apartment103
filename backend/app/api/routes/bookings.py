@@ -3,7 +3,6 @@ from decimal import Decimal
 from beanie import PydanticObjectId
 from beanie.operators import In
 from fastapi import APIRouter, Depends, HTTPException, status
-from pymongo.errors import DuplicateKeyError
 
 from app.api.common import get_or_404
 from app.api.deps import (
@@ -11,7 +10,7 @@ from app.api.deps import (
     ensure_can_access_booking,
     get_current_principal,
 )
-from app.models.booking import Booking, BookingCancellationPolicy, BookingDateRange, nights_of_ranges
+from app.models.booking import Booking, BookingCancellationPolicy, BookingDateRange
 from app.models.cancellation_policy import CancellationPolicy
 from app.models.guest import Currency, Guest
 from app.models.plan import Plan
@@ -25,6 +24,7 @@ from app.schemas.booking import (
     BookingRangeDisplay,
     BookingScheduleDisplay,
 )
+from app.services.availability import find_overlapping_ranges
 from app.services.booking_pricing import UnpricedDatesError, price_date_ranges
 from app.services.charge_schedule import build_charge_schedule
 from app.services.currency_service import convert_amount_with_rates, rates_for
@@ -265,6 +265,19 @@ async def update_booking(
     ensure_can_access_booking(principal, booking)
     if not principal.is_admin and payload.guest_id != principal.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Guests may only book for themselves")
+    # Only a still-Pending booking is safe to edit in place. Once it has left
+    # Pending it carries payment/ledger state — amount_charged, charges, and
+    # (for an Active booking) claimed nights — that rebuilding date_ranges,
+    # cancellation_policy and charge_schedule would silently invalidate: the
+    # edit could leave amount_charged > total_price and a schedule that no
+    # longer matches the charges already recorded. Changes to a charged
+    # booking have to go through the payment paths (cancel/refund) instead of
+    # rewriting money fields here.
+    if booking.status != "Pending":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only a pending booking can be edited",
+        )
     guest = await get_or_404(Guest, payload.guest_id, "Guest")
     date_ranges, cancellation_policy = await _resolve_terms(payload, principal)
     booking.guest = guest
@@ -272,17 +285,15 @@ async def update_booking(
     booking.date_ranges = date_ranges
     booking.cancellation_policy = _snapshot_cancellation_policy(cancellation_policy)
     booking.charge_schedule = build_charge_schedule(booking)
-    # Only an Active booking may hold nights; recompute them in the same write
-    # so a date edit on an already-paid booking keeps the unique constraint
-    # (and therefore the public calendar) in sync with the new dates.
-    booking.booked_nights = nights_of_ranges(booking.date_ranges) if booking.status == "Active" else []
-    try:
-        await booking.save()
-    except DuplicateKeyError as exc:
+    # A Pending booking never claims nights, so the unique booked_nights index
+    # can't backstop a date change the way it does for activation. Re-check
+    # the new dates against other Active bookings and closures here instead.
+    if await find_overlapping_ranges(booking):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="These dates overlap an existing booking",
-        ) from exc
+            detail="These dates are no longer available",
+        )
+    await booking.save()
     return booking
 
 
