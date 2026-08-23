@@ -68,3 +68,6 @@ backend/venv/
 
 # local image uploads (IMAGE_STORAGE_PATH default; see app/core/config.py)
 backend/var/
+
+# Evaluation results
+evals
