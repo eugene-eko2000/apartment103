@@ -1,3 +1,4 @@
+import asyncio
 from datetime import date, timedelta
 from types import SimpleNamespace
 
@@ -618,6 +619,84 @@ class TestStripeWebhook:
         assert first.status_code == 200
         assert second.status_code == 200
         assert second.json()["status"] == "duplicate"
+
+        booking = await Booking.get(PydanticObjectId(booking_id))
+        assert booking.amount_charged == pytest.approx(1000.0)
+        assert len(booking.charges) == 1
+
+    async def test_simultaneous_deliveries_of_one_event_charge_once(
+        self, monkeypatch, client, guest, cancellation_policy, guest_headers, admin_headers):
+        """Two deliveries of the same event in flight at once.
+
+        Stripe redelivers until it sees a 2xx, so the second delivery can
+        arrive while the first is still mid-flight. Both must not apply the
+        charge: exactly one wins the PaymentEvent insert, the other is
+        turned away as a duplicate before any money is recorded.
+        """
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers, price=1000.0)
+        event = SimpleNamespace(
+            id="evt_race_1",
+            type="payment_intent.succeeded",
+            data=SimpleNamespace(
+                object={
+                    "id": "pi_race",
+                    "amount": 100000,
+                    "currency": "chf",
+                    "metadata": {"booking_id": booking_id, "reason": "initial_charge"},
+                }
+            ),
+        )
+        monkeypatch.setattr(stripe_service, "construct_webhook_event", lambda payload, sig: event)
+
+        first, second = await asyncio.gather(
+            client.post("/webhooks/stripe", content=b"{}", headers={"stripe-signature": "sig"}),
+            client.post("/webhooks/stripe", content=b"{}", headers={"stripe-signature": "sig"}),
+        )
+        assert {first.status_code, second.status_code} == {200}
+        assert sorted([first.json()["status"], second.json()["status"]]) == ["duplicate", "ok"]
+
+        booking = await Booking.get(PydanticObjectId(booking_id))
+        assert booking.amount_charged == pytest.approx(1000.0)
+        assert len(booking.charges) == 1
+        assert await PaymentEvent.find(PaymentEvent.stripe_event_id == "evt_race_1").count() == 1
+
+    async def test_failed_processing_releases_the_lock_and_redelivery_charges_once(
+        self, monkeypatch, client, guest, cancellation_policy, guest_headers, admin_headers):
+        """A delivery that blows up after recording the charge must not
+        strand the event: the lock is released so Stripe's redelivery is
+        processed rather than dismissed as a duplicate — and the redelivery
+        must not charge the guest a second time."""
+        booking_id = await _create_booking(client, guest, cancellation_policy, admin_headers, price=1000.0)
+        event = SimpleNamespace(
+            id="evt_retry_1",
+            type="payment_intent.succeeded",
+            data=SimpleNamespace(
+                object={
+                    "id": "pi_retry",
+                    "amount": 100000,
+                    "currency": "chf",
+                    "metadata": {"booking_id": booking_id, "reason": "initial_charge"},
+                }
+            ),
+        )
+        monkeypatch.setattr(stripe_service, "construct_webhook_event", lambda payload, sig: event)
+
+        # Blow up after the charge has been written, the way a failing
+        # follow-up step would.
+        async def boom(booking, charge):
+            raise RuntimeError("balance transaction lookup exploded")
+
+        monkeypatch.setattr(payments_routes, "_attach_fee_breakdown", boom)
+        with pytest.raises(RuntimeError):
+            await client.post("/webhooks/stripe", content=b"{}", headers={"stripe-signature": "sig"})
+
+        # Lock released: the event is not on record, so Stripe may retry.
+        assert await PaymentEvent.find(PaymentEvent.stripe_event_id == "evt_retry_1").count() == 0
+
+        monkeypatch.undo()
+        monkeypatch.setattr(stripe_service, "construct_webhook_event", lambda payload, sig: event)
+        retry = await client.post("/webhooks/stripe", content=b"{}", headers={"stripe-signature": "sig"})
+        assert retry.status_code == 200
 
         booking = await Booking.get(PydanticObjectId(booking_id))
         assert booking.amount_charged == pytest.approx(1000.0)

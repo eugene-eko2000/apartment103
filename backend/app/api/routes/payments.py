@@ -414,13 +414,37 @@ async def _apply_successful_charge(
             "$slice": -_MAX_WEBHOOK_EVENTS,
         }
     try:
-        await booking.update(update)
+        # Guarded on the PaymentIntent id rather than issued as a plain
+        # booking.update(): recording a charge has to be idempotent in its
+        # own right. An event whose processing failed part-way through
+        # releases its idempotency lock (see stripe_webhook) so Stripe's
+        # redelivery can finish the job — and this filter is what stops that
+        # second run from $push-ing the same charge and $inc-ing its amount
+        # a second time.
+        result = await Booking.get_pymongo_collection().update_one(
+            {
+                "_id": booking.id,
+                "charges.stripe_payment_intent_id": {"$ne": payment_intent["id"]},
+            },
+            update,
+        )
     except DuplicateKeyError:
         # The $set of booked_nights hit the unique index: another Active
         # booking already owns one of these nights. The whole update failed
         # atomically, so no charge was recorded — refund the guest and reject.
         logger.warning("Booking %s lost the availability race (payment intent)", booking.id)
         await _reject_dates_taken(booking, event, payment_intent_id=payment_intent["id"])
+        return
+    if result.matched_count == 0:
+        # Either this exact charge is already on the booking (a redelivery
+        # of an event that had applied it before failing later on) or the
+        # booking has since been deleted. Nothing was written either way, so
+        # stop here rather than re-running the follow-ups below.
+        logger.warning(
+            "Charge %s not applied to booking %s: already recorded, or booking gone",
+            payment_intent["id"],
+            booking.id,
+        )
         return
 
     if activating:
@@ -472,9 +496,6 @@ async def stripe_webhook(request: Request) -> dict[str, str]:
     except (ValueError, stripe.SignatureVerificationError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid webhook signature") from exc
 
-    if await PaymentEvent.find_one(PaymentEvent.stripe_event_id == event.id) is not None:
-        return {"status": "duplicate"}
-
     # stripe-python's StripeObject no longer subclasses dict, so it doesn't
     # support .get() — convert to a plain (recursively-converted) dict here so
     # the handlers below, which use .get() throughout, keep working. Tests
@@ -487,40 +508,66 @@ async def stripe_webhook(request: Request) -> dict[str, str]:
     if booking_id_str:
         booking = await Booking.get(PydanticObjectId(booking_id_str))
 
-    if booking is not None:
-        # Every event that references this booking is logged on it, and the
-        # charge/status update below (if any) is applied in the very same
-        # write. The raw payload is not duplicated here — it is stored once,
-        # on the PaymentEvent inserted below, and read back through
-        # GET /payment-events/{stripe_event_id}.
-        event_ref = BookingWebhookEvent(stripe_event_id=event.id, event_type=event.type)
-        booking.webhook_events.append(event_ref)
-        handler = _WEBHOOK_HANDLERS.get(event.type)
-        if handler is not None:
-            await handler(booking, obj, event_ref)
-        else:
-            await _commit(booking, event_ref)
-    elif booking_id_str and event.type in ("payment_intent.succeeded", "setup_intent.succeeded"):
-        # This payment named a booking that no longer exists — deleted by an
-        # admin, or by an older release that removed the loser of a date race
-        # outright. Unwind the charge so the guest isn't left paying for a
-        # booking that isn't there. A verified card (setup_intent) carries no
-        # charge, so there is nothing to refund on that path.
-        #
-        # Gated on booking_id_str: without it, *any* succeeded PaymentIntent
-        # on this Stripe account that this app didn't create — a dashboard
-        # payment link, an invoice, a manual charge — would land here with
-        # booking None and be refunded.
-        if event.type == "payment_intent.succeeded":
-            await _refund_safely(obj["id"], f"booking {booking_id_str} no longer exists")
-        else:
-            logger.warning("Setup intent %s arrived for missing booking %s", obj.get("id"), booking_id_str)
-
-    await PaymentEvent(
+    # Claim the event *before* applying it: the unique index on
+    # stripe_event_id makes this insert the idempotency lock. Stripe retries
+    # a delivery it hasn't seen a 2xx for, so the same event can be in flight
+    # twice at once; a read-then-write check let both deliveries see "not
+    # seen yet", both apply the charge, and only then have the loser fail on
+    # this insert — a duplicate charge with a single ledger row to show for
+    # it. Losing the insert now means losing it before any money moves.
+    payment_event = PaymentEvent(
         stripe_event_id=event.id,
         event_type=event.type,
         processed_at=datetime.now(timezone.utc),
         booking_id=booking.id if booking else None,
         data=obj,
-    ).insert()
+    )
+    try:
+        await payment_event.insert()
+    except DuplicateKeyError:
+        return {"status": "duplicate"}
+
+    try:
+        if booking is not None:
+            # Every event that references this booking is logged on it, and
+            # the charge/status update below (if any) is applied in the very
+            # same write. The raw payload is not duplicated here — it is
+            # stored once, on the PaymentEvent inserted above, and read back
+            # through GET /payment-events/{stripe_event_id}.
+            event_ref = BookingWebhookEvent(stripe_event_id=event.id, event_type=event.type)
+            booking.webhook_events.append(event_ref)
+            handler = _WEBHOOK_HANDLERS.get(event.type)
+            if handler is not None:
+                await handler(booking, obj, event_ref)
+            else:
+                await _commit(booking, event_ref)
+        elif booking_id_str and event.type in ("payment_intent.succeeded", "setup_intent.succeeded"):
+            # This payment named a booking that no longer exists — deleted by
+            # an admin, or by an older release that removed the loser of a
+            # date race outright. Unwind the charge so the guest isn't left
+            # paying for a booking that isn't there. A verified card
+            # (setup_intent) carries no charge, so there is nothing to refund
+            # on that path.
+            #
+            # Gated on booking_id_str: without it, *any* succeeded
+            # PaymentIntent on this Stripe account that this app didn't
+            # create — a dashboard payment link, an invoice, a manual
+            # charge — would land here with booking None and be refunded.
+            if event.type == "payment_intent.succeeded":
+                await _refund_safely(obj["id"], f"booking {booking_id_str} no longer exists")
+            else:
+                logger.warning("Setup intent %s arrived for missing booking %s", obj.get("id"), booking_id_str)
+    except Exception:
+        # Applying the event failed, so release the lock: holding it would
+        # turn Stripe's redelivery away as a "duplicate" and lose the event
+        # for good. The retry is safe to re-run — _apply_successful_charge
+        # only records a charge whose PaymentIntent isn't already on the
+        # booking, so whatever did land before the failure is not applied
+        # twice.
+        try:
+            await payment_event.delete()
+        except Exception:
+            # Never let the cleanup mask what actually went wrong.
+            logger.exception("Failed to release the lock on event %s", event.id)
+        raise
     return {"status": "ok"}
