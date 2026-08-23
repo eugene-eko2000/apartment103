@@ -66,6 +66,17 @@ class BookingCreate(BaseModel):
     currency: Currency = "CHF"
     date_ranges: list[BookingDateRangeInput] = Field(default_factory=list)
 
+    @model_validator(mode="after")
+    def _check_has_date_ranges(self) -> "BookingCreate":
+        # An empty stay reaches build_charge_schedule, whose `min(...)` over
+        # date_ranges raises ValueError on an empty sequence — a 500 instead
+        # of the clean 422 a malformed payload deserves. Enforced here rather
+        # than defensively in the service, so create and update both reject
+        # it before any pricing/charge-schedule code runs.
+        if not self.date_ranges:
+            raise ValueError("date_ranges must contain at least one date range")
+        return self
+
 
 class BookedDateRange(BaseModel):
     """Public, guest-anonymized view of a booking's date range."""

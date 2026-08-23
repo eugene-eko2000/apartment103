@@ -775,6 +775,28 @@ class TestPricesAreServerSide:
         )
         assert response.status_code == 422
 
+    async def test_rejects_an_empty_date_ranges_list(
+        self, client, guest, plan, price, guest_headers
+    ):
+        response = await client.post(
+            "/bookings",
+            json=_plan_payload(guest.id, plan.name, date_ranges=[]),
+            headers=guest_headers,
+        )
+        assert response.status_code == 422
+
+    async def test_rejects_a_booking_without_date_ranges(
+        self, client, guest, plan, price, guest_headers
+    ):
+        payload = _plan_payload(guest.id, plan.name)
+        del payload["date_ranges"]
+        response = await client.post(
+            "/bookings",
+            json=payload,
+            headers=guest_headers,
+        )
+        assert response.status_code == 422
+
     async def test_admin_manual_price_is_still_honoured(
         self, client, guest, price, cancellation_policy, admin_headers
     ):
