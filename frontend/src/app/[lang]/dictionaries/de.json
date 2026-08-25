@@ -238,7 +238,7 @@
       "cancelledStatus": "Storniert",
       "cancelButton": "Stornieren",
       "cancelQuestion": "Möchten Sie diese Buchung wirklich stornieren?",
-      "chargeNotice": "Ihnen werden {amount} des Gesamtpreises berechnet.",
+      "chargeNotice": "Es kostet Sie {amount} des Gesamtpreises, die Ihnen bereits berechnet wurden.",
       "confirmCancel": "Buchung stornieren",
       "keepBooking": "Nicht stornieren",
       "detailsModal": {

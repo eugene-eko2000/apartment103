@@ -238,7 +238,7 @@
       "cancelledStatus": "Annulée",
       "cancelButton": "Annuler",
       "cancelQuestion": "Êtes-vous sûr de vouloir annuler cette réservation ?",
-      "chargeNotice": "Vous serez facturé {amount} du prix total.",
+      "chargeNotice": "Cela vous coûtera {amount} du prix total, déjà prélevés précédemment.",
       "confirmCancel": "Annuler la réservation",
       "keepBooking": "Ne pas annuler",
       "detailsModal": {

@@ -238,7 +238,7 @@
       "cancelledStatus": "Cancellata",
       "cancelButton": "Cancella",
       "cancelQuestion": "Sei sicuro di voler cancellare questa prenotazione?",
-      "chargeNotice": "Ti verrà addebitato {amount} del prezzo totale.",
+      "chargeNotice": "Ti costerà {amount} del prezzo totale, già addebitati in precedenza.",
       "confirmCancel": "Cancella prenotazione",
       "keepBooking": "Non cancellare",
       "detailsModal": {

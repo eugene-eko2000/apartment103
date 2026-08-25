@@ -238,7 +238,7 @@
       "cancelledStatus": "Cancelled",
       "cancelButton": "Cancel",
       "cancelQuestion": "Are you sure you want to cancel this booking?",
-      "chargeNotice": "You'll be charged {amount} of the total price.",
+      "chargeNotice": "It will cost you {amount} of the total price, which was already charged to you.",
       "confirmCancel": "Cancel booking",
       "keepBooking": "Don't cancel",
       "detailsModal": {
