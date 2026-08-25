@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { format, differenceInCalendarDays, parse, parseISO } from "date-fns";
 import { enUS, de, fr, it } from "date-fns/locale";
 import type { Locale as DateFnsLocale } from "date-fns";
-import type { Booking, BookingCharge, BookingDisplay } from "@/lib/api";
+import { ApiError, type Booking, type BookingCharge, type BookingDisplay } from "@/lib/api";
 import { formatPrice } from "@/lib/currency-config";
 import { useCurrency } from "@/lib/currency-context";
-import { CancellationTimeline } from "@/components/CancellationTimeline";
+import { applicableRefundPercentage } from "@/lib/refund";
+import { CancellationTimeline, fillForRefund } from "@/components/CancellationTimeline";
 import type { Locale } from "@/lib/i18n-config";
 
 const DATE_FNS_LOCALES: Record<Locale, DateFnsLocale> = { en: enUS, de, fr, it };
@@ -37,6 +38,11 @@ export interface BookingDetailsDict {
   chargeReasonInitial: string;
   chargeReasonAccrual: string;
   chargeReasonSettlement: string;
+  cancelledStatus: string;
+  cancelQuestion: string;
+  chargeNotice: string;
+  confirmCancel: string;
+  keepBooking: string;
 }
 
 function earliestBeginDate(booking: Booking): Date {
@@ -68,15 +74,20 @@ export default function BookingDetailsModal({
   dict,
   lang,
   onClose,
+  onCancel,
 }: {
   booking: Booking;
   display: BookingDisplay;
   dict: BookingDetailsDict;
   lang: Locale;
   onClose: () => void;
+  onCancel: (booking: Booking) => Promise<void>;
 }) {
   const { currency: preferredCurrency } = useCurrency();
   const dateFnsLocale = DATE_FNS_LOCALES[lang];
+  const [confirming, setConfirming] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -90,13 +101,40 @@ export default function BookingDetailsModal({
 
   // display.charges/charge_schedule are index-aligned with booking's own
   // (unfiltered) lists — pair them up before filtering by status so the
-  // amount for each entry still lines up after the filter.
+  // amount for each entry still lines up after the filter. Entries without
+  // a converted amount are dropped: cancelling from here adds a settlement
+  // charge to the booking right away, while its display amount only arrives
+  // with the follow-up currency-conversion request.
   const paidCharges = booking.charges
     .map((charge, i) => ({ charge, amount: display.charges[i] }))
-    .filter((entry) => entry.charge.status === "succeeded");
+    .filter((entry) => entry.charge.status === "succeeded" && entry.amount !== undefined);
   const upcomingCharges = booking.charge_schedule
     .map((entry, i) => ({ entry, amount: display.charge_schedule[i] }))
-    .filter((x) => x.entry.status === "pending");
+    .filter((x) => x.entry.status === "pending" && x.amount !== undefined);
+
+  const isCancelled = booking.status === "Cancelled";
+  const refundPercentage = applicableRefundPercentage(
+    booking.cancellation_policy.rules,
+    differenceInCalendarDays(earliestBeginDate(booking), new Date())
+  );
+  const chargePercentage = 1 - refundPercentage;
+  // display.total_price is already converted server-side; the refund
+  // percentage is plain arithmetic, not currency exchange.
+  const chargeAmount = display.total_price * chargePercentage;
+  // Same gradient scale as the cancellation timeline bars, keyed by the
+  // underlying refund rate so the colors line up with that visualization.
+  const chargeFill = fillForRefund(refundPercentage);
+
+  const handleCancel = () => {
+    setCancelling(true);
+    setCancelError(null);
+    onCancel(booking)
+      // The parent re-renders us with the now-cancelled booking, so the
+      // footer falls back to the cancelled state on its own.
+      .then(() => setConfirming(false))
+      .catch((err) => setCancelError(err instanceof ApiError ? err.message : String(err)))
+      .finally(() => setCancelling(false));
+  };
 
   return createPortal(
     <div
@@ -224,6 +262,77 @@ export default function BookingDetailsModal({
                   </li>
                 ))}
               </ul>
+            )}
+          </div>
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 shrink-0 space-y-3">
+          {!isCancelled && confirming && (
+            <>
+              <p className="text-sm text-gray-700 dark:text-gray-300">
+                {(() => {
+                  const [before, after] = dict.chargeNotice.split("{amount}");
+                  return (
+                    <>
+                      {before}
+                      <span
+                        className="font-semibold"
+                        style={{ color: `rgb(${chargeFill[0]}, ${chargeFill[1]}, ${chargeFill[2]})` }}
+                      >
+                        {price(chargeAmount)} ({Math.round(chargePercentage * 100)}%)
+                      </span>
+                      {after}
+                    </>
+                  );
+                })()}
+              </p>
+              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{dict.cancelQuestion}</p>
+            </>
+          )}
+          {cancelError && <p className="text-xs text-red-600 dark:text-red-400">{cancelError}</p>}
+
+          <div className="flex items-center justify-end gap-2">
+            {isCancelled ? (
+              <p className="mr-auto text-xs font-semibold text-red-500 dark:text-red-400">{dict.cancelledStatus}</p>
+            ) : confirming ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setConfirming(false)}
+                  disabled={cancelling}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer disabled:opacity-50"
+                >
+                  {dict.keepBooking}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  disabled={cancelling}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-red-600 hover:bg-red-700 cursor-pointer disabled:opacity-50"
+                >
+                  {dict.confirmCancel}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setCancelError(null);
+                  setConfirming(true);
+                }}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900 hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer"
+              >
+                {dict.confirmCancel}
+              </button>
+            )}
+            {!confirming && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-teal-700 hover:bg-teal-800 cursor-pointer"
+              >
+                {dict.close}
+              </button>
             )}
           </div>
         </div>

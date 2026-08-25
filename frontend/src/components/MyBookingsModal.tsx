@@ -28,7 +28,12 @@ export interface MyBookingsDict {
   chargeNotice: string;
   confirmCancel: string;
   keepBooking: string;
-  detailsModal: BookingDetailsDict;
+  // The details modal reuses the cancellation strings defined above rather
+  // than duplicating them in every locale file.
+  detailsModal: Omit<
+    BookingDetailsDict,
+    "cancelledStatus" | "cancelQuestion" | "chargeNotice" | "confirmCancel" | "keepBooking"
+  >;
 }
 
 type Status = "loading" | "loggedOut" | "loaded" | "error";
@@ -70,26 +75,30 @@ export default function MyBookingsModal({
       .catch(() => setDisplaysLoading(false));
   };
 
-  const handleCancelConfirm = (booking: Booking) => {
+  // Shared by the list row and the details modal; the caller decides how to
+  // surface a rejection.
+  const runCancel = (booking: Booking): Promise<void> => {
     const session = readGuestSession();
     if (!session) {
       setStatus("loggedOut");
-      return;
+      return Promise.reject(new Error(dict.loggedOut));
     }
     setCancellingId(booking._id);
-    setCancelError(null);
-    cancelBooking(booking._id, session.token)
+    return cancelBooking(booking._id, session.token)
       .then((updated) => {
         setBookings((prev) => prev.map((b) => (b._id === updated._id ? updated : b)));
-        setConfirmingId(null);
         // Cancellation can add a settlement charge, so the display amounts
         // (paid/upcoming breakdown) for this booking may now be stale.
         refreshDisplays();
       })
-      .catch((err) => {
-        setCancelError(err instanceof ApiError ? err.message : String(err));
-      })
       .finally(() => setCancellingId(null));
+  };
+
+  const handleCancelConfirm = (booking: Booking) => {
+    setCancelError(null);
+    runCancel(booking)
+      .then(() => setConfirmingId(null))
+      .catch((err) => setCancelError(err instanceof ApiError ? err.message : String(err)));
   };
 
   useEffect(() => {
@@ -304,9 +313,17 @@ export default function MyBookingsModal({
         <BookingDetailsModal
           booking={bookings.find((b) => b._id === detailsBooking._id) ?? detailsBooking}
           display={displays[detailsBooking._id]}
-          dict={dict.detailsModal}
+          dict={{
+            ...dict.detailsModal,
+            cancelledStatus: dict.cancelledStatus,
+            cancelQuestion: dict.cancelQuestion,
+            chargeNotice: dict.chargeNotice,
+            confirmCancel: dict.confirmCancel,
+            keepBooking: dict.keepBooking,
+          }}
           lang={lang}
           onClose={() => setDetailsBooking(null)}
+          onCancel={runCancel}
         />
       )}
     </div>,
