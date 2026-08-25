@@ -14,6 +14,7 @@ from app.models.otp_challenge import OtpChallenge
 from app.models.payment_event import PaymentEvent
 from app.models.plan import Plan
 from app.models.price import Price
+from app.models.promotion import Promotion
 
 
 async def init_mongo() -> None:
@@ -36,5 +37,6 @@ async def init_mongo() -> None:
             Image,
             Category,
             ExternalCalendar,
+            Promotion,
         ],
     )

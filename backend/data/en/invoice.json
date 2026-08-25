@@ -11,5 +11,7 @@
     "initial_charge": "Booking deposit / initial charge",
     "scheduled_accrual": "Scheduled payment installment",
     "cancellation_settlement": "Cancellation settlement charge"
-  }
+  },
+  "regular_price": "Regular price",
+  "you_save": "You save"
 }

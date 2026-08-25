@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef, useId, useEffect, useLayoutEffect } from "react";
+import { useState, useRef, useId, useEffect, useLayoutEffect, useMemo } from "react";
 import { DayPicker } from "react-day-picker";
-import type { DateRange } from "react-day-picker";
+import type { DateRange, DayButtonProps } from "react-day-picker";
 import { format, differenceInCalendarDays, parse, isBefore, isAfter, isSameDay, subDays, addDays } from "date-fns";
 import { enUS, de, fr, it } from "date-fns/locale";
 import type { Locale as DateFnsLocale } from "date-fns";
@@ -16,24 +16,32 @@ import {
   createGuest,
   createPaymentIntent,
   deleteBooking,
+  getFromPrice,
   getGuest,
+  getStayQuote,
   listBookings,
   listPublicBookedDateRanges,
   listPublicClosedDateRanges,
   listPublicPlans,
   listPublicPrices,
+  listPublicPromotions,
   registerGuestSelf,
   updateBooking,
   updateGuest,
   verifyToken,
   type Currency,
+  type FromPriceQuote,
   type GuestInput,
   type Language,
   type PaymentIntentResponse,
   type Plan,
+  type PlanQuote,
   type PublicPrice,
+  type PublicPromotion,
+  type StayQuote,
 } from "@/lib/api";
-import { findDailyRate, findLowestDailyRate, findMinStay } from "@/lib/pricing";
+import { findMinStay, hasRateFor, promotionsForDate } from "@/lib/pricing";
+import PriceWithDiscount from "@/components/PriceWithDiscount";
 import { useLocaleSwitch } from "@/lib/use-locale-switch";
 import BookingModal, { guestToForm, type BookingModalDict, type VerifiedIdentity } from "@/components/BookingModal";
 import { CancellationTimeline, refundHighlightColor } from "@/components/CancellationTimeline";
@@ -72,8 +80,18 @@ const LOCALE_SWITCH_RESUME_KEY = "booking_resume_after_locale_switch";
 // strings — kept as a constant since the FLIP effects below need the same
 // threshold read from JS (window.innerWidth) to decide whether to run.
 const MOBILE_BREAKPOINT_PX = 1024;
+// Picking a range fires a render per click, and each one would otherwise
+// start its own quote request. Short enough that the guest never notices a
+// wait, long enough that a from→to selection costs one request, not two.
+const QUOTE_DEBOUNCE_MS = 150;
+// Days in the first calendar row have no space above them for a tooltip, so
+// theirs flips below. With showOutsideDays={false} that row holds exactly
+// the first seven days of the month.
+const FIRST_CALENDAR_ROW_LAST_DAY = 7;
 
 type Child = { age: number | null };
+/** A stay quote together with what it was fetched for. */
+type QuotedStay = { beginDate: string; endDate: string; currency: Currency; quote: StayQuote };
 type GuestFlowStep = "plan" | "form" | "submitting" | "payment" | "success" | "error";
 
 export interface BookingDict {
@@ -109,6 +127,11 @@ export interface BookingDict {
   resumePendingBookingPrompt: string;
   datesTakenMessage: string;
   total: string;
+  specialOffer: string;
+  regularPrice: string;
+  youSave: string;
+  promotionPercentTooltip: string;
+  promotionAmountTooltip: string;
   modal: BookingModalDict;
 }
 
@@ -133,6 +156,20 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [prices, setPrices] = useState<PublicPrice[]>([]);
   const [bookedRanges, setBookedRanges] = useState<DateRange[]>([]);
+  // Active offers covering future dates — drives the calendar's violet
+  // highlight and its tooltip. Carries no stay price: what a stay costs
+  // comes from `quote` below.
+  const [promotions, setPromotions] = useState<PublicPromotion[]>([]);
+  // Every price this widget shows, computed server-side. `quoteResult`
+  // covers the picked dates (one entry per plan); `fromPrice` is the
+  // "from …/night" teaser shown before any dates are picked. Nothing here is
+  // multiplied on the client — see lib/pricing.ts.
+  //
+  // The quote is stored together with what it was fetched for, so a quote
+  // that no longer describes the current selection can be recognised and
+  // ignored rather than having to be cleared (see `quote` below).
+  const [quoteResult, setQuoteResult] = useState<QuotedStay | null>(null);
+  const [fromPrice, setFromPrice] = useState<FromPriceQuote | null>(null);
   const [identityModalOpen, setIdentityModalOpen] = useState(false);
   const dateRef = useRef<HTMLDivElement>(null);
   const calendarRef = useRef<HTMLDivElement>(null);
@@ -196,7 +233,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   // open must still show up as soon as the guest opens the picker again.
   const fetchAvailability = () => {
     // end_date is the checkout day (exclusive, same convention as
-    // findDailyRate), so the last disabled night is the day before it — this
+    // hasRateFor), so the last disabled night is the day before it — this
     // keeps a booking's checkout day available as another's check-in. Dates
     // closed off on other platforms use the same convention and are merged
     // into the same disabled-ranges list as actual bookings.
@@ -204,11 +241,16 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
       from: parse(r.begin_date, "yyyy-MM-dd", new Date()),
       to: subDays(parse(r.end_date, "yyyy-MM-dd", new Date()), 1),
     });
+    // Promotions ride along: they're read straight off the same calendar,
+    // and an offer created or ended elsewhere while this page stays open
+    // must show up as soon as the guest reopens the picker.
     Promise.all([
       listPublicBookedDateRanges().catch(() => []),
       listPublicClosedDateRanges().catch(() => []),
-    ]).then(([bookedRanges, closedRanges]) => {
+      listPublicPromotions(currency).catch(() => []),
+    ]).then(([bookedRanges, closedRanges, activePromotions]) => {
       setBookedRanges([...bookedRanges, ...closedRanges].map(toDateRange));
+      setPromotions(activePromotions);
     });
   };
 
@@ -216,17 +258,83 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     listPublicPlans()
       .then(setPlans)
       .catch(() => setPlans([]));
-    fetchAvailability();
   }, []);
 
-  // Prices are already converted server-side into `currency` (Stripe FX
-  // rate + commission — see backend/app/services/currency_service.py), so a
-  // currency switch re-fetches rather than recomputing anything client-side.
+  // Keyed on `currency` rather than run once: a promotion's discount amount
+  // is converted server-side, so switching currency has to re-read it — the
+  // same reason the price list below is re-fetched.
+  useEffect(() => {
+    fetchAvailability();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currency]);
+
+  // Prices are only consulted for *availability* now (which days are
+  // bookable, and the hard minimum stay) — every figure the guest sees comes
+  // from the quote endpoints below. They are still fetched per currency
+  // because min_stay_days lives on the same documents.
   useEffect(() => {
     listPublicPrices(currency)
       .then(setPrices)
       .catch(() => setPrices([]));
   }, [currency]);
+
+  // The "from …/night" teaser: the cheapest future nightly rate at the
+  // cheapest plan's ratio, with the best offer on it — all resolved on the
+  // server (see backend/app/api/routes/quotes.py).
+  useEffect(() => {
+    const controller = new AbortController();
+    getFromPrice(currency, controller.signal)
+      .then(setFromPrice)
+      .catch(() => {
+        if (!controller.signal.aborted) setFromPrice(null);
+      });
+    return () => controller.abort();
+  }, [currency]);
+
+  // The dates to quote for, in the server's own format. Also the key that
+  // decides whether a quote already in hand still describes what's on screen.
+  const quoteBeginDate = range?.from ? format(range.from, "yyyy-MM-dd") : null;
+  const quoteEndDate = range?.to ? format(range.to, "yyyy-MM-dd") : null;
+
+  // The priced answer for the picked dates, for every plan at once.
+  // Debounced so a from→to selection costs one request, and aborted so a
+  // fast re-pick can't let an older answer land after a newer one.
+  useEffect(() => {
+    if (!quoteBeginDate || !quoteEndDate) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      getStayQuote(quoteBeginDate, quoteEndDate, currency, controller.signal)
+        .then((stayQuote) =>
+          setQuoteResult({
+            beginDate: quoteBeginDate,
+            endDate: quoteEndDate,
+            currency,
+            quote: stayQuote,
+          })
+        )
+        .catch(() => {
+          // Aborted (superseded) or failed: either way the stale result
+          // below stops matching, so the spinner shows rather than a wrong
+          // figure. Nothing to record.
+        });
+    }, QUOTE_DEBOUNCE_MS);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [quoteBeginDate, quoteEndDate, currency]);
+
+  // A quote counts only while it still describes the current selection: one
+  // fetched for other dates, or in another currency, reads as absent — which
+  // is what makes the existing LoadingSpinner show instead of a figure that
+  // no longer matches what's on screen.
+  const quote =
+    quoteResult !== null &&
+    quoteResult.beginDate === quoteBeginDate &&
+    quoteResult.endDate === quoteEndDate &&
+    quoteResult.currency === currency
+      ? quoteResult.quote
+      : null;
 
   // Shared by every check-in/check-out DateField below: opening the calendar
   // always refreshes availability first, so it can never show data staler
@@ -541,34 +649,32 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const nights =
     range?.from && range?.to ? differenceInCalendarDays(range.to, range.from) : 0;
   const totalGuests = adults + children.length;
-  const matchedRate = range?.from
-    ? findDailyRate(prices, format(range.from, "yyyy-MM-dd"))
-    : findLowestDailyRate(prices, format(today, "yyyy-MM-dd"));
   const selectedPlan = plans.find((p) => p._id === selectedPlanId) ?? null;
   const visiblePlans = range?.from
     ? cheapestPerCancellationFee(plans, differenceInCalendarDays(range.from, today))
     : plans;
-  const cheapestPlanRatio = plans.length > 0 ? Math.min(...plans.map((p) => p.price_ratio)) : 1;
-  // matchedRate.dailyRate is already converted server-side into `currency`
-  // (see /prices/public?currency=... in the effect above), so everything
-  // below is plain same-currency arithmetic — no FX math on the client.
-  // dailyRateChf mirrors the same arithmetic for the "150 CHF/night"
-  // reference line shown whenever the display currency isn't CHF.
-  const pricePerNight = matchedRate ? matchedRate.dailyRate * cheapestPlanRatio : null;
-  const pricePerNightChf = matchedRate ? matchedRate.dailyRateChf * cheapestPlanRatio : null;
-  const priceTotal = pricePerNight !== null ? pricePerNight * nights : null;
-  const priceTotalChf = pricePerNightChf !== null ? pricePerNightChf * nights : null;
-  const activePrice = nights > 0 ? priceTotal : pricePerNight;
-  const activeRawPrice = nights > 0 ? priceTotalChf : pricePerNightChf;
-  const selectedPlanPricePerNight =
-    selectedPlan && matchedRate ? matchedRate.dailyRate * selectedPlan.price_ratio : null;
-  const selectedPlanPricePerNightChf =
-    selectedPlan && matchedRate ? matchedRate.dailyRateChf * selectedPlan.price_ratio : null;
-  const selectedPlanPriceTotal = selectedPlanPricePerNight !== null ? selectedPlanPricePerNight * nights : null;
-  const selectedPlanPriceTotalChf =
-    selectedPlanPricePerNightChf !== null ? selectedPlanPricePerNightChf * nights : null;
-  const chosenPlanPrice = nights > 0 ? selectedPlanPriceTotal : selectedPlanPricePerNight;
-  const chosenPlanRawPrice = nights > 0 ? selectedPlanPriceTotalChf : selectedPlanPricePerNightChf;
+
+  // Every figure below is read straight out of the server's answer — the
+  // widget formats, it never multiplies. `quote` is null while a request is
+  // in flight (or before dates are picked), which is what makes the
+  // LoadingSpinner show rather than a stale number.
+  const planQuoteFor = (planId: string | null): PlanQuote | null =>
+    quote?.plans.find((p) => p.plan_id === planId) ?? null;
+  const selectedPlanQuote = planQuoteFor(selectedPlanId);
+  // Cheapest plan, for the "from …" framing the header uses until the guest
+  // has actually chosen a rate.
+  const cheapestPlanQuote =
+    quote?.plans.reduce<PlanQuote | null>((min, p) => (min === null || p.price < min.price ? p : min), null) ??
+    null;
+  const headerQuote = selectedPlanQuote ?? cheapestPlanQuote;
+  // Before any dates are picked there is no stay to price, so the header
+  // shows the per-night teaser instead of a total.
+  const headerPrice = nights > 0 ? headerQuote?.price ?? null : fromPrice?.price_per_night ?? null;
+  const headerRegularPrice =
+    nights > 0 ? headerQuote?.regular_price ?? null : fromPrice?.regular_price_per_night ?? null;
+  const headerPriceChf = nights > 0 ? headerQuote?.price_chf ?? null : fromPrice?.price_per_night_chf ?? null;
+  const headerRegularPriceChf =
+    nights > 0 ? headerQuote?.regular_price_chf ?? null : fromPrice?.regular_price_per_night_chf ?? null;
   // Which stage of the extended flow (rate → data → payment) the header
   // should reflect; falls back to the initial planYourStay/"from" price
   // outside the extended flow and on the terminal success/error screens.
@@ -582,8 +688,6 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     ? dict.paymentDetailsTitle
     : dict.planYourStay;
   const showFromPrefix = (!extended || guestStep === "plan") && !selectedPlan;
-  const headerPrice = selectedPlan ? chosenPlanPrice : activePrice;
-  const headerRawPrice = selectedPlan ? chosenPlanRawPrice : activeRawPrice;
   const isFormValid =
     !!range?.from &&
     !!range?.to &&
@@ -920,7 +1024,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     // stays as a pre-flight check: dates with no configured rate are the
     // one case the backend answers with a 400, and bailing here keeps the
     // guest on the form instead of dropping them into the error screen.
-    if (!findDailyRate(prices, format(range.from, "yyyy-MM-dd"))) return;
+    if (!hasRateFor(prices, format(range.from, "yyyy-MM-dd"))) return;
     setGuestStep("submitting");
     try {
       // No amount is sent: the backend prices the stay from the stored
@@ -1063,7 +1167,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
 
   const isPastDate = (date: Date) => isBefore(date, today) && !isSameDay(date, today);
 
-  const hasNoPrice = (date: Date) => findDailyRate(prices, format(date, "yyyy-MM-dd")) === null;
+  const hasNoPrice = (date: Date) => !hasRateFor(prices, format(date, "yyyy-MM-dd"));
 
   const isOccupiedDate = (date: Date) => isBookedDate(date) || hasNoPrice(date);
 
@@ -1107,6 +1211,12 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const isOccupiedValidCheckout = (date: Date) =>
     !!range?.from && !range?.to && isBookedDate(date) && isValidCheckout(date);
 
+  // A free day that an active promotion covers. Takes the violet tint
+  // instead of the plain green one, so an offer is visible in the calendar
+  // before the guest has picked anything.
+  const isPromotedDate = (date: Date) =>
+    promotionsForDate(promotions, format(date, "yyyy-MM-dd")).length > 0;
+
   // Days already covered by the range-selection or hover-preview modifiers
   // keep their own (teal) styling instead of the green/red availability tint.
   const isRangeOrHoverDate = (date: Date) =>
@@ -1115,6 +1225,16 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     (!!range?.from && !!range?.to && isAfter(date, range.from) && isBefore(date, range.to)) ||
     (!!range?.from && !range?.to && !!hoverDate && hoverIsValidCheckout &&
       ((isAfter(date, range.from) && isBefore(date, hoverDate)) || isSameDay(date, hoverDate)));
+
+  // react-day-picker has no tooltip API, and a native `title` attribute has
+  // a ~1s delay and no styling, so the day button is rendered ourselves.
+  // Memoized on exactly what its output depends on: without that, a new
+  // component identity on every render (hover included) would remount every
+  // button in the grid and steal keyboard focus mid-navigation.
+  const DayButtonWithPromotions = useMemo(
+    () => makePromotionDayButton(promotions, dict, currency),
+    [promotions, dict, currency]
+  );
 
   // Embedded (not portaled) — a plain conditionally-mounted block, in flow
   // right below the date fields. Its appearing/disappearing (both size and
@@ -1168,6 +1288,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
           min={1}
           onDayMouseEnter={(date) => setHoverDate(date)}
           onDayMouseLeave={() => setHoverDate(undefined)}
+          components={{ DayButton: DayButtonWithPromotions }}
           modifiers={{
             hoverRange: (date) =>
               !!range?.from &&
@@ -1182,7 +1303,21 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
               !!hoverDate &&
               hoverIsValidCheckout &&
               isSameDay(date, hoverDate),
-            available: (date) => !isRangeOrHoverDate(date) && !isPastDate(date) && !isBookedDate(date) && !hasNoPrice(date) && !isInvalidCheckoutCandidate(date),
+            // Listed before `available` so a promoted free day takes the
+            // promotion tint rather than the green one.
+            promoted: (date) =>
+              !isRangeOrHoverDate(date) &&
+              !isPastDate(date) &&
+              !isOccupiedDate(date) &&
+              !isInvalidCheckoutCandidate(date) &&
+              isPromotedDate(date),
+            available: (date) =>
+              !isRangeOrHoverDate(date) &&
+              !isPastDate(date) &&
+              !isBookedDate(date) &&
+              !hasNoPrice(date) &&
+              !isInvalidCheckoutCandidate(date) &&
+              !isPromotedDate(date),
             past: (date) => !isRangeOrHoverDate(date) && isPastDate(date),
             occupiedCheckout: (date) => !isRangeOrHoverDate(date) && isOccupiedValidCheckout(date),
             unavailable: (date) =>
@@ -1194,6 +1329,12 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
           modifiersClassNames={{
             hoverRange: "rdp-range_middle",
             hoverRangeEnd: "rdp-range_end",
+            // Violet: the palette already uses green = available,
+            // red = unavailable, yellow = occupied-but-checkout-able,
+            // teal = selection, grey = past.
+            promoted:
+              "!bg-violet-100 dark:!bg-violet-950/50 !text-violet-800 dark:!text-violet-300 " +
+              "hover:!bg-violet-200 dark:hover:!bg-violet-900/60 !font-semibold",
             available: "!bg-green-50 dark:!bg-green-950/40 !text-green-800 dark:!text-green-300 hover:!bg-green-100 dark:hover:!bg-green-900/40",
             past: "!bg-gray-100 dark:!bg-gray-800/60 !text-gray-400 dark:!text-gray-600",
             occupiedCheckout: "!bg-yellow-50 dark:!bg-yellow-950/40 !text-yellow-800 dark:!text-yellow-400 hover:!bg-yellow-100 dark:hover:!bg-yellow-900/40",
@@ -1371,8 +1512,17 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                 <span className="text-white/90 text-base mr-1 [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">{dict.fromPrefix}</span>
               )}
               <span className="whitespace-nowrap">
-                <span className="inline-flex items-center text-lg lg:text-xl font-bold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.35)]">
-                  {headerPrice !== null ? formatPrice(headerPrice, currency) : <LoadingSpinner className="w-4 h-4" />}
+                <span className="inline-flex items-baseline text-lg lg:text-xl font-bold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.35)]">
+                  {headerPrice !== null && headerRegularPrice !== null ? (
+                    <PriceWithDiscount
+                      price={headerPrice}
+                      regularPrice={headerRegularPrice}
+                      currency={currency}
+                      regularClassName="!text-white/70"
+                    />
+                  ) : (
+                    <LoadingSpinner className="w-4 h-4 self-center" />
+                  )}
                 </span>
                 {headerPrice !== null && (
                   <span className="text-white/90 text-base ml-1 [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
@@ -1380,9 +1530,15 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                   </span>
                 )}
               </span>
-              {currency !== "CHF" && headerRawPrice !== null && (
+              {currency !== "CHF" && headerPriceChf !== null && headerRegularPriceChf !== null && (
                 <div className="text-white/85 text-sm [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
-                  {formatPrice(headerRawPrice, "CHF")}{" "}
+                  <PriceWithDiscount
+                    price={headerPriceChf}
+                    regularPrice={headerRegularPriceChf}
+                    currency="CHF"
+                    className="font-normal"
+                    regularClassName="!text-white/60"
+                  />{" "}
                   {nights > 0 ? dict.total : dict.perNight}
                 </div>
               )}
@@ -1481,11 +1637,20 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                   ) : (
                     <div className="space-y-2">
                       {visiblePlans.map((p) => {
-                        // matchedRate.dailyRate is already converted server-side into
-                        // `currency`, so this is plain same-currency arithmetic.
-                        const planPricePerNight = matchedRate ? matchedRate.dailyRate * p.price_ratio : null;
-                        const planTotal = planPricePerNight !== null ? planPricePerNight * nights : null;
-                        const activePlanPrice = nights > 0 ? planTotal : planPricePerNight;
+                        // Straight from the server's quote for this plan —
+                        // discounted total, undiscounted total, and the
+                        // per-night figures — with nothing computed here.
+                        const planQuote = planQuoteFor(p._id);
+                        const activePlanPrice = planQuote
+                          ? nights > 0
+                            ? planQuote.price
+                            : planQuote.price_per_night
+                          : null;
+                        const activePlanRegularPrice = planQuote
+                          ? nights > 0
+                            ? planQuote.regular_price
+                            : planQuote.regular_price_per_night
+                          : null;
                         const isSelected = selectedPlanId === p._id;
                         const highlight = refundHighlightColor(p.cancellation_policy.rules, range.from!, today);
                         const highlightBackground = `rgba(${highlight[0]}, ${highlight[1]}, ${highlight[2]}, ${isSelected ? 0.3 : 0.14})`;
@@ -1516,11 +1681,15 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                               </span>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-baseline justify-between gap-3">
-                                  <span className="inline-flex items-center text-2xl font-bold text-gray-800 dark:text-gray-100">
-                                    {activePlanPrice !== null ? (
-                                      formatPrice(activePlanPrice, currency)
+                                  <span className="inline-flex items-baseline text-2xl font-bold text-gray-800 dark:text-gray-100">
+                                    {activePlanPrice !== null && activePlanRegularPrice !== null ? (
+                                      <PriceWithDiscount
+                                        price={activePlanPrice}
+                                        regularPrice={activePlanRegularPrice}
+                                        currency={currency}
+                                      />
                                     ) : (
-                                      <LoadingSpinner className="w-5 h-5" />
+                                      <LoadingSpinner className="w-5 h-5 self-center" />
                                     )}
                                   </span>
                                   {nights > 0 && activePlanPrice !== null && (
@@ -1529,9 +1698,14 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                                     </span>
                                   )}
                                 </div>
-                                {nights > 0 && planPricePerNight !== null && (
-                                  <p className="text-base text-gray-500 dark:text-gray-400 mt-0.5">
-                                    {formatPrice(planPricePerNight, currency)}
+                                {nights > 0 && planQuote !== null && (
+                                  <p className="inline-flex items-baseline text-base text-gray-500 dark:text-gray-400 mt-0.5">
+                                    <PriceWithDiscount
+                                      price={planQuote.price_per_night}
+                                      regularPrice={planQuote.regular_price_per_night}
+                                      currency={currency}
+                                      className="font-normal"
+                                    />
                                     {dict.perNight}
                                   </p>
                                 )}
@@ -1702,6 +1876,83 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
       )}
     </>
   );
+}
+
+/* ── Promotion tooltip ─────────────────────────────────── */
+
+/** The tooltip line for one promotion, split so the offer's name can be
+ *  emphasised while the wording itself stays in the dictionaries. */
+function promotionTooltipParts(
+  promotion: PublicPromotion,
+  dict: BookingDict,
+  currency: Currency
+): { before: string; name: string; after: string } {
+  const template =
+    promotion.discount_type === "percent"
+      ? dict.promotionPercentTooltip.replace("{percent}", String(Math.round(promotion.discount_ratio * 100)))
+      : dict.promotionAmountTooltip.replace("{amount}", formatPrice(promotion.discount_amount, currency));
+  const [before, after = ""] = template
+    .replace("{nights}", String(promotion.min_stay_days))
+    .split("{name}");
+  return { before, name: promotion.name, after };
+}
+
+/**
+ * Builds the calendar's day button: the default button, plus a tooltip for
+ * whichever promotions cover that day.
+ *
+ * A factory rather than a plain component because react-day-picker only
+ * hands the component `day` and `modifiers` — the promotions, wording and
+ * currency have to be closed over. The caller memoizes the result so the
+ * grid isn't remounted on every render.
+ *
+ * The same text is also set as a `title` and an `aria-label`, so touch
+ * devices (which never hover) and screen readers get the offer too.
+ */
+function makePromotionDayButton(
+  promotions: PublicPromotion[],
+  dict: BookingDict,
+  currency: Currency
+) {
+  return function PromotionDayButton({ day, modifiers, ...buttonProps }: DayButtonProps) {
+    const dayPromotions = promotionsForDate(promotions, format(day.date, "yyyy-MM-dd"));
+    if (dayPromotions.length === 0 || modifiers.disabled) {
+      return <button {...buttonProps} />;
+    }
+
+    const lines = dayPromotions.map((promotion) => ({
+      promotion,
+      parts: promotionTooltipParts(promotion, dict, currency),
+    }));
+    const plainText = lines
+      .map(({ parts }) => `${parts.before}${parts.name}${parts.after}`)
+      .join(" · ");
+    // The first calendar row has no room above it, so its tooltip flips
+    // below the day instead of being clipped by the calendar's own
+    // scroll box.
+    const below = day.date.getDate() <= FIRST_CALENDAR_ROW_LAST_DAY;
+
+    return (
+      <span className="relative group block">
+        <button {...buttonProps} title={plainText} aria-label={`${buttonProps["aria-label"] ?? ""} ${plainText}`.trim()} />
+        <span
+          role="tooltip"
+          className={`pointer-events-none absolute left-1/2 -translate-x-1/2 z-50 hidden w-max max-w-[15rem] rounded-lg bg-gray-900 dark:bg-gray-700 px-2.5 py-1.5 text-left text-xs font-normal leading-snug text-white shadow-xl group-hover:block group-focus-within:block ${
+            below ? "top-full mt-1.5" : "bottom-full mb-1.5"
+          }`}
+        >
+          <span className="block font-semibold text-violet-200">{dict.specialOffer}</span>
+          {lines.map(({ promotion, parts }) => (
+            <span key={promotion._id} className="block">
+              {parts.before}
+              <strong className="font-semibold">{parts.name}</strong>
+              {parts.after}
+            </span>
+          ))}
+        </span>
+      </span>
+    );
+  };
 }
 
 /* ── DateField ─────────────────────────────────────────── */

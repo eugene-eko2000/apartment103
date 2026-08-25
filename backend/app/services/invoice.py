@@ -72,6 +72,16 @@ def build_charge_invoice_pdf(*, booking: Booking, guest: Guest, charge: BookingC
     pdf.set_font("Helvetica", "", 10)
     pdf.cell(0, 6, f"{labels['stay']}: {check_in.isoformat()} to {check_out.isoformat()}", new_x="LMARGIN", new_y="NEXT")
 
+    # Stay-level context for a discounted booking, printed above the charge
+    # line so it reads as background to the amount rather than as part of
+    # it: this charge is (a share of) the already-discounted total, so
+    # nothing below changes.
+    if booking.total_discount > 0:
+        regular = format_money(booking.total_regular_price, booking.currency)
+        saved = format_money(booking.total_discount, booking.currency)
+        pdf.cell(0, 6, f"{labels['regular_price']}: {regular}", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 6, f"{labels['you_save']}: {saved}", new_x="LMARGIN", new_y="NEXT")
+
     pdf.ln(4)
     pdf.set_font("Helvetica", "B", 10)
     pdf.cell(130, 8, labels["description"], border=1)

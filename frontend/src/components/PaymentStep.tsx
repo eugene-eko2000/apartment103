@@ -11,6 +11,7 @@ import type { PaymentIntentResponse } from "@/lib/api";
 import type { Locale } from "@/lib/i18n-config";
 import { useTheme } from "@/lib/theme-context";
 import { formatPrice } from "@/lib/currency-config";
+import PriceWithDiscount from "@/components/PriceWithDiscount";
 
 const DATE_FNS_LOCALES: Record<Locale, DateFnsLocale> = { en: enUS, de, fr, it };
 
@@ -27,6 +28,8 @@ export interface PaymentStepDict {
   cardholderNameLabel: string;
   cardholderNamePlaceholder: string;
   cardDetailsLabel: string;
+  regularPrice: string;
+  youSave: string;
 }
 
 export default function PaymentStep({
@@ -149,8 +152,32 @@ function PaymentForm({
         <p className="text-sm text-gray-600 dark:text-gray-300">{dict.verifyCardHint}</p>
       )}
 
-      {((intent.mode === "payment" && intent.total_price > 0) || intent.upcoming_charges.length > 0) && (
+      {((intent.mode === "payment" && intent.total_price > 0) ||
+        intent.total_discount > 0 ||
+        intent.upcoming_charges.length > 0) && (
         <div className="text-sm bg-gray-50 dark:bg-gray-700/50 rounded-xl px-3 py-2.5 space-y-1.5">
+          {/* The stay's total, with what the promotions took off it.
+              intent.amount — what is being charged right now — keeps its
+              own single-figure rendering in the line below: a discount
+              applies to the stay, not to this one instalment. */}
+          {intent.total_discount > 0 && (
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-gray-600 dark:text-gray-300">{dict.regularPrice}</span>
+              <span className="inline-flex items-baseline text-gray-700 dark:text-gray-200">
+                <PriceWithDiscount
+                  price={intent.total_price}
+                  regularPrice={intent.regular_total_price}
+                  currency={intent.currency}
+                />
+              </span>
+            </div>
+          )}
+          {intent.total_discount > 0 && (
+            <p className="font-medium text-teal-700 dark:text-teal-400">
+              {dict.youSave.replace("{amount}", formatPrice(intent.total_discount, intent.currency))}
+            </p>
+          )}
+
           {intent.mode === "payment" && intent.total_price > 0 && (
             <p className="font-medium text-gray-700 dark:text-gray-200">
               {dict.chargeSummary

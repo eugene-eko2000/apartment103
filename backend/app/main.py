@@ -21,6 +21,8 @@ from app.api.routes import (
     payments,
     plans,
     prices,
+    promotions,
+    quotes,
 )
 from app.core.config import settings
 from app.db.mongo import init_mongo
@@ -56,6 +58,11 @@ app.include_router(plans.public_router)
 app.include_router(plans.router)
 app.include_router(prices.public_router)
 app.include_router(prices.router)
+app.include_router(promotions.public_router)
+app.include_router(promotions.router)
+# Public only: a quote is derived data with no stored document behind it,
+# so there is nothing for an admin to CRUD here.
+app.include_router(quotes.public_router)
 app.include_router(cancellation_policies.router)
 app.include_router(categories.router)
 app.include_router(guests.router)

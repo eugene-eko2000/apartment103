@@ -10,6 +10,7 @@ import { formatPrice } from "@/lib/currency-config";
 import { useCurrency } from "@/lib/currency-context";
 import { applicableRefundPercentage } from "@/lib/refund";
 import { CancellationTimeline, fillForRefund } from "@/components/CancellationTimeline";
+import PriceWithDiscount from "@/components/PriceWithDiscount";
 import type { Locale } from "@/lib/i18n-config";
 
 const DATE_FNS_LOCALES: Record<Locale, DateFnsLocale> = { en: enUS, de, fr, it };
@@ -43,6 +44,9 @@ export interface BookingDetailsDict {
   chargeNotice: string;
   confirmCancel: string;
   keepBooking: string;
+  regularPrice: string;
+  youSave: string;
+  promotionApplied: string;
 }
 
 function earliestBeginDate(booking: Booking): Date {
@@ -184,24 +188,64 @@ export default function BookingDetailsModal({
                 const from = parse(range.begin_date, "yyyy-MM-dd", new Date());
                 const to = parse(range.end_date, "yyyy-MM-dd", new Date());
                 const nights = differenceInCalendarDays(to, from);
-                const rangePrice = display.date_ranges[i].price;
-                const perNight = nights > 0 ? rangePrice / nights : rangePrice;
+                const rangeDisplay = display.date_ranges[i];
+                const perNight = nights > 0 ? rangeDisplay.price / nights : rangeDisplay.price;
                 return (
-                  <div key={i} className="px-4 py-2.5 flex items-center justify-between text-sm">
-                    <span className="text-gray-700 dark:text-gray-300">
-                      {format(from, "dd/MM/yyyy")} → {format(to, "dd/MM/yyyy")}
-                      <span className="text-gray-400 dark:text-gray-500 ml-2">
-                        ({nights} {nights !== 1 ? dict.nights : dict.night}, {dict.averageNightly.replace("{price}", price(perNight))})
+                  <div key={i} className="px-4 py-2.5 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-700 dark:text-gray-300">
+                        {format(from, "dd/MM/yyyy")} → {format(to, "dd/MM/yyyy")}
+                        <span className="text-gray-400 dark:text-gray-500 ml-2">
+                          ({nights} {nights !== 1 ? dict.nights : dict.night}, {dict.averageNightly.replace("{price}", price(perNight))})
+                        </span>
                       </span>
-                    </span>
-                    <span className="font-semibold text-gray-900 dark:text-gray-100">{price(rangePrice)}</span>
+                      <span className="inline-flex items-baseline font-semibold text-gray-900 dark:text-gray-100">
+                        <PriceWithDiscount
+                          price={rangeDisplay.price}
+                          regularPrice={rangeDisplay.regular_price}
+                          currency={preferredCurrency}
+                        />
+                      </span>
+                    </div>
+                    {/* The promotions as they applied when this booking was
+                        made — read from the snapshot stored on it, so a
+                        promotion since edited or deleted still explains the
+                        price the guest agreed to. */}
+                    {range.applied_promotions.map((promotion, j) => (
+                      <p key={j} className="mt-1 text-xs text-violet-700 dark:text-violet-400">
+                        {dict.promotionApplied
+                          .replace("{name}", promotion.name)
+                          .replace("{nights}", String(promotion.nights))
+                          // discount_total is denominated in the BOOKING's
+                          // currency, not the display one — and no amount is
+                          // ever converted on the client, so it is labelled
+                          // with the currency it is actually in. The
+                          // converted saving is the "you save" line below,
+                          // which the server computes.
+                          .replace("{amount}", formatPrice(promotion.discount_total, booking.currency))}
+                      </p>
+                    ))}
                   </div>
                 );
               })}
               <div className="px-4 py-2.5 flex items-center justify-between text-sm bg-gray-50 dark:bg-gray-900/40">
                 <span className="font-semibold text-gray-700 dark:text-gray-300">{dict.totalPrice}</span>
-                <span className="font-bold text-gray-900 dark:text-gray-100">{price(display.total_price)}</span>
+                <span className="inline-flex items-baseline font-bold text-gray-900 dark:text-gray-100">
+                  <PriceWithDiscount
+                    price={display.total_price}
+                    regularPrice={display.total_regular_price}
+                    currency={preferredCurrency}
+                  />
+                </span>
               </div>
+              {display.total_discount > 0 && (
+                <div className="px-4 py-2.5 flex items-center justify-between text-sm">
+                  <span className="text-gray-500 dark:text-gray-400">{dict.regularPrice}</span>
+                  <span className="font-semibold text-teal-700 dark:text-teal-400">
+                    {dict.youSave.replace("{amount}", price(display.total_discount))}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -210,6 +254,9 @@ export default function BookingDetailsModal({
             <p className="font-semibold text-sm text-gray-600 dark:text-gray-300 mb-1">
               {dict.cancellationPolicy}: {booking.cancellation_policy.name}
             </p>
+            {/* price stays display.total_price — the discounted figure. A
+                refund is computed off what the guest actually pays, not off
+                the struck-through regular price. */}
             <CancellationTimeline
               rules={booking.cancellation_policy.rules}
               checkInDate={earliestBeginDate(booking)}

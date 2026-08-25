@@ -3,13 +3,14 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Literal
 
-from beanie import Document, Link
+from beanie import Document, Link, PydanticObjectId
 from pydantic import BaseModel, Field
 from pymongo import IndexModel
 
 from app.core.money import Money, to_decimal
 from app.models.cancellation_policy import CancellationRule
 from app.models.guest import Currency, Guest
+from app.models.promotion import DiscountType
 
 BookingStatus = Literal["Pending", "Active", "Cancelled"]
 
@@ -32,10 +33,42 @@ BookingChargeStatus = Literal["succeeded", "requires_action", "failed"]
 BookingChargeScheduleStatus = Literal["pending", "done"]
 
 
+class AppliedPromotion(BaseModel):
+    """By-value snapshot of a Promotion as it applied to one booking date
+    range. Never a Link: editing or deleting the source promotion must not
+    change the price of a booking that already exists — same rule as
+    BookingCancellationPolicy.
+
+    `promotion_id` is provenance only (it lets an admin trace a discount
+    back to the offer that produced it); it is never re-read to price
+    anything.
+    """
+
+    promotion_id: PydanticObjectId | None = None
+    name: str
+    begin_date: date
+    end_date: date
+    discount_type: DiscountType
+    discount_ratio: float = 0.0
+    discount_amount: Money = Decimal("0.00")
+    currency: Currency = "CHF"
+    min_stay_days: int = 1
+    nights: int  # nights of this range it actually discounted
+    discount_total: Money  # in the BOOKING's currency
+
+
 class BookingDateRange(BaseModel):
     begin_date: date
     end_date: date
+    # The final, discounted amount — unchanged in meaning. Every money path
+    # (total_price_of, build_charge_schedule, amount_charged, the invoice,
+    # the cancellation settlement) reads this and only this, which is why
+    # the two fields below are purely additive display data.
     price: Money = Field(ge=0)
+    # What the same stay would have cost with no promotion applied, for the
+    # struck-through line next to `price`.
+    regular_price: Money = Field(default=Decimal("0.00"), ge=0)
+    applied_promotions: list[AppliedPromotion] = Field(default_factory=list)
 
 
 def total_price_of(date_ranges: Iterable[BookingDateRange]) -> Decimal:
@@ -44,6 +77,16 @@ def total_price_of(date_ranges: Iterable[BookingDateRange]) -> Decimal:
     endpoints — see app.schemas.booking.BookingDisplaySource — derive the
     total exactly the same way the stored document does."""
     return to_decimal(sum((date_range.price for date_range in date_ranges), Decimal("0.00")))
+
+
+def total_regular_price_of(date_ranges: Iterable[BookingDateRange]) -> Decimal:
+    """Sum of the undiscounted prices — the struck-through figure."""
+    return to_decimal(sum((date_range.regular_price for date_range in date_ranges), Decimal("0.00")))
+
+
+def total_discount_of(date_ranges: Iterable[BookingDateRange]) -> Decimal:
+    """What the promotions took off the whole stay: regular − payable."""
+    return to_decimal(total_regular_price_of(date_ranges) - total_price_of(date_ranges))
 
 
 def nights_of_ranges(date_ranges: Iterable[BookingDateRange]) -> list[date]:
@@ -167,6 +210,14 @@ class Booking(Document):
     @property
     def total_price(self) -> Decimal:
         return total_price_of(self.date_ranges)
+
+    @property
+    def total_regular_price(self) -> Decimal:
+        return total_regular_price_of(self.date_ranges)
+
+    @property
+    def total_discount(self) -> Decimal:
+        return total_discount_of(self.date_ranges)
 
     class Settings:
         name = "bookings"

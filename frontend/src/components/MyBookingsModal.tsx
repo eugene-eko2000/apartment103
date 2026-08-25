@@ -9,6 +9,7 @@ import { useCurrency } from "@/lib/currency-context";
 import { applicableRefundPercentage } from "@/lib/refund";
 import { readGuestSession } from "@/lib/guest-auth";
 import { fillForRefund } from "@/components/CancellationTimeline";
+import PriceWithDiscount from "@/components/PriceWithDiscount";
 import BookingDetailsModal, { type BookingDetailsDict } from "@/components/BookingDetailsModal";
 import type { Locale } from "@/lib/i18n-config";
 
@@ -28,6 +29,7 @@ export interface MyBookingsDict {
   chargeNotice: string;
   confirmCancel: string;
   keepBooking: string;
+  regularPrice: string;
   // The details modal reuses the cancellation strings defined above rather
   // than duplicating them in every locale file.
   detailsModal: Omit<
@@ -223,12 +225,28 @@ export default function MyBookingsModal({
                             ({nights} {nights !== 1 ? dict.nights : dict.night})
                           </span>
                         </span>
-                        <span className="font-semibold text-gray-900 dark:text-gray-100">
-                          {formatPrice(display.date_ranges[i].price, preferredCurrency)}
+                        <span className="inline-flex items-baseline font-semibold text-gray-900 dark:text-gray-100">
+                          <PriceWithDiscount
+                            price={display.date_ranges[i].price}
+                            regularPrice={display.date_ranges[i].regular_price}
+                            currency={preferredCurrency}
+                          />
                         </span>
                       </div>
                     );
                   })}
+                  {display.total_discount > 0 && (
+                    <div className="flex items-center justify-between text-sm py-1.5 border-t border-gray-100 dark:border-gray-700 mt-1.5 pt-2.5">
+                      <span className="text-gray-500 dark:text-gray-400">{dict.regularPrice}</span>
+                      <span className="inline-flex items-baseline font-semibold text-gray-900 dark:text-gray-100">
+                        <PriceWithDiscount
+                          price={display.total_price}
+                          regularPrice={display.total_regular_price}
+                          currency={preferredCurrency}
+                        />
+                      </span>
+                    </div>
+                  )}
                   <div className="text-xs text-gray-400 dark:text-gray-500 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
                     <span>{dict.bookedOn.replace("{date}", format(parse(booking.booking_date, "yyyy-MM-dd", new Date()), "dd/MM/yyyy"))}</span>
                     <span>{dict.cancellationPolicy}: {booking.cancellation_policy.name}</span>

@@ -98,6 +98,53 @@ export interface PublicPrice {
   period: PublicPeriod;
 }
 
+export type DiscountType = "percent" | "amount";
+
+export interface Promotion {
+  _id: string;
+  name: string;
+  /** Inclusive, like DateRangeRate — not a stay's exclusive checkout day. */
+  begin_date: string;
+  end_date: string;
+  discount_type: DiscountType;
+  /** The fraction taken OFF (0.2 = 20% off) — the opposite convention to Plan.price_ratio. */
+  discount_ratio: number;
+  /** Per night, in `currency`. */
+  discount_amount: number;
+  currency: Currency;
+  /** Gates the discount only; the hard minimum stay is DateRangeRate.min_stay_days. */
+  min_stay_days: number;
+  active: boolean;
+}
+
+export interface PromotionInput {
+  name: string;
+  begin_date: string;
+  end_date: string;
+  discount_type: DiscountType;
+  discount_ratio: number;
+  discount_amount: number;
+  currency: Currency;
+  min_stay_days: number;
+  active: boolean;
+}
+
+// Response shape of GET /promotions/public?currency=<Currency> — only
+// active, unexpired promotions, with discount_amount already converted
+// server-side. Carries no stay price: the calendar tooltip states the offer,
+// every actual figure comes from the quote endpoints.
+export interface PublicPromotion {
+  _id: string;
+  name: string;
+  begin_date: string;
+  end_date: string;
+  discount_type: DiscountType;
+  discount_ratio: number;
+  discount_amount: number;
+  discount_amount_chf: number;
+  min_stay_days: number;
+}
+
 export interface CancellationPolicy {
   _id: string;
   name: string;
@@ -146,10 +193,33 @@ export interface GuestCreateResponse {
   expires_in: number;
 }
 
+// By-value snapshot of a Promotion as it applied to one booking date range.
+// Frozen at booking time: editing or deleting the source promotion never
+// changes what an existing booking cost.
+export interface AppliedPromotion {
+  promotion_id: string | null;
+  name: string;
+  begin_date: string;
+  end_date: string;
+  discount_type: DiscountType;
+  discount_ratio: number;
+  discount_amount: number;
+  currency: Currency;
+  min_stay_days: number;
+  /** Nights of this range the promotion actually discounted. */
+  nights: number;
+  /** In the BOOKING's currency. */
+  discount_total: number;
+}
+
 export interface BookingDateRange {
   begin_date: string;
   end_date: string;
+  /** The final, discounted amount — what is actually charged. */
   price: number;
+  /** The undiscounted amount, for the struck-through line. Display only. */
+  regular_price: number;
+  applied_promotions: AppliedPromotion[];
 }
 
 // Write shape for BookingInput.date_ranges. The guest flow sends dates only:
@@ -253,6 +323,9 @@ export interface Booking {
 export interface BookingRangeDisplay {
   price: number;
   price_chf: number;
+  regular_price: number;
+  regular_price_chf: number;
+  discount: number;
 }
 
 export interface BookingChargeDisplay {
@@ -269,6 +342,9 @@ export interface BookingDisplay {
   currency: Currency;
   total_price: number;
   total_price_chf: number;
+  total_regular_price: number;
+  total_regular_price_chf: number;
+  total_discount: number;
   date_ranges: BookingRangeDisplay[];
   charges: BookingChargeDisplay[];
   charge_schedule: BookingScheduleDisplay[];
@@ -282,10 +358,57 @@ export interface UpcomingCharge {
 export interface PaymentIntentResponse {
   mode: "setup" | "payment";
   client_secret: string;
+  /** Charged now. Unchanged in meaning by promotions. */
   amount: number;
+  /** The stay's full, discounted cost. */
   total_price: number;
+  /** Undiscounted, for the struck-through line. Display only. */
+  regular_total_price: number;
+  total_discount: number;
   currency: Currency;
   upcoming_charges: UpcomingCharge[];
+}
+
+// Response shapes of GET /quotes/public… — every figure is computed
+// server-side from the same code that prices the booking itself, so the
+// widget renders these and multiplies nothing.
+export interface QuotePromotion {
+  name: string;
+  nights: number;
+  discount_total: number;
+  discount_type: DiscountType;
+  discount_ratio: number;
+}
+
+export interface PlanQuote {
+  plan_id: string;
+  plan_name: string;
+  price: number;
+  regular_price: number;
+  discount: number;
+  price_per_night: number;
+  regular_price_per_night: number;
+  price_chf: number;
+  regular_price_chf: number;
+  applied_promotions: QuotePromotion[];
+}
+
+export interface StayQuote {
+  currency: Currency;
+  nights: number;
+  /** The hard minimum stay for this check-in date. */
+  min_stay_days: number;
+  plans: PlanQuote[];
+}
+
+export interface FromPriceQuote {
+  currency: Currency;
+  price_per_night: number;
+  regular_price_per_night: number;
+  price_per_night_chf: number;
+  regular_price_per_night_chf: number;
+  promoted: boolean;
+  promotion_name: string | null;
 }
 
 export interface BookedDateRange {
@@ -469,6 +592,32 @@ export function listPublicBookedDateRanges(): Promise<BookedDateRange[]> {
   return request("/bookings/public/date-ranges");
 }
 
+export function listPublicPromotions(currency: Currency): Promise<PublicPromotion[]> {
+  return request(`/promotions/public?currency=${currency}`);
+}
+
+/**
+ * Every plan's price for one stay, in one request. `signal` lets a caller
+ * abort a quote that a faster re-pick has superseded, so an older response
+ * can't land after a newer one.
+ */
+export function getStayQuote(
+  beginDate: string,
+  endDate: string,
+  currency: Currency,
+  signal?: AbortSignal
+): Promise<StayQuote> {
+  return request(
+    `/quotes/public?begin_date=${beginDate}&end_date=${endDate}&currency=${currency}`,
+    { signal }
+  );
+}
+
+/** The "from …/night" teaser shown before any dates are picked. */
+export function getFromPrice(currency: Currency, signal?: AbortSignal): Promise<FromPriceQuote> {
+  return request(`/quotes/public/from?currency=${currency}`, { signal });
+}
+
 export function createBooking(token: string, data: BookingInput): Promise<Booking> {
   return request("/bookings", {
     method: "POST",
@@ -586,6 +735,34 @@ export function updatePrice(priceId: string, token: string, data: PriceInput): P
 
 export function deletePrice(priceId: string, token: string): Promise<void> {
   return request(`/prices/${priceId}`, { method: "DELETE", headers: authHeaders(token) });
+}
+
+export function listPromotions(token: string): Promise<Promotion[]> {
+  return request("/promotions", { headers: authHeaders(token) });
+}
+
+export function getPromotion(promotionId: string, token: string): Promise<Promotion> {
+  return request(`/promotions/${promotionId}`, { headers: authHeaders(token) });
+}
+
+export function createPromotion(token: string, data: PromotionInput): Promise<Promotion> {
+  return request("/promotions", { method: "POST", headers: authHeaders(token), body: JSON.stringify(data) });
+}
+
+export function updatePromotion(
+  promotionId: string,
+  token: string,
+  data: PromotionInput
+): Promise<Promotion> {
+  return request(`/promotions/${promotionId}`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+}
+
+export function deletePromotion(promotionId: string, token: string): Promise<void> {
+  return request(`/promotions/${promotionId}`, { method: "DELETE", headers: authHeaders(token) });
 }
 
 export function listCancellationPolicies(token: string): Promise<CancellationPolicy[]> {

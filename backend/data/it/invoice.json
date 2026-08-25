@@ -11,5 +11,7 @@
     "initial_charge": "Deposito / pagamento iniziale",
     "scheduled_accrual": "Rata di pagamento programmata",
     "cancellation_settlement": "Regolamento per cancellazione"
-  }
+  },
+  "regular_price": "Prezzo regolare",
+  "you_save": "Risparmi"
 }

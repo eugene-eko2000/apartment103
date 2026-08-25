@@ -159,6 +159,8 @@ async def create_payment_intent(
             client_secret=intent.client_secret,
             amount=Decimal("0.00"),
             total_price=booking.total_price,
+            regular_total_price=booking.total_regular_price,
+            total_discount=booking.total_discount,
             currency=booking.currency,
             upcoming_charges=upcoming,
         )
@@ -174,6 +176,8 @@ async def create_payment_intent(
         client_secret=intent.client_secret,
         amount=amount,
         total_price=booking.total_price,
+        regular_total_price=booking.total_regular_price,
+        total_discount=booking.total_discount,
         currency=booking.currency,
         upcoming_charges=upcoming,
     )
@@ -218,6 +222,8 @@ async def retry_payment(
         client_secret=intent.client_secret,
         amount=outstanding,
         total_price=booking.total_price,
+        regular_total_price=booking.total_regular_price,
+        total_discount=booking.total_discount,
         currency=booking.currency,
         upcoming_charges=[
             UpcomingCharge(charge_date=entry.charge_date, amount=entry.amount)

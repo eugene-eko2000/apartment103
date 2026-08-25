@@ -14,6 +14,10 @@ Subject: Booking confirmed — {{ business_name }}
     <tr><td style="padding:4px 12px 4px 0;">Check-in</td><td style="padding:4px 0; text-align:right;">{{ check_in }}</td></tr>
     <tr><td style="padding:4px 12px 4px 0;">Check-out</td><td style="padding:4px 0; text-align:right;">{{ check_out }}</td></tr>
     <tr><td style="padding:4px 12px 4px 0;">Total price</td><td style="padding:4px 0; text-align:right;">{{ total_price | money(currency) }}</td></tr>
+{% if total_discount > 0 %}
+    <tr><td style="padding:4px 12px 4px 0; color:#888;">Regular price</td><td style="padding:4px 0; text-align:right; color:#888; text-decoration:line-through;">{{ total_regular_price | money(currency) }}</td></tr>
+    <tr><td style="padding:4px 12px 4px 0; color:#0f766e;">You save</td><td style="padding:4px 0; text-align:right; color:#0f766e;">{{ total_discount | money(currency) }}</td></tr>
+{% endif %}
   </table>
 
   <p><strong>Daily rates</strong></p>

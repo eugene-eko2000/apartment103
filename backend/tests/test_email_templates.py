@@ -10,6 +10,10 @@ _CONFIRMATION_CONTEXT = {
     "check_in": "2026-09-01",
     "check_out": "2026-09-04",
     "total_price": 300.0,
+    # Undiscounted by default: total_regular_price == total_price, so the
+    # "you save" block stays out of the way.
+    "total_regular_price": 300.0,
+    "total_discount": 0.0,
     "nightly_rates": [{"date": "2026-09-01", "rate": 100.0}],
     "cancellation_policy_name": "Standard",
     "cancellation_rules": [{"days_before_checkin": 14, "refund_percentage": 1.0}],
@@ -53,3 +57,26 @@ def test_scheduled_payment_renders_for_every_supported_language(language):
     assert "Berg See Home" in subject
     assert "pi_test" in body
     assert "50.00 CHF" in body
+
+
+@pytest.mark.parametrize("language", ["en", "de", "fr", "it"])
+def test_booking_confirmation_omits_the_saving_when_nothing_was_discounted(language):
+    _, body = email_templates.render_email(
+        language=language, name="booking_confirmation.html", context=_CONFIRMATION_CONTEXT
+    )
+    assert "line-through" not in body
+
+
+@pytest.mark.parametrize("language", ["en", "de", "fr", "it"])
+def test_booking_confirmation_shows_the_saving_for_a_discounted_booking(language):
+    _, body = email_templates.render_email(
+        language=language,
+        name="booking_confirmation.html",
+        context={**_CONFIRMATION_CONTEXT, "total_regular_price": 400.0, "total_discount": 100.0},
+    )
+    # The struck-through regular price and the saving, alongside the
+    # unchanged payable total.
+    assert "line-through" in body
+    assert "400.00 CHF" in body
+    assert "100.00 CHF" in body
+    assert "300.00 CHF" in body

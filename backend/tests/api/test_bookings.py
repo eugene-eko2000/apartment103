@@ -791,3 +791,114 @@ class TestPricesAreServerSide:
         )
         assert response.status_code == 201
         assert response.json()["date_ranges"][0]["price"] == 42.0
+
+
+class TestPromotionsAreSnapshotted:
+    """A promotion's effect on a booking is frozen at booking time.
+
+    The stored `applied_promotions` are a by-value copy, exactly like the
+    cancellation policy snapshot: what the guest agreed to pay cannot be
+    changed afterwards by an admin editing — or deleting — the offer.
+    """
+
+    async def test_booking_stores_the_discounted_and_regular_prices(
+        self, client, guest, plan, price, promotion, guest_headers
+    ):
+        response = await client.post(
+            "/bookings", json=_plan_payload(guest.id, plan.name), headers=guest_headers
+        )
+        assert response.status_code == 201
+        stored = response.json()["date_ranges"][0]
+        # Three of the four nights fall inside the promotion: 20% off a
+        # 100.00 nightly price, three times.
+        assert stored["price"] == 340.0
+        assert stored["regular_price"] == 400.0
+
+    async def test_booking_stores_the_applied_promotion(
+        self, client, guest, plan, price, promotion, guest_headers
+    ):
+        response = await client.post(
+            "/bookings", json=_plan_payload(guest.id, plan.name), headers=guest_headers
+        )
+        applied = response.json()["date_ranges"][0]["applied_promotions"]
+        assert len(applied) == 1
+        assert applied[0]["promotion_id"] == str(promotion.id)
+        assert applied[0]["name"] == "Summer escape"
+        assert applied[0]["nights"] == 3
+        assert applied[0]["discount_total"] == 60.0
+        assert applied[0]["discount_type"] == "percent"
+        assert applied[0]["discount_ratio"] == 0.2
+
+    async def test_editing_the_promotion_does_not_change_an_existing_booking(
+        self, client, guest, plan, price, promotion, guest_headers, admin_headers
+    ):
+        created = await client.post(
+            "/bookings", json=_plan_payload(guest.id, plan.name), headers=guest_headers
+        )
+        booking_id = created.json()["_id"]
+
+        await client.put(
+            f"/promotions/{promotion.id}",
+            json={
+                "name": "Renamed and halved",
+                "begin_date": promotion.begin_date.isoformat(),
+                "end_date": promotion.end_date.isoformat(),
+                "discount_type": "percent",
+                "discount_ratio": 0.5,
+                "min_stay_days": 1,
+            },
+            headers=admin_headers,
+        )
+
+        response = await client.get(f"/bookings/{booking_id}", headers=guest_headers)
+        stored = response.json()["date_ranges"][0]
+        assert stored["price"] == 340.0
+        assert stored["applied_promotions"][0]["name"] == "Summer escape"
+        assert stored["applied_promotions"][0]["discount_ratio"] == 0.2
+
+    async def test_deleting_the_promotion_does_not_change_an_existing_booking(
+        self, client, guest, plan, price, promotion, guest_headers, admin_headers
+    ):
+        created = await client.post(
+            "/bookings", json=_plan_payload(guest.id, plan.name), headers=guest_headers
+        )
+        booking_id = created.json()["_id"]
+
+        await client.delete(f"/promotions/{promotion.id}", headers=admin_headers)
+
+        response = await client.get(f"/bookings/{booking_id}", headers=guest_headers)
+        stored = response.json()["date_ranges"][0]
+        assert stored["price"] == 340.0
+        assert stored["regular_price"] == 400.0
+        assert stored["applied_promotions"][0]["name"] == "Summer escape"
+
+    async def test_display_reports_the_discount(
+        self, client, guest, plan, price, promotion, guest_headers
+    ):
+        created = await client.post(
+            "/bookings", json=_plan_payload(guest.id, plan.name), headers=guest_headers
+        )
+        booking_id = created.json()["_id"]
+
+        response = await client.get(
+            f"/bookings/{booking_id}/display?currency=CHF", headers=guest_headers
+        )
+        body = response.json()
+        assert body["total_price"] == 340.0
+        assert body["total_regular_price"] == 400.0
+        assert body["total_discount"] == 60.0
+        assert body["date_ranges"][0]["regular_price"] == 400.0
+        assert body["date_ranges"][0]["discount"] == 60.0
+
+    async def test_admin_manual_price_records_no_discount(
+        self, client, guest, price, cancellation_policy, promotion, admin_headers
+    ):
+        # An admin typing a final amount is stating the actual figure,
+        # promotions included — so nothing is struck through.
+        response = await client.post(
+            "/bookings", json=_booking_payload(guest.id, cancellation_policy.id), headers=admin_headers
+        )
+        stored = response.json()["date_ranges"][0]
+        assert stored["price"] == 400.0
+        assert stored["regular_price"] == 400.0
+        assert stored["applied_promotions"] == []

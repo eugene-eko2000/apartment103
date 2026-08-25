@@ -192,9 +192,16 @@
         "processing": "Traitement en cours…",
         "cardholderNameLabel": "Nom du titulaire",
         "cardholderNamePlaceholder": "Nom figurant sur la carte",
-        "cardDetailsLabel": "Détails de la carte"
+        "cardDetailsLabel": "Détails de la carte",
+        "regularPrice": "Prix normal",
+        "youSave": "Vous économisez {amount}"
       }
-    }
+    },
+    "specialOffer": "Offre spéciale",
+    "regularPrice": "Prix normal",
+    "youSave": "Vous économisez {amount}",
+    "promotionPercentTooltip": "{name} — {percent}% de réduction · min. {nights} nuits",
+    "promotionAmountTooltip": "{name} — {amount} de réduction par nuit · min. {nights} nuits"
   },
   "gallery": {
     "closeGallery": "Fermer la galerie",
@@ -264,8 +271,12 @@
         "noUpcomingCharges": "Aucun paiement à venir.",
         "chargeReasonInitial": "Paiement initial",
         "chargeReasonAccrual": "Paiement programmé",
-        "chargeReasonSettlement": "Règlement d'annulation"
-      }
+        "chargeReasonSettlement": "Règlement d'annulation",
+        "regularPrice": "Prix normal",
+        "youSave": "Vous économisez {amount}",
+        "promotionApplied": "{name} — {nights} nuits, −{amount}"
+      },
+      "regularPrice": "Prix normal"
     },
     "profileModal": {
       "close": "Fermer",

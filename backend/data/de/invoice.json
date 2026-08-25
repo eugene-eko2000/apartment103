@@ -11,5 +11,7 @@
     "initial_charge": "Anzahlung / Erstzahlung",
     "scheduled_accrual": "Ratenzahlung",
     "cancellation_settlement": "Stornierungsabrechnung"
-  }
+  },
+  "regular_price": "Regulärer Preis",
+  "you_save": "Sie sparen"
 }

@@ -20,12 +20,30 @@ def guest(preferred_language: Language | None = None) -> Guest:
 
 
 def booking(
-    rules: list[CancellationRule], begin_date: date, price: float = 1000.0, booking_date: date | None = None
+    rules: list[CancellationRule],
+    begin_date: date,
+    price: float = 1000.0,
+    booking_date: date | None = None,
+    regular_price: float | None = None,
 ) -> Booking:
+    """A plain, unsaved Booking.
+
+    `price` is the payable figure, the one every money path reads.
+    `regular_price` (defaulting to `price`, i.e. undiscounted) is display
+    data only — passing a higher value models a stay that a promotion
+    discounted, which nothing about charging may react to.
+    """
     b = Booking(
         guest=guest(),
         currency="CHF",
-        date_ranges=[BookingDateRange(begin_date=begin_date, end_date=begin_date, price=price)],
+        date_ranges=[
+            BookingDateRange(
+                begin_date=begin_date,
+                end_date=begin_date,
+                price=price,
+                regular_price=price if regular_price is None else regular_price,
+            )
+        ],
         cancellation_policy=BookingCancellationPolicy(name="Test", rules=rules),
     )
     if booking_date is not None:

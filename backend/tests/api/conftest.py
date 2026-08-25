@@ -28,6 +28,7 @@ from app.models.guest import Guest, ResidenceAddress  # noqa: E402
 from app.models.image import Image  # noqa: E402
 from app.models.plan import Plan  # noqa: E402
 from app.models.price import DateRangeRate, Period, Price  # noqa: E402
+from app.models.promotion import Promotion  # noqa: E402
 from app.services import currency_service  # noqa: E402
 
 
@@ -186,6 +187,25 @@ async def price(client) -> Price:
     )
     await price.insert()
     return price
+
+
+@pytest.fixture
+async def promotion(client) -> Promotion:
+    """20% off the July nights the booking tests stay for, with no minimum
+    stay. Covers 2026-07-01 to 2026-07-03 inclusive, i.e. the first three
+    nights of the standard 2026-07-01 → 2026-07-05 stay — deliberately a
+    partial overlap, so a test can tell "the promotion applied" apart from
+    "the whole stay was discounted"."""
+    promotion = Promotion(
+        name="Summer escape",
+        begin_date=date(2026, 7, 1),
+        end_date=date(2026, 7, 3),
+        discount_type="percent",
+        discount_ratio=0.2,
+        min_stay_days=1,
+    )
+    await promotion.insert()
+    return promotion
 
 
 @pytest.fixture

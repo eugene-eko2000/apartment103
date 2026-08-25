@@ -134,3 +134,28 @@ class TestSyncChargeScheduleStatus:
         b.amount_charged = 0.0
         sync_charge_schedule_status(b)
         assert b.charge_schedule[0].status == "pending"
+
+
+class TestScheduleFollowsTheDiscountedTotal:
+    """Promotions change `price`, and `price` is what the schedule is built
+    from — the struck-through `regular_price` must never reach a charge."""
+
+    def test_schedule_sums_to_the_discounted_total(self):
+        rules = [
+            CancellationRule(days_before_checkin=30, refund_percentage=1.0),
+            CancellationRule(days_before_checkin=7, refund_percentage=0.5),
+        ]
+        b = booking(rules, date(2026, 8, 20), price=800.0, regular_price=1000.0)
+        schedule = build_charge_schedule(b)
+        assert sum(entry.amount for entry in schedule) == 800.0
+        # ... and it is due on exactly the same dates as before, at the
+        # same proportions of the (now discounted) total.
+        assert scheduled_amount_due(schedule, date(2026, 8, 10)) == 400.0
+        assert scheduled_amount_due(schedule, date(2026, 8, 14)) == 800.0
+
+    def test_outstanding_amount_ignores_the_regular_price(self):
+        rules = [CancellationRule(days_before_checkin=0, refund_percentage=0.0)]
+        b = booking(rules, date(2026, 9, 1), price=800.0, regular_price=1000.0, booking_date=date(2026, 8, 1))
+        b.charge_schedule = build_charge_schedule(b)
+        b.amount_charged = 800.0
+        assert outstanding_amount(b, date(2026, 8, 1)) == 0.0

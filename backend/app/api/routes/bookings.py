@@ -111,11 +111,16 @@ async def _resolve_terms(
             detail="Either plan_name or cancellation_policy_id is required",
         )
     policy = await get_or_404(CancellationPolicy, payload.cancellation_policy_id, "Cancellation policy")
+    # An admin typing a final amount is stating the actual figure,
+    # promotions included — so there is no discount to record: the regular
+    # price *is* the price, and no promotion snapshot applies.
     date_ranges = [
         BookingDateRange(
             begin_date=date_range.begin_date,
             end_date=date_range.end_date,
             price=date_range.price,
+            regular_price=date_range.price,
+            applied_promotions=[],
         )
         for date_range in payload.date_ranges
     ]
@@ -145,10 +150,16 @@ async def _build_display(booking: Booking | BookingDisplaySource, currency: Curr
         currency=currency,
         total_price=convert(booking.total_price, booking.currency),
         total_price_chf=convert_chf(booking.total_price, booking.currency),
+        total_regular_price=convert(booking.total_regular_price, booking.currency),
+        total_regular_price_chf=convert_chf(booking.total_regular_price, booking.currency),
+        total_discount=convert(booking.total_discount, booking.currency),
         date_ranges=[
             BookingRangeDisplay(
                 price=convert(r.price, booking.currency),
                 price_chf=convert_chf(r.price, booking.currency),
+                regular_price=convert(r.regular_price, booking.currency),
+                regular_price_chf=convert_chf(r.regular_price, booking.currency),
+                discount=convert(r.regular_price - r.price, booking.currency),
             )
             for r in booking.date_ranges
         ],

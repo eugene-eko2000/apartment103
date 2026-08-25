@@ -52,7 +52,24 @@ const BOOKING_STATUS_CLASSES: Record<Booking["status"], string> = {
   Cancelled: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
 };
 
-const emptyDateRange = (): BookingDateRange => ({ begin_date: "", end_date: "", price: 0 });
+// A hand-entered range is by definition undiscounted: an admin typing a
+// final amount is stating the actual figure, promotions included (the
+// backend records it the same way — see _resolve_terms in bookings.py).
+const emptyDateRange = (): BookingDateRange => ({
+  begin_date: "",
+  end_date: "",
+  price: 0,
+  regular_price: 0,
+  applied_promotions: [],
+});
+
+function totalRegularPriceOf(b: Booking): number {
+  return b.date_ranges.reduce((sum, r) => sum + r.regular_price, 0);
+}
+
+function totalDiscountOf(b: Booking): number {
+  return totalRegularPriceOf(b) - b.date_ranges.reduce((sum, r) => sum + r.price, 0);
+}
 
 function checkInDate(b: Booking): string | null {
   if (b.date_ranges.length === 0) return null;
@@ -139,6 +156,7 @@ function WebhookEventItem({ event, token }: { event: BookingWebhookEvent; token:
 
 function TotalPriceSummary({ booking, totalPriceChf }: { booking: Booking; totalPriceChf: number | null }) {
   const totalPrice = booking.date_ranges.reduce((sum, r) => sum + r.price, 0);
+  const totalDiscount = totalDiscountOf(booking);
   const isChf = booking.currency === "CHF";
 
   return (
@@ -157,6 +175,69 @@ function TotalPriceSummary({ booking, totalPriceChf }: { booking: Booking; total
             {totalPriceChf != null ? `${totalPriceChf.toFixed(2)} CHF` : "—"}
           </div>
         )}
+        {totalDiscount > 0 && (
+          <>
+            <div>
+              <span className="block text-xs text-slate-500 dark:text-slate-400">
+                Regular price ({booking.currency})
+              </span>
+              <span className="line-through">
+                {totalRegularPriceOf(booking).toFixed(2)} {booking.currency}
+              </span>
+            </div>
+            <div>
+              <span className="block text-xs text-slate-500 dark:text-slate-400">Discount</span>
+              −{totalDiscount.toFixed(2)} {booking.currency}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The promotions that produced a booking's discount, as they were at
+ * booking time.
+ *
+ * Read from the snapshot stored on the booking, never from the promotions
+ * collection: the source offer may since have been edited or deleted, and
+ * this is what the guest actually agreed to pay.
+ */
+function AppliedPromotionsSummary({ booking }: { booking: Booking }) {
+  const applied = booking.date_ranges.flatMap((range, i) =>
+    range.applied_promotions.map((promotion) => ({ range, promotion, key: `${i}-${promotion.name}` }))
+  );
+  if (applied.length === 0) return null;
+
+  return (
+    <div>
+      <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+        Promotions applied ({applied.length})
+      </span>
+      <div className="space-y-1.5">
+        {applied.map(({ range, promotion, key }) => (
+          <div
+            key={key}
+            className="text-xs text-slate-600 dark:text-slate-300 bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-900 rounded-lg px-3 py-2 flex flex-wrap gap-x-3 gap-y-0.5"
+          >
+            <span className="font-semibold">{promotion.name}</span>
+            <span>
+              {range.begin_date} → {range.end_date}
+            </span>
+            <span>
+              {promotion.nights} night{promotion.nights === 1 ? "" : "s"}
+            </span>
+            <span>
+              {promotion.discount_type === "percent"
+                ? `${Math.round(promotion.discount_ratio * 100)}% off`
+                : `${promotion.discount_amount.toFixed(2)} ${promotion.currency} / night`}
+            </span>
+            <span className="font-semibold">
+              −{promotion.discount_total.toFixed(2)} {booking.currency}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -325,6 +406,16 @@ export default function BookingsPanel() {
       label: "Total",
       render: (b) => b.date_ranges.reduce((sum, r) => sum + r.price, 0).toFixed(2),
     },
+    {
+      key: "discount",
+      label: "Discount",
+      // What promotions took off, from the snapshot stored on the booking —
+      // so a booking priced below the rate card is explainable at a glance.
+      render: (b) => {
+        const discount = totalDiscountOf(b);
+        return discount > 0 ? `−${discount.toFixed(2)}` : "—";
+      },
+    },
     { key: "policy", label: "Cancellation policy", render: (b) => b.cancellation_policy.name },
     {
       key: "payment",
@@ -442,6 +533,8 @@ export default function BookingsPanel() {
               </div>
 
               <TotalPriceSummary booking={editing} totalPriceChf={totalPriceChf} />
+
+              <AppliedPromotionsSummary booking={editing} />
 
               <div>
                 <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">

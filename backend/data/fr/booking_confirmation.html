@@ -14,6 +14,10 @@ Subject: Réservation confirmée — {{ business_name }}
     <tr><td style="padding:4px 12px 4px 0;">Arrivée</td><td style="padding:4px 0; text-align:right;">{{ check_in }}</td></tr>
     <tr><td style="padding:4px 12px 4px 0;">Départ</td><td style="padding:4px 0; text-align:right;">{{ check_out }}</td></tr>
     <tr><td style="padding:4px 12px 4px 0;">Prix total</td><td style="padding:4px 0; text-align:right;">{{ total_price | money(currency) }}</td></tr>
+{% if total_discount > 0 %}
+    <tr><td style="padding:4px 12px 4px 0; color:#888;">Prix normal</td><td style="padding:4px 0; text-align:right; color:#888; text-decoration:line-through;">{{ total_regular_price | money(currency) }}</td></tr>
+    <tr><td style="padding:4px 12px 4px 0; color:#0f766e;">Vous économisez</td><td style="padding:4px 0; text-align:right; color:#0f766e;">{{ total_discount | money(currency) }}</td></tr>
+{% endif %}
   </table>
 
   <p><strong>Tarifs journaliers</strong></p>

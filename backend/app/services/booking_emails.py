@@ -80,6 +80,10 @@ def _booking_context(booking: Booking, guest: Guest) -> dict:
         "check_in": check_in.isoformat(),
         "check_out": check_out.isoformat(),
         "total_price": booking.total_price,
+        # Display-only, and only rendered when there is a saving to show —
+        # every amount that actually moves stays `total_price`.
+        "total_regular_price": booking.total_regular_price,
+        "total_discount": booking.total_discount,
         "nightly_rates": _nightly_rates(booking),
         "cancellation_policy_name": booking.cancellation_policy.name,
         "cancellation_rules": _cancellation_rules(booking),

@@ -11,5 +11,7 @@
     "initial_charge": "Acompte / paiement initial",
     "scheduled_accrual": "Échéance de paiement",
     "cancellation_settlement": "Règlement d'annulation"
-  }
+  },
+  "regular_price": "Prix normal",
+  "you_save": "Vous économisez"
 }

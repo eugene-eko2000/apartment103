@@ -9,7 +9,9 @@ from app.models.booking import (
     BookingCharge,
     BookingChargeScheduleEntry,
     BookingDateRange,
+    total_discount_of,
     total_price_of,
+    total_regular_price_of,
 )
 from app.models.guest import Currency
 
@@ -131,6 +133,14 @@ class BookingDisplaySource(BaseModel):
     def total_price(self) -> Decimal:
         return total_price_of(self.date_ranges)
 
+    @property
+    def total_regular_price(self) -> Decimal:
+        return total_regular_price_of(self.date_ranges)
+
+    @property
+    def total_discount(self) -> Decimal:
+        return total_discount_of(self.date_ranges)
+
     class Settings:
         projection = {"_id": 1, "currency": 1, "date_ranges": 1, "charges": 1, "charge_schedule": 1}
 
@@ -138,6 +148,11 @@ class BookingDisplaySource(BaseModel):
 class BookingRangeDisplay(BaseModel):
     price: Money
     price_chf: Money
+    # The undiscounted figures, so a details page can render the
+    # struck-through line without doing any arithmetic of its own.
+    regular_price: Money
+    regular_price_chf: Money
+    discount: Money
 
 
 class BookingChargeDisplay(BaseModel):
@@ -158,6 +173,9 @@ class BookingDisplay(BaseModel):
     currency: Currency
     total_price: Money
     total_price_chf: Money
+    total_regular_price: Money
+    total_regular_price_chf: Money
+    total_discount: Money
     date_ranges: list[BookingRangeDisplay]
     charges: list[BookingChargeDisplay]
     charge_schedule: list[BookingScheduleDisplay]
