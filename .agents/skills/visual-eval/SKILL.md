@@ -28,6 +28,8 @@ Follow these exact steps in order:
 
 ## 4. Compare and Annotate Differences
 * Write a Python script to calculate the visual differences and draw bounding boxes. (Create a temporary virtual environment and install `opencv-python` and `numpy` if needed).
+  - Use only Python libraries for image processing (e.g., OpenCV, NumPy). Do not use any external visual diff tools and 
+    don't use LLM for that.
 * For each pair of screenshots:
   1. Load both images and convert them to grayscale.
   2. Crop images to the view e.g. modal form, widget, etc.
