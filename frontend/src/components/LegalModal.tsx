@@ -3,14 +3,14 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 
-export interface PrivacyModalDict {
+export interface LegalModalDict {
   title: string;
   close: string;
   intro: string;
   sections: { heading: string; body: string }[];
 }
 
-export default function PrivacyModal({ dict, onClose }: { dict: PrivacyModalDict; onClose: () => void }) {
+export default function LegalModal({ dict, onClose }: { dict: LegalModalDict; onClose: () => void }) {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();

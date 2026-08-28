@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import type { Dictionary } from "@/app/[lang]/dictionaries";
-import PrivacyModal from "./PrivacyModal";
+import LegalModal from "./LegalModal";
 
 export default function SiteFooter({ dict }: { dict: Dictionary }) {
   const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
 
   return (
     <footer id="site-footer" className="shrink-0 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
@@ -19,11 +20,18 @@ export default function SiteFooter({ dict }: { dict: Dictionary }) {
           >
             {dict.footer.privacy}
           </button>
-          <a href="#" className="hover:text-teal-700 dark:hover:text-teal-400 transition-colors">{dict.footer.terms}</a>
+          <button
+            type="button"
+            onClick={() => setShowTerms(true)}
+            className="hover:text-teal-700 dark:hover:text-teal-400 transition-colors cursor-pointer"
+          >
+            {dict.footer.terms}
+          </button>
           <a href="#" className="hover:text-teal-700 dark:hover:text-teal-400 transition-colors">{dict.footer.contact}</a>
         </div>
       </div>
-      {showPrivacy && <PrivacyModal dict={dict.footer.privacyModal} onClose={() => setShowPrivacy(false)} />}
+      {showPrivacy && <LegalModal dict={dict.footer.privacyModal} onClose={() => setShowPrivacy(false)} />}
+      {showTerms && <LegalModal dict={dict.footer.termsModal} onClose={() => setShowTerms(false)} />}
     </footer>
   );
 }

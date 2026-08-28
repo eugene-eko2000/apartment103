@@ -78,6 +78,45 @@
           "body": "If you have any questions about this Privacy Policy or how we handle your data, please contact us via the contact details provided on this website."
         }
       ]
+    },
+    "termsModal": {
+      "title": "Terms and Conditions",
+      "close": "Close",
+      "intro": "These Terms and Conditions govern your booking and your stay at Berg See Home. By making a reservation through this website, you agree to the terms set out below.",
+      "sections": [
+        {
+          "heading": "Booking and Confirmation",
+          "body": "A reservation is confirmed once we have received your booking request and the required payment has been processed successfully. You will then receive a confirmation email containing the details of your stay."
+        },
+        {
+          "heading": "Prices and Payment",
+          "body": "All prices are shown per night in the currency you select and include applicable taxes unless stated otherwise. Payment is processed securely by our payment provider at the time of booking. Additional local charges, such as a tourist tax, may apply and will be indicated before you confirm."
+        },
+        {
+          "heading": "Cancellations and Refunds",
+          "body": "The cancellation policy that applies to your reservation is shown before you confirm the booking and repeated in your confirmation email. Refunds are calculated according to that policy and returned to the original payment method."
+        },
+        {
+          "heading": "Check-in and Check-out",
+          "body": "Check-in and check-out times are stated in your booking confirmation. Please let us know in advance if you expect to arrive outside the agreed window so that we can arrange access."
+        },
+        {
+          "heading": "Occupancy and Guests",
+          "body": "The apartment may only be occupied by the number of guests stated in the reservation. Additional visitors, as well as subletting or commercial use of the apartment, require our prior written consent."
+        },
+        {
+          "heading": "House Rules",
+          "body": "We ask you to treat the apartment and its furnishings with care, to respect quiet hours, and to observe the no-smoking rule inside the property. Pets are permitted only where this has been agreed in advance."
+        },
+        {
+          "heading": "Damages and Liability",
+          "body": "You are responsible for any damage caused during your stay beyond normal wear and tear, and we ask you to report it to us promptly. We are not liable for loss of or damage to guests' personal belongings, except where caused by our own fault."
+        },
+        {
+          "heading": "Governing Law",
+          "body": "These Terms are governed by the law of the country in which the property is located. Should any provision be invalid, the remaining provisions remain in full effect."
+        }
+      ]
     }
   },
   "languageSwitcher": {

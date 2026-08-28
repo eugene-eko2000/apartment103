@@ -78,6 +78,45 @@
           "body": "Si vous avez des questions concernant cette politique de confidentialité ou la manière dont nous traitons vos données, veuillez nous contacter via les coordonnées indiquées sur ce site."
         }
       ]
+    },
+    "termsModal": {
+      "title": "Conditions générales",
+      "close": "Fermer",
+      "intro": "Les présentes conditions générales régissent votre réservation et votre séjour à Berg See Home. En effectuant une réservation sur ce site, vous acceptez les conditions énoncées ci-dessous.",
+      "sections": [
+        {
+          "heading": "Réservation et confirmation",
+          "body": "Une réservation est confirmée dès réception de votre demande et une fois le paiement requis traité avec succès. Vous recevez alors un e-mail de confirmation reprenant les détails de votre séjour."
+        },
+        {
+          "heading": "Tarifs et paiement",
+          "body": "Tous les tarifs sont indiqués par nuit dans la devise que vous avez choisie et incluent les taxes applicables, sauf mention contraire. Le paiement est traité de manière sécurisée par notre prestataire au moment de la réservation. Des taxes locales, telles que la taxe de séjour, peuvent s'ajouter et vous seront indiquées avant confirmation."
+        },
+        {
+          "heading": "Annulation et remboursement",
+          "body": "La politique d'annulation applicable à votre réservation vous est présentée avant la confirmation et rappelée dans votre e-mail de confirmation. Les remboursements sont calculés selon cette politique et effectués sur le moyen de paiement d'origine."
+        },
+        {
+          "heading": "Arrivée et départ",
+          "body": "Les horaires d'arrivée et de départ figurent dans votre confirmation de réservation. Merci de nous prévenir à l'avance si vous arrivez en dehors du créneau convenu afin que nous puissions organiser votre accès."
+        },
+        {
+          "heading": "Occupation et voyageurs",
+          "body": "Le logement ne peut être occupé que par le nombre de voyageurs indiqué dans la réservation. Tout visiteur supplémentaire, ainsi que la sous-location ou l'usage commercial du logement, requiert notre accord écrit préalable."
+        },
+        {
+          "heading": "Règlement intérieur",
+          "body": "Nous vous demandons de prendre soin du logement et de son mobilier, de respecter les heures de calme et l'interdiction de fumer à l'intérieur. Les animaux de compagnie ne sont admis qu'après accord préalable."
+        },
+        {
+          "heading": "Dommages et responsabilité",
+          "body": "Vous êtes responsable des dommages causés pendant votre séjour au-delà de l'usure normale et nous vous remercions de nous les signaler sans délai. Nous déclinons toute responsabilité en cas de perte ou de dommage des effets personnels des voyageurs, sauf en cas de faute de notre part."
+        },
+        {
+          "heading": "Droit applicable",
+          "body": "Les présentes conditions sont régies par le droit du pays où se situe le logement. Si une clause venait à être invalide, les autres clauses demeureraient pleinement applicables."
+        }
+      ]
     }
   },
   "languageSwitcher": {

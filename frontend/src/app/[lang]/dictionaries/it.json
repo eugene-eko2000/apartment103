@@ -78,6 +78,45 @@
           "body": "Per qualsiasi domanda su questa informativa sulla privacy o su come trattiamo i tuoi dati, contattaci tramite i recapiti forniti su questo sito."
         }
       ]
+    },
+    "termsModal": {
+      "title": "Termini e condizioni",
+      "close": "Chiudi",
+      "intro": "I presenti termini e condizioni disciplinano la prenotazione e il soggiorno presso Berg See Home. Effettuando una prenotazione tramite questo sito accetti le condizioni riportate di seguito.",
+      "sections": [
+        {
+          "heading": "Prenotazione e conferma",
+          "body": "La prenotazione si considera confermata quando abbiamo ricevuto la tua richiesta e il pagamento previsto è stato elaborato con successo. Riceverai quindi un'e-mail di conferma con tutti i dettagli del soggiorno."
+        },
+        {
+          "heading": "Prezzi e pagamento",
+          "body": "Tutti i prezzi sono indicati per notte nella valuta selezionata e includono le imposte applicabili, salvo diversa indicazione. Il pagamento viene elaborato in modo sicuro dal nostro fornitore al momento della prenotazione. Eventuali oneri locali, come la tassa di soggiorno, possono essere dovuti e ti verranno indicati prima della conferma."
+        },
+        {
+          "heading": "Cancellazioni e rimborsi",
+          "body": "La politica di cancellazione applicabile alla tua prenotazione viene mostrata prima della conferma e ripetuta nell'e-mail di conferma. I rimborsi sono calcolati in base a tale politica e accreditati sul metodo di pagamento originario."
+        },
+        {
+          "heading": "Check-in e check-out",
+          "body": "Gli orari di check-in e check-out sono indicati nella conferma di prenotazione. Ti preghiamo di avvisarci in anticipo se prevedi di arrivare al di fuori della fascia oraria concordata, così da poter organizzare l'accesso."
+        },
+        {
+          "heading": "Occupazione e ospiti",
+          "body": "L'appartamento può essere occupato esclusivamente dal numero di ospiti indicato nella prenotazione. Ospiti aggiuntivi, così come la sublocazione o l'uso commerciale dell'appartamento, richiedono il nostro previo consenso scritto."
+        },
+        {
+          "heading": "Regole della casa",
+          "body": "Ti chiediamo di trattare con cura l'appartamento e i suoi arredi, di rispettare le ore di silenzio e il divieto di fumo all'interno. Gli animali domestici sono ammessi solo previo accordo."
+        },
+        {
+          "heading": "Danni e responsabilità",
+          "body": "Sei responsabile di eventuali danni causati durante il soggiorno che eccedano la normale usura e ti chiediamo di segnalarceli tempestivamente. Non rispondiamo della perdita o del danneggiamento degli effetti personali degli ospiti, salvo il caso di nostra colpa."
+        },
+        {
+          "heading": "Legge applicabile",
+          "body": "I presenti termini sono regolati dalla legge del paese in cui si trova l'immobile. L'eventuale invalidità di una clausola non pregiudica l'efficacia delle restanti disposizioni."
+        }
+      ]
     }
   },
   "languageSwitcher": {

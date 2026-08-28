@@ -78,6 +78,45 @@
           "body": "Wenn Sie Fragen zu dieser Datenschutzerklärung oder zum Umgang mit Ihren Daten haben, kontaktieren Sie uns bitte über die auf dieser Website angegebenen Kontaktdaten."
         }
       ]
+    },
+    "termsModal": {
+      "title": "Allgemeine Geschäftsbedingungen",
+      "close": "Schließen",
+      "intro": "Diese Allgemeinen Geschäftsbedingungen regeln Ihre Buchung und Ihren Aufenthalt im Berg See Home. Mit der Vornahme einer Reservierung über diese Website erkennen Sie die nachfolgenden Bedingungen an.",
+      "sections": [
+        {
+          "heading": "Buchung und Bestätigung",
+          "body": "Eine Reservierung ist verbindlich, sobald Ihre Buchungsanfrage bei uns eingegangen und die erforderliche Zahlung erfolgreich verarbeitet wurde. Sie erhalten anschließend eine Bestätigung per E-Mail mit allen Angaben zu Ihrem Aufenthalt."
+        },
+        {
+          "heading": "Preise und Zahlung",
+          "body": "Alle Preise verstehen sich pro Nacht in der von Ihnen gewählten Währung und enthalten die anfallenden Steuern, sofern nicht anders angegeben. Die Zahlung wird zum Zeitpunkt der Buchung sicher über unseren Zahlungsdienstleister abgewickelt. Zusätzliche örtliche Abgaben wie die Kurtaxe können anfallen und werden vor der Bestätigung ausgewiesen."
+        },
+        {
+          "heading": "Stornierung und Erstattung",
+          "body": "Die für Ihre Reservierung geltenden Stornierungsbedingungen werden Ihnen vor der Bestätigung der Buchung angezeigt und in der Buchungsbestätigung wiederholt. Erstattungen richten sich nach diesen Bedingungen und erfolgen auf das ursprünglich verwendete Zahlungsmittel."
+        },
+        {
+          "heading": "An- und Abreise",
+          "body": "Die Zeiten für Check-in und Check-out sind in Ihrer Buchungsbestätigung angegeben. Bitte teilen Sie uns rechtzeitig mit, wenn Sie außerhalb des vereinbarten Zeitfensters anreisen, damit wir den Zugang organisieren können."
+        },
+        {
+          "heading": "Belegung und Gäste",
+          "body": "Die Wohnung darf nur von der in der Reservierung angegebenen Anzahl von Gästen genutzt werden. Weitere Besucher sowie die Untervermietung oder gewerbliche Nutzung der Wohnung bedürfen unserer vorherigen schriftlichen Zustimmung."
+        },
+        {
+          "heading": "Hausordnung",
+          "body": "Wir bitten Sie, die Wohnung und ihre Einrichtung sorgsam zu behandeln, die Ruhezeiten einzuhalten und das Rauchverbot innerhalb der Wohnung zu beachten. Haustiere sind nur nach vorheriger Absprache erlaubt."
+        },
+        {
+          "heading": "Schäden und Haftung",
+          "body": "Für Schäden, die während Ihres Aufenthalts über die normale Abnutzung hinaus entstehen, haften Sie; bitte melden Sie uns solche Schäden umgehend. Für den Verlust oder die Beschädigung persönlicher Gegenstände der Gäste haften wir nur bei eigenem Verschulden."
+        },
+        {
+          "heading": "Anwendbares Recht",
+          "body": "Es gilt das Recht des Landes, in dem sich die Unterkunft befindet. Sollte eine Bestimmung unwirksam sein, bleibt die Wirksamkeit der übrigen Bestimmungen unberührt."
+        }
+      ]
     }
   },
   "languageSwitcher": {
