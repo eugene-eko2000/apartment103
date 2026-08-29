@@ -35,6 +35,7 @@ Follow these exact steps in order:
   2. Crop images to the view e.g. modal form, widget, etc.
   3. Execute the comparison script.
   4. Compute the absolute difference between them (`cv2.absdiff`).
+     * When computing difference, compare changed elements, e.g. text, input fields, buttons, etc. If the element is not changed itself but its position is changed, don't consaider it as a difference. Consider difference only if the element is changed.
   5. Apply a binary threshold to isolate the changed pixels.
   6. Find the contours of the thresholded differences.
   7. Draw visible bounding boxes (e.g., in bright red, thickness 2) around the contours on a copy of both **base** and **eval** screenshots.

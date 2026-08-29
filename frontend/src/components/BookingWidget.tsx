@@ -84,6 +84,17 @@ const MOBILE_BREAKPOINT_PX = 1024;
 // start its own quote request. Short enough that the guest never notices a
 // wait, long enough that a from→to selection costs one request, not two.
 const QUOTE_DEBOUNCE_MS = 150;
+// Width reserved for a header figure, in `ch` — the width of a "0" in
+// whatever size that figure renders at, so one number covers the header's
+// mobile (18px) and desktop (20px) sizes alike. Sized for the widest string
+// formatPrice can return at four digits: "€1234" measures 4.53ch and
+// "1234 CHF" 6.69ch in Geist, so these leave a hair of slack and no more.
+// Reserved as a min-width on the figure and used as the loading
+// placeholder's width, which is what keeps the "from"/"per night" text
+// around it still when a price lands (and when one price replaces another).
+const PRICE_SLOT_CH: Record<"CHF" | "other", number> = { CHF: 6.8, other: 4.6 };
+const priceSlot = (currency: Currency) => `${PRICE_SLOT_CH[currency === "CHF" ? "CHF" : "other"]}ch`;
+
 // Days in the first calendar row have no space above them for a tooltip, so
 // theirs flips below. With showOutsideDays={false} that row holds exactly
 // the first seven days of the month.
@@ -326,8 +337,8 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
 
   // A quote counts only while it still describes the current selection: one
   // fetched for other dates, or in another currency, reads as absent — which
-  // is what makes the existing LoadingSpinner show instead of a figure that
-  // no longer matches what's on screen.
+  // is what makes the price placeholder show instead of a figure that no
+  // longer matches what's on screen.
   const quote =
     quoteResult !== null &&
     quoteResult.beginDate === quoteBeginDate &&
@@ -656,8 +667,8 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
 
   // Every figure below is read straight out of the server's answer — the
   // widget formats, it never multiplies. `quote` is null while a request is
-  // in flight (or before dates are picked), which is what makes the
-  // LoadingSpinner show rather than a stale number.
+  // in flight (or before dates are picked), which is what makes the price
+  // placeholder show rather than a stale number.
   const planQuoteFor = (planId: string | null): PlanQuote | null =>
     quote?.plans.find((p) => p.plan_id === planId) ?? null;
   const selectedPlanQuote = planQuoteFor(selectedPlanId);
@@ -1512,7 +1523,14 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                 <span className="text-white/90 text-base mr-1 [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">{dict.fromPrefix}</span>
               )}
               <span className="whitespace-nowrap">
-                <span className="inline-flex items-baseline text-lg lg:text-xl font-bold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.35)]">
+                <span
+                  // justify-end: any slack in the reserved slot (a three-digit
+                  // price in room kept for four) falls before the figure, so
+                  // the figure stays tight against the unit that follows it
+                  // and the two header lines' units line up under each other.
+                  className="inline-flex items-baseline justify-end text-lg lg:text-xl font-bold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.35)]"
+                  style={{ minWidth: priceSlot(currency) }}
+                >
                   {headerPrice !== null && headerRegularPrice !== null ? (
                     <PriceWithDiscount
                       price={headerPrice}
@@ -1521,24 +1539,36 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                       regularClassName="!text-white/70"
                     />
                   ) : (
-                    <LoadingSpinner className="w-4 h-4 self-center" />
+                    <PricePlaceholder width={priceSlot(currency)} />
                   )}
                 </span>
-                {headerPrice !== null && (
-                  <span className="text-white/90 text-base ml-1 [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
-                    {nights > 0 ? dict.total : dict.perNight}
-                  </span>
-                )}
+                {/* Rendered while loading too: the unit never depends on a
+                    price having arrived, and dropping it would resize the
+                    header the moment one does. */}
+                <span className="text-white/90 text-base ml-1 [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
+                  {nights > 0 ? dict.total : dict.perNight}
+                </span>
               </span>
-              {currency !== "CHF" && headerPriceChf !== null && headerRegularPriceChf !== null && (
+              {/* The CHF companion line is decided by the currency alone, not
+                  by whether its figure is in hand — the two prices always
+                  arrive together, so holding this row open (with a
+                  placeholder in it) is what keeps the header one fixed
+                  height from first paint through to the loaded prices. */}
+              {currency !== "CHF" && (
                 <div className="text-white/85 text-sm [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
-                  <PriceWithDiscount
-                    price={headerPriceChf}
-                    regularPrice={headerRegularPriceChf}
-                    currency="CHF"
-                    className="font-normal"
-                    regularClassName="!text-white/60"
-                  />{" "}
+                  <span className="inline-flex items-baseline justify-end" style={{ minWidth: priceSlot("CHF") }}>
+                    {headerPriceChf !== null && headerRegularPriceChf !== null ? (
+                      <PriceWithDiscount
+                        price={headerPriceChf}
+                        regularPrice={headerRegularPriceChf}
+                        currency="CHF"
+                        className="font-normal"
+                        regularClassName="!text-white/60"
+                      />
+                    ) : (
+                      <PricePlaceholder width={priceSlot("CHF")} />
+                    )}
+                  </span>{" "}
                   {nights > 0 ? dict.total : dict.perNight}
                 </div>
               )}
@@ -2027,6 +2057,25 @@ function CalendarIcon() {
       <path d="M1 7h14" stroke="currentColor" strokeWidth="1.5" />
       <path d="M5 1v4M11 1v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
+  );
+}
+
+/* ── PricePlaceholder ──────────────────────────────────── */
+/**
+ * A shimmering bar standing in for a header price still being fetched.
+ *
+ * Unlike a spinner it occupies the text's own line box: the non-breaking
+ * space sets the height from the surrounding font size and line height, and
+ * the bar itself is taken out of flow on top of it. Given the same `width`
+ * its slot reserves (see PRICE_SLOT_CH), a price appearing changes neither
+ * the header's height nor the position of the text around the figure.
+ */
+function PricePlaceholder({ width }: { width: string }) {
+  return (
+    <span className="relative inline-block align-baseline" style={{ width }} role="status" aria-label="Loading price">
+      &nbsp;
+      <span className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[0.66em] rounded bg-white/30 animate-pulse" />
+    </span>
   );
 }
 
