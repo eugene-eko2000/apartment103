@@ -1508,9 +1508,14 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
           className="relative px-6 py-5 rounded-t-2xl shrink-0"
           style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
         >
-          <div className="flex flex-col gap-1 lg:flex-row lg:items-baseline lg:justify-between lg:gap-0">
-            <div className="flex flex-col gap-0.5">
-              <h2 className="text-lg lg:text-xl font-bold text-white whitespace-nowrap [text-shadow:0_1px_3px_rgba(0,0,0,0.35)]">{headerTitle}</h2>
+          {/* Wrapping, not nowrap: the title and the price group only share a
+              line when they actually fit on one. The compact widget is a
+              narrow sidebar card, and a promotion adds a struck-through
+              regular price to the price group — held on one rigid row, that
+              pair overflowed the header and spilled onto the card below it. */}
+          <div className="flex flex-col gap-1 lg:flex-row lg:flex-wrap lg:items-baseline lg:justify-between lg:gap-x-4 lg:gap-y-1">
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <h2 className="text-lg lg:text-xl font-bold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.35)]">{headerTitle}</h2>
               {nights > 0 && (
                 <p className="text-white/85 text-sm [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
                   {nights} {nights !== 1 ? dict.nights : dict.night} · {totalGuests}{" "}
