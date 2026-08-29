@@ -1523,16 +1523,22 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                 </p>
               )}
             </div>
-            <div className="text-left shrink-0">
-              {showFromPrefix && (
-                <span className="text-white/90 text-base mr-1 [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">{dict.fromPrefix}</span>
-              )}
-              <span className="whitespace-nowrap">
+            {/* Figure column then unit column: the two price lines are cells
+                of one grid, so the euro figure and its CHF companion share a
+                right edge and both units start at the same x — which neither
+                gets from being two independently laid out lines, since the
+                lines are set at different sizes and only one carries the
+                "from" prefix. */}
+            <div className="shrink-0 grid grid-cols-[auto_auto] items-baseline gap-x-1 justify-start lg:justify-end">
+              <div className="text-right whitespace-nowrap">
+                {showFromPrefix && (
+                  <span className="text-white/90 text-base mr-1 [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">{dict.fromPrefix}</span>
+                )}
                 <span
                   // justify-end: any slack in the reserved slot (a three-digit
                   // price in room kept for four) falls before the figure, so
-                  // the figure stays tight against the unit that follows it
-                  // and the two header lines' units line up under each other.
+                  // the figure stays tight against its column's right edge and
+                  // the two header lines' figures line up under each other.
                   className="inline-flex items-baseline justify-end text-lg lg:text-xl font-bold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.35)]"
                   style={{ minWidth: priceSlot(currency) }}
                 >
@@ -1547,12 +1553,12 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                     <PricePlaceholder width={priceSlot(currency)} />
                   )}
                 </span>
-                {/* Rendered while loading too: the unit never depends on a
-                    price having arrived, and dropping it would resize the
-                    header the moment one does. */}
-                <span className="text-white/90 text-base ml-1 [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
-                  {nights > 0 ? dict.total : dict.perNight}
-                </span>
+              </div>
+              {/* Rendered while loading too: the unit never depends on a
+                  price having arrived, and dropping it would resize the
+                  header the moment one does. */}
+              <span className="text-white/90 text-base whitespace-nowrap [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
+                {nights > 0 ? dict.total : dict.perNight}
               </span>
               {/* The CHF companion line is decided by the currency alone, not
                   by whether its figure is in hand — the two prices always
@@ -1560,22 +1566,26 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                   placeholder in it) is what keeps the header one fixed
                   height from first paint through to the loaded prices. */}
               {currency !== "CHF" && (
-                <div className="text-white/85 text-sm [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
-                  <span className="inline-flex items-baseline justify-end" style={{ minWidth: priceSlot("CHF") }}>
-                    {headerPriceChf !== null && headerRegularPriceChf !== null ? (
-                      <PriceWithDiscount
-                        price={headerPriceChf}
-                        regularPrice={headerRegularPriceChf}
-                        currency="CHF"
-                        className="font-normal"
-                        regularClassName="!text-white/60"
-                      />
-                    ) : (
-                      <PricePlaceholder width={priceSlot("CHF")} />
-                    )}
-                  </span>{" "}
-                  {nights > 0 ? dict.total : dict.perNight}
-                </div>
+                <>
+                  <div className="text-right text-white/85 text-sm [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
+                    <span className="inline-flex items-baseline justify-end" style={{ minWidth: priceSlot("CHF") }}>
+                      {headerPriceChf !== null && headerRegularPriceChf !== null ? (
+                        <PriceWithDiscount
+                          price={headerPriceChf}
+                          regularPrice={headerRegularPriceChf}
+                          currency="CHF"
+                          className="font-normal"
+                          regularClassName="!text-white/60"
+                        />
+                      ) : (
+                        <PricePlaceholder width={priceSlot("CHF")} />
+                      )}
+                    </span>
+                  </div>
+                  <span className="text-white/85 text-sm whitespace-nowrap [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
+                    {nights > 0 ? dict.total : dict.perNight}
+                  </span>
+                </>
               )}
             </div>
           </div>
