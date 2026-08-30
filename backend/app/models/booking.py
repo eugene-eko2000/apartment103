@@ -94,9 +94,10 @@ def nights_of_ranges(date_ranges: Iterable[BookingDateRange]) -> list[date]:
 
     `end_date` is an exclusive checkout day, so the nights are the half-open
     interval [begin_date, end_date). This is the authoritative source for
-    Booking.booked_nights, whose unique multikey index makes two Active
-    bookings sharing a night impossible — the atomic backstop behind the
-    proactive deletion in app.services.availability.
+    Booking.booked_nights, whose unique multikey index makes two live
+    bookings — Pending or Active — sharing a night impossible. That index is
+    the atomic backstop behind every availability check in
+    app.services.availability.
     """
     nights: set[date] = set()
     for date_range in date_ranges:
@@ -176,10 +177,12 @@ class Booking(Document):
     booking_date: date = Field(default_factory=date.today)
     currency: Currency = "CHF"
     date_ranges: list[BookingDateRange] = Field(default_factory=list)
-    # Every night the stay occupies. Written only in the same atomic update
-    # that flips a booking to Active; the unique multikey index below is what
-    # closes the simultaneous-payment race. Pending bookings keep it empty
-    # (they deliberately don't block the calendar).
+    # Every night the stay occupies. Claimed as soon as the booking is
+    # created — a Pending booking blocks its nights for the duration of
+    # `pending_expires_at` (see below) — and released only when the booking
+    # is cancelled or swept away. The unique multikey index below is what
+    # makes the claim atomic, so two guests reaching checkout for the same
+    # nights at the same instant can never both get them.
     booked_nights: list[date] = Field(default_factory=list)
     cancellation_policy: BookingCancellationPolicy
     charge_schedule: list[BookingChargeScheduleEntry] = Field(default_factory=list)
@@ -187,12 +190,23 @@ class Booking(Document):
     # verified) and only becomes Active once the first Stripe
     # setup/payment confirmation lands via webhook — see
     # app.api.routes.payments._apply_setup_succeeded /
-    # _apply_successful_charge. Pending bookings deliberately don't block
-    # the calendar (app.api.routes.bookings.list_public_booked_date_ranges
-    # only returns Active ones), so two guests can both be mid-checkout for
-    # the same dates; app.services.availability resolves that race by
-    # rejecting whichever one pays second.
+    # _apply_successful_charge.
+    #
+    # Pending is a *blocking* status: the booking is created the moment a
+    # guest reaches checkout and holds its nights from then on, so no second
+    # guest can start (let alone finish) a checkout for the same dates. The
+    # hold is temporary — see `pending_expires_at`.
     status: BookingStatus = "Pending"
+    # When this booking's Pending hold lapses. Set at creation to
+    # now + settings.pending_booking_ttl_minutes and pushed back when the
+    # guest reaches the payment step; cleared (None) on activation, since an
+    # Active booking holds its dates for good. A Pending booking past this
+    # instant no longer blocks anything: it is deleted by the sweep job
+    # (app.jobs.expire_pending_bookings) and, so no availability answer ever
+    # depends on when that job last ran, on demand by every path that reads
+    # or claims availability — see
+    # app.services.availability.expire_pending_bookings.
+    pending_expires_at: datetime | None = None
 
     # Stripe/payment state. stripe_payment_method_id is the card saved for
     # this specific booking's off-session accrual charges — deliberately not
@@ -228,16 +242,39 @@ class Booking(Document):
             IndexModel([("guest.$id", 1)]),
             IndexModel([("date_ranges.begin_date", 1), ("date_ranges.end_date", 1)]),
             IndexModel([("booking_date", 1)]),
-            # Unique multikey: no two Active bookings may share a night. The
+            # Unique multikey: no two live bookings may share a night. The
             # partial filter indexes only documents with at least one night —
-            # Pending/Cancelled bookings (empty array) are excluded, since a
-            # unique index would otherwise treat every empty array as the same
-            # null value and allow only one such booking to exist. This is the
-            # atomic backstop; the claim happens in app.api.routes.payments.
+            # Cancelled bookings (which release their nights to an empty
+            # array) are excluded, since a unique index would otherwise treat
+            # every empty array as the same null value and allow only one such
+            # booking to exist. This is the atomic backstop; the claim happens
+            # at booking creation (app.api.routes.bookings.create_booking) and
+            # is carried through activation by app.api.routes.payments.
             IndexModel(
                 [("booked_nights", 1)],
                 unique=True,
                 partialFilterExpression={"booked_nights.0": {"$exists": True}},
                 name="booked_nights_unique",
             ),
+            # The overlap lookup in app.services.availability and the public
+            # calendar both filter by status first and then by stay dates, so
+            # status leads this index; the plain date-range index above stays
+            # for the status-agnostic lookups (the .ics export, the admin
+            # views).
+            IndexModel(
+                [("status", 1), ("date_ranges.begin_date", 1), ("date_ranges.end_date", 1)],
+                name="status_date_ranges",
+            ),
+            # The pending sweep: every Pending booking whose hold has lapsed.
+            # Sparse-by-partial-filter so it only ever holds the handful of
+            # bookings actually in checkout, not every Active/Cancelled
+            # booking ever made (they carry no pending_expires_at).
+            IndexModel(
+                [("status", 1), ("pending_expires_at", 1)],
+                partialFilterExpression={"pending_expires_at": {"$type": "date"}},
+                name="pending_expiry",
+            ),
+            # A guest's own bookings by status — the "do you already have a
+            # booking in checkout?" lookup on every booking creation.
+            IndexModel([("guest.$id", 1), ("status", 1)], name="guest_status"),
         ]

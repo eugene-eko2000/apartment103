@@ -25,8 +25,9 @@ def start_scheduler() -> None:
     # Imported here, not at module scope: the job modules pull in the model
     # and service stack, and they in turn should be able to import this
     # module for the scheduler without a cycle.
-    from app.jobs import reconcile_payments, sync_calendars
+    from app.jobs import expire_pending_bookings, reconcile_payments, sync_calendars
 
+    expire_pending_bookings.register(scheduler)
     reconcile_payments.register(scheduler)
     sync_calendars.register(scheduler)
     scheduler.start()

@@ -1,15 +1,23 @@
-"""Overlap checks around the Pending→Active booking lifecycle.
+"""Who holds which nights, and for how long.
 
-Two things can make a candidate's dates unavailable:
+A booking claims its nights the moment it is created, not when it is paid
+for: `Booking.booked_nights` is written at creation and guarded by a unique
+multikey index, so a Pending booking blocks its dates against every other
+booking and against the public calendar. That is what makes "two guests
+mid-checkout for the same nights" impossible rather than merely unlikely.
 
-* another Active booking on this site. Pending bookings never block the
-  public calendar (only Active ones do — see
-  app.api.routes.bookings.list_public_booked_date_ranges), so two guests can
-  legitimately reach checkout for the same dates at once. The guest who pays
-  first wins: their activation discards the other guests' overlapping Pending
-  bookings (see discard_overlapping_pending_bookings), and any loser who
-  tries to pay afterwards is caught in
-  app.api.routes.payments.create_payment_intent.
+The hold is temporary. A guest who walks away from checkout must not sit on
+the dates forever, so a Pending booking carries `pending_expires_at`
+(settings.pending_booking_ttl_minutes from when it was created, pushed back
+when the guest reaches the payment step). Past that instant it holds
+nothing: `expire_pending_bookings` deletes it, and every path that reads or
+claims availability calls that first, so an answer never depends on when the
+sweep job (app.jobs.expire_pending_bookings) last ran.
+
+Two things can therefore make a candidate's dates unavailable:
+
+* another live booking on this site — Active, or Pending and not yet
+  expired.
 * a Closure — the stay is booked on Airbnb/Booking.com (imported by
   app.services.calendar_sync) or the host blocked the dates by hand. The
   guest calendar already greys those days out, but it may be working from a
@@ -17,18 +25,43 @@ Two things can make a candidate's dates unavailable:
   happens here.
 """
 
+import logging
+from datetime import datetime, timedelta, timezone
+
 from beanie.odm.utils.encoder import Encoder
 
+from app.core.config import settings
 from app.models.booking import Booking
 from app.models.closure import Closure
 from app.schemas.booking import BookedDateRange, BookingOverlapProjection
 from app.schemas.closure import ClosedDateRange
+
+logger = logging.getLogger(__name__)
 
 _encoder = Encoder()
 
 # Recorded on a booking whose nights another guest secured first. Mirrored by
 # app.api.routes.payments, which reports it to the guest as a 409 detail.
 DATES_TAKEN_MESSAGE = "Selected dates are no longer available"
+
+# Statuses that hold nights. Cancelled bookings release theirs (their
+# booked_nights are emptied), and expired Pending ones are deleted before any
+# of the queries below run.
+BLOCKING_STATUSES = ["Active", "Pending"]
+
+
+def pending_deadline() -> datetime:
+    """When a Pending booking created (or resumed) right now stops holding
+    its nights."""
+    return datetime.now(timezone.utc) + timedelta(minutes=settings.pending_booking_ttl_minutes)
+
+
+def dates_taken_detail(overlapping: list[BookedDateRange]) -> str:
+    """The guest-facing reason a stay can't be booked. One message for the
+    whole flow: the same wording answers a booking creation, a date change,
+    and a payment attempt that arrives too late."""
+    dates = ", ".join(f"{r.begin_date.isoformat()} to {r.end_date.isoformat()}" for r in overlapping)
+    return f"Another booking was made for dates {dates}. Please book different dates."
 
 
 def _ranges_overlap(
@@ -56,20 +89,52 @@ def _overlaps_any_clause(booking: Booking, begin_field: str, end_field: str) -> 
     ]
 
 
+async def expire_pending_bookings() -> int:
+    """Delete every Pending booking whose hold has lapsed, releasing its
+    nights. Returns how many were removed.
+
+    Deleted, not left behind as Cancelled: a checkout that was abandoned
+    before any money moved is not a record of anything the guest did, and
+    leaving it in their list would show them (and the host) a cancellation
+    that never happened — the same reasoning that applies to a booking which
+    loses the availability race.
+
+    Scoped to bookings with no charges. A Pending booking should never have
+    any (its opening charge is what activates it), but a payment confirmed
+    seconds before the deadline can still be in flight, and money already
+    taken must never have its booking swept out from under it. Such a booking
+    is left for app.api.routes.payments to resolve — it either activates on
+    the webhook, or is refunded and rejected there.
+
+    One atomic bulk delete, and cheap enough to call on demand: it is indexed
+    by (status, pending_expires_at) and matches nothing at all in the common
+    case.
+    """
+    result = await Booking.get_pymongo_collection().delete_many(
+        {
+            "status": "Pending",
+            "pending_expires_at": {"$lte": _encoder.encode(datetime.now(timezone.utc))},
+            "charges.0": {"$exists": False},
+        }
+    )
+    if result.deleted_count:
+        logger.info("Expired %d pending booking(s)", result.deleted_count)
+    return result.deleted_count
+
+
 async def _overlapping_booking_ranges(booking: Booking) -> list[BookedDateRange]:
-    # Let MongoDB do the filtering, against the (begin_date, end_date) index
-    # created in migrations/20260712000329_create_initial_collections.py,
-    # instead of scanning every Active booking into Python. $elemMatch is
-    # per stored range, so one clause per range of *this* booking, or-ed
-    # together. Projected to ids and dates: this is on the hot path of
-    # payment-intent creation.
+    # Let MongoDB do the filtering, against the (status, begin_date,
+    # end_date) index on Booking, instead of scanning every live booking into
+    # Python. $elemMatch is per stored range, so one clause per range of
+    # *this* booking, or-ed together. Projected to ids and dates: this is on
+    # the hot path of booking creation and payment-intent creation.
     overlaps_any = [
         {"date_ranges": {"$elemMatch": clause}}
         for clause in _overlaps_any_clause(booking, "begin_date", "end_date")
     ]
     others = await Booking.find(
         {
-            "status": "Active",
+            "status": {"$in": BLOCKING_STATUSES},
             "_id": {"$ne": booking.id},
             "$or": overlaps_any,
         },
@@ -98,11 +163,16 @@ async def _overlapping_closure_ranges(booking: Booking) -> list[BookedDateRange]
 
 
 async def find_overlapping_ranges(booking: Booking) -> list[BookedDateRange]:
-    """Date ranges — from other Active bookings, or from closures — that
+    """Date ranges — from other live bookings, or from closures — that
     overlap this booking's own date ranges. Empty if the dates are still
-    free."""
+    free.
+
+    Lapsed Pending holds are cleared first, so a booking that has run out of
+    time never shows up here as a blocker.
+    """
     if not booking.date_ranges:
         return []
+    await expire_pending_bookings()
     return [
         *await _overlapping_booking_ranges(booking),
         *await _overlapping_closure_ranges(booking),
@@ -112,10 +182,12 @@ async def find_overlapping_ranges(booking: Booking) -> list[BookedDateRange]:
 async def discard_overlapping_pending_bookings(booking: Booking) -> int:
     """Remove every Pending booking whose stay overlaps `booking`'s dates.
 
-    Called right after `booking` becomes Active: the guest who paid first owns
-    the dates, so any other guest still mid-checkout on the same nights must
-    be stopped. Otherwise they could pay for the same dates moments later and
-    double-book.
+    Called right after `booking` becomes Active. Since Pending bookings now
+    claim their nights against the same unique index, there should be nothing
+    left to find — no overlapping Pending booking can have been created in
+    the first place. This stays as a backstop for the one case that predates
+    that rule: a Pending booking stored before this release, holding no
+    nights of its own.
 
     Deleted, not left behind as Cancelled. A booking that never got its dates
     is not a record of anything the guest did — leaving it in the list would

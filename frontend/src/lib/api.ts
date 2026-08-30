@@ -313,6 +313,10 @@ export interface Booking {
   webhook_events: BookingWebhookEvent[];
   last_payment_check_at?: string | null;
   last_payment_error?: string | null;
+  // When this booking's temporary hold on the dates lapses (ISO 8601), for
+  // a Pending booking. Null once it goes Active — a paid booking keeps its
+  // dates for good. See the backend's app.services.availability.
+  pending_expires_at?: string | null;
 }
 
 // Response shape of GET /bookings/{id}/display and GET /bookings/display —

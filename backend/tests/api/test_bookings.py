@@ -1,8 +1,10 @@
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
 from beanie import PydanticObjectId
 
+from app.core.config import settings
 from app.models.booking import Booking, BookingCharge
 from app.models.cancellation_policy import CancellationPolicy, CancellationRule
 from app.models.plan import Plan
@@ -128,15 +130,142 @@ class TestCreateBooking:
         )
         assert second.status_code == 201
 
-
-class TestListPublicBookedDateRanges:
-    async def test_excludes_pending_bookings(
+    async def test_claims_its_nights_and_starts_a_hold(
         self, client, guest, cancellation_policy, admin_headers
     ):
-        # A booking that's stored but not yet paid/verified (Pending) must
-        # not block the calendar, so a second guest can still reach checkout
-        # for the same dates — see app.services.availability for how that
-        # race is then resolved.
+        # The whole point of creating the booking up front: from this moment
+        # the dates are held, and the hold has a deadline.
+        before = datetime.now(timezone.utc)
+        created = await client.post(
+            "/bookings",
+            json=_booking_payload(guest.id, cancellation_policy.id),
+            headers=admin_headers,
+        )
+        assert created.status_code == 201
+
+        stored = await Booking.get(PydanticObjectId(created.json()["_id"]))
+        assert stored.status == "Pending"
+        assert stored.booked_nights == [date(2026, 7, d) for d in (1, 2, 3, 4)]
+        assert stored.pending_expires_at is not None
+        expires_at = stored.pending_expires_at.replace(tzinfo=timezone.utc)
+        assert expires_at >= before + timedelta(minutes=settings.pending_booking_ttl_minutes - 1)
+        assert expires_at <= datetime.now(timezone.utc) + timedelta(
+            minutes=settings.pending_booking_ttl_minutes
+        )
+
+    async def test_rejects_dates_another_guest_is_in_checkout_for(
+        self, client, guest, other_guest, cancellation_policy, admin_headers
+    ):
+        first = await client.post(
+            "/bookings",
+            json=_booking_payload(guest.id, cancellation_policy.id),
+            headers=admin_headers,
+        )
+        assert first.status_code == 201
+
+        second = await client.post(
+            "/bookings",
+            json=_booking_payload(
+                other_guest.id,
+                cancellation_policy.id,
+                date_ranges=[{"begin_date": "2026-07-03", "end_date": "2026-07-08", "price": 500.0}],
+            ),
+            headers=admin_headers,
+        )
+        assert second.status_code == 409
+        # The same wording the guest gets when a payment arrives too late,
+        # naming the dates that are spoken for.
+        assert "2026-07-01 to 2026-07-05" in second.json()["detail"]
+
+    async def test_rejects_dates_an_active_booking_holds(
+        self, client, guest, other_guest, cancellation_policy, admin_headers
+    ):
+        first = await client.post(
+            "/bookings",
+            json=_booking_payload(guest.id, cancellation_policy.id),
+            headers=admin_headers,
+        )
+        booking = await Booking.get(PydanticObjectId(first.json()["_id"]))
+        booking.status = "Active"
+        booking.pending_expires_at = None
+        await booking.save()
+
+        second = await client.post(
+            "/bookings",
+            json=_booking_payload(other_guest.id, cancellation_policy.id),
+            headers=admin_headers,
+        )
+        assert second.status_code == 409
+
+    async def test_rejects_dates_a_closure_covers(
+        self, client, guest, cancellation_policy, closure, admin_headers
+    ):
+        # A closure claims no nights of its own (it isn't a booking), so this
+        # is the overlap query doing the work, not the unique index.
+        response = await client.post(
+            "/bookings",
+            json=_booking_payload(
+                guest.id,
+                cancellation_policy.id,
+                date_ranges=[{"begin_date": "2026-08-02", "end_date": "2026-08-06", "price": 400.0}],
+            ),
+            headers=admin_headers,
+        )
+        assert response.status_code == 409
+
+    async def test_accepts_dates_freed_by_an_expired_hold(
+        self, client, guest, other_guest, cancellation_policy, admin_headers
+    ):
+        first = await client.post(
+            "/bookings",
+            json=_booking_payload(guest.id, cancellation_policy.id),
+            headers=admin_headers,
+        )
+        abandoned_id = PydanticObjectId(first.json()["_id"])
+        abandoned = await Booking.get(abandoned_id)
+        await abandoned.set(
+            {Booking.pending_expires_at: datetime.now(timezone.utc) - timedelta(minutes=1)}
+        )
+
+        second = await client.post(
+            "/bookings",
+            json=_booking_payload(other_guest.id, cancellation_policy.id),
+            headers=admin_headers,
+        )
+        assert second.status_code == 201
+        assert await Booking.get(abandoned_id) is None
+
+    async def test_checkout_day_may_be_another_stays_checkin(
+        self, client, guest, other_guest, cancellation_policy, admin_headers
+    ):
+        # end_date is the exclusive checkout day, so back-to-back stays hold
+        # disjoint nights and both go through.
+        first = await client.post(
+            "/bookings",
+            json=_booking_payload(guest.id, cancellation_policy.id),
+            headers=admin_headers,
+        )
+        assert first.status_code == 201
+
+        second = await client.post(
+            "/bookings",
+            json=_booking_payload(
+                other_guest.id,
+                cancellation_policy.id,
+                date_ranges=[{"begin_date": "2026-07-05", "end_date": "2026-07-09", "price": 400.0}],
+            ),
+            headers=admin_headers,
+        )
+        assert second.status_code == 201
+
+
+class TestListPublicBookedDateRanges:
+    async def test_includes_pending_bookings(
+        self, client, guest, cancellation_policy, admin_headers
+    ):
+        # A guest in checkout holds their nights, so the calendar has to show
+        # those days as taken — offering them would only walk the next guest
+        # into a conflict they can't get past.
         await client.post(
             "/bookings",
             json=_booking_payload(guest.id, cancellation_policy.id),
@@ -145,7 +274,28 @@ class TestListPublicBookedDateRanges:
 
         response = await client.get("/bookings/public/date-ranges")
         assert response.status_code == 200
+        assert response.json() == [{"begin_date": "2026-07-01", "end_date": "2026-07-05"}]
+
+    async def test_excludes_expired_pending_bookings(
+        self, client, guest, cancellation_policy, admin_headers
+    ):
+        # A checkout that ran out of time holds nothing: the endpoint sweeps
+        # it away rather than greying out dates that are in fact free.
+        created = await client.post(
+            "/bookings",
+            json=_booking_payload(guest.id, cancellation_policy.id),
+            headers=admin_headers,
+        )
+        booking_id = PydanticObjectId(created.json()["_id"])
+        booking = await Booking.get(booking_id)
+        await booking.set(
+            {Booking.pending_expires_at: datetime.now(timezone.utc) - timedelta(minutes=1)}
+        )
+
+        response = await client.get("/bookings/public/date-ranges")
+        assert response.status_code == 200
         assert response.json() == []
+        assert await Booking.get(booking_id) is None
 
     async def test_lists_date_ranges_for_active_bookings(
         self, client, guest, cancellation_policy, admin_headers
@@ -184,6 +334,8 @@ class TestListBookings:
     async def test_admin_sees_all_bookings(
         self, client, guest, other_guest, cancellation_policy, admin_headers
     ):
+        # Different dates for the two guests: bookings hold their nights from
+        # creation now, so two stays on the same nights can't both exist.
         await client.post(
             "/bookings",
             json=_booking_payload(guest.id, cancellation_policy.id),
@@ -191,7 +343,11 @@ class TestListBookings:
         )
         await client.post(
             "/bookings",
-            json=_booking_payload(other_guest.id, cancellation_policy.id),
+            json=_booking_payload(
+                other_guest.id,
+                cancellation_policy.id,
+                date_ranges=[{"begin_date": "2026-08-01", "end_date": "2026-08-05", "price": 400.0}],
+            ),
             headers=admin_headers,
         )
 
@@ -607,12 +763,12 @@ class TestBookedNightsAreInternal:
         assert listed.json()
         assert all("booked_nights" not in item for item in listed.json())
 
-    async def test_update_does_not_claim_nights(
+    async def test_update_moves_the_claimed_nights(
         self, client, guest, cancellation_policy, admin_headers
     ):
-        # Editing is restricted to Pending bookings, which never claim nights.
-        # Excluding booked_nights from responses must not mean an update
-        # starts writing it: the field stays empty in storage too.
+        # Moving a stay gives up the old nights and takes the new ones.
+        # Excluding booked_nights from responses is a wire-format choice
+        # only — the field is still what backs the claim in storage.
         created = await client.post(
             "/bookings", json=_booking_payload(guest.id, cancellation_policy.id), headers=admin_headers
         )
@@ -631,7 +787,7 @@ class TestBookedNightsAreInternal:
         assert "booked_nights" not in updated.json()
 
         stored = await Booking.get(PydanticObjectId(booking_id))
-        assert stored.booked_nights == []
+        assert stored.booked_nights == [date(2026, 8, 1), date(2026, 8, 2), date(2026, 8, 3)]
 
 
 class TestPricesAreServerSide:

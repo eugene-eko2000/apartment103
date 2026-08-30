@@ -18,8 +18,10 @@ from app.schemas.payment import PaymentIntentResponse, PaymentOutcomeResponse, U
 from app.services import booking_emails, stripe_service
 from app.services.availability import (
     DATES_TAKEN_MESSAGE,
+    dates_taken_detail,
     discard_overlapping_pending_bookings,
     find_overlapping_ranges,
+    pending_deadline,
 )
 from app.services.charge_schedule import outstanding_amount, sync_charge_schedule_status, upcoming_charges
 
@@ -111,7 +113,19 @@ async def _reject_dates_taken(
     """
     booking.status = "Cancelled"
     booking.last_payment_error = DATES_TAKEN_MESSAGE
-    await _commit(booking, event, status=booking.status, last_payment_error=booking.last_payment_error)
+    # Release whatever nights this booking was still holding. It is about to
+    # be deleted in the ordinary case, but a booking kept back for a human
+    # (a refund that failed, below) must not go on blocking dates it lost.
+    booking.booked_nights = []
+    booking.pending_expires_at = None
+    await _commit(
+        booking,
+        event,
+        status=booking.status,
+        last_payment_error=booking.last_payment_error,
+        booked_nights=booking.booked_nights,
+        pending_expires_at=booking.pending_expires_at,
+    )
     if payment_intent_id is not None and not await _refund_safely(
         payment_intent_id, "the booking lost the availability race"
     ):
@@ -139,10 +153,11 @@ async def create_payment_intent(
             detail=DATES_TAKEN_MESSAGE,
         )
 
-    # A Pending booking doesn't block the calendar, so another guest may have
-    # since paid for (and gone Active on) an overlapping range. Catch that
-    # here, right before money moves, rather than letting it surface only
-    # once the Stripe confirmation itself fails.
+    # The booking has held these nights since it was created, so this should
+    # find nothing. It is kept as the check that catches the cases the hold
+    # cannot: a closure imported from Airbnb/Booking.com since checkout
+    # began, and any booking stored before Pending started blocking. Money is
+    # about to move, so it is worth one indexed query to be sure.
     overlapping = await find_overlapping_ranges(booking)
     if overlapping:
         # Removed, not kept as a cancellation: no intent was issued from this
@@ -150,11 +165,16 @@ async def create_payment_intent(
         # guest still confirms a payment on a client secret from an earlier
         # attempt, stripe_webhook's "booking is gone" branch refunds it.
         await booking.delete()
-        dates = ", ".join(f"{r.begin_date.isoformat()} to {r.end_date.isoformat()}" for r in overlapping)
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Another booking was made for dates {dates}. Please book different dates.",
+            status_code=status.HTTP_409_CONFLICT, detail=dates_taken_detail(overlapping)
         )
+
+    # The guest is at the card form: restart the clock, so a hold that was
+    # about to lapse doesn't pull the dates out from under a payment being
+    # entered right now.
+    if booking.status == "Pending":
+        booking.pending_expires_at = pending_deadline()
+        await booking.set({Booking.pending_expires_at: booking.pending_expires_at})
 
     # fetch_links=True in _get_booking_or_404 resolves booking.guest to a
     # full Guest document, not a Link.
@@ -334,10 +354,15 @@ async def _apply_setup_succeeded(
     booking.stripe_payment_method_id = setup_intent["payment_method"]
     booking.payment_status = "card_verified"
     booking.status = "Active"
-    # Claim the nights atomically with the activation: the unique multikey
-    # index on booked_nights makes this write fail if another Active booking
-    # already owns one of them — closing the simultaneous-payment race.
+    # The booking has held these nights since it was created; re-asserting
+    # them here is what makes an *older* booking — one stored before Pending
+    # blocked, holding none — claim them now, and the unique multikey index
+    # on booked_nights is what makes that claim fail rather than double-book
+    # if another booking already owns one of them.
     booking.booked_nights = nights_of_ranges(booking.date_ranges)
+    # The hold has served its purpose: an Active booking keeps its dates for
+    # good, so there is nothing left for the sweep to expire.
+    booking.pending_expires_at = None
     try:
         await _commit(
             booking,
@@ -346,6 +371,7 @@ async def _apply_setup_succeeded(
             payment_status=booking.payment_status,
             status=booking.status,
             booked_nights=booking.booked_nights,
+            pending_expires_at=booking.pending_expires_at,
         )
     except DuplicateKeyError:
         # Card verified, nothing charged — just reject the booking.
@@ -446,11 +472,14 @@ async def _apply_successful_charge(
     booking.last_payment_error = None
     if activating:
         booking.status = "Active"
-        # Claim the nights atomically with the activation: the unique multikey
-        # index on booked_nights makes this write fail if another Active
-        # booking already owns one of them — closing the simultaneous-payment
-        # race.
+        # As in _apply_setup_succeeded: the nights are normally already this
+        # booking's, held since it was created; re-asserting them claims them
+        # for a booking that predates the Pending hold, and the unique
+        # multikey index on booked_nights makes that claim fail rather than
+        # double-book. The hold itself is dropped — an Active booking keeps
+        # its dates for good.
         booking.booked_nights = nights_of_ranges(booking.date_ranges)
+        booking.pending_expires_at = None
     booking.payment_status = (
         "fully_charged"
         if booking.amount_charged >= booking.total_price - CHARGE_TOLERANCE
@@ -474,6 +503,7 @@ async def _apply_successful_charge(
     if activating:
         update["$set"]["status"] = booking.status
         update["$set"]["booked_nights"] = _encoder.encode(booking.booked_nights)
+        update["$set"]["pending_expires_at"] = None
     if payment_method_id:
         update["$set"]["stripe_payment_method_id"] = payment_method_id
     if event is not None:

@@ -3,6 +3,7 @@ from decimal import Decimal
 from beanie import PydanticObjectId
 from beanie.operators import In
 from fastapi import APIRouter, Depends, HTTPException, status
+from pymongo.errors import DuplicateKeyError
 
 from app.api.common import get_or_404
 from app.api.deps import (
@@ -10,7 +11,12 @@ from app.api.deps import (
     ensure_can_access_booking,
     get_current_principal,
 )
-from app.models.booking import Booking, BookingCancellationPolicy, BookingDateRange
+from app.models.booking import (
+    Booking,
+    BookingCancellationPolicy,
+    BookingDateRange,
+    nights_of_ranges,
+)
 from app.models.cancellation_policy import CancellationPolicy
 from app.models.guest import Currency, Guest
 from app.models.plan import Plan
@@ -24,7 +30,14 @@ from app.schemas.booking import (
     BookingRangeDisplay,
     BookingScheduleDisplay,
 )
-from app.services.availability import find_overlapping_ranges
+from app.services.availability import (
+    BLOCKING_STATUSES,
+    DATES_TAKEN_MESSAGE,
+    dates_taken_detail,
+    expire_pending_bookings,
+    find_overlapping_ranges,
+    pending_deadline,
+)
 from app.services.booking_pricing import UnpricedDatesError, price_date_ranges
 from app.services.charge_schedule import build_charge_schedule
 from app.services.currency_service import convert_amount_with_rates, rates_for
@@ -46,16 +59,29 @@ public_router = APIRouter(prefix="/bookings", tags=["bookings"])
 
 @public_router.get("/public/date-ranges", response_model=list[BookedDateRange])
 async def list_public_booked_date_ranges() -> list[BookedDateRange]:
+    """Every stay currently holding dates, for the calendar's greyed-out
+    days.
+
+    Pending bookings are included: a guest in checkout holds their nights
+    (see app.services.availability), so showing those days as free would
+    only walk the next guest into a conflict they can't get past. Lapsed
+    holds are cleared first, so a checkout that ran out of time doesn't grey
+    out dates that are in fact free.
+    """
+    await expire_pending_bookings()
     # Projected to `date_ranges` only: this is anonymous and hit on every
     # calendar open, so it must not drag whole Booking documents (charges,
     # charge_schedule, webhook_events) across the wire to return two dates.
     bookings = await Booking.find(
-        Booking.status == "Active", projection_model=BookingDateRangesProjection
+        {"status": {"$in": BLOCKING_STATUSES}}, projection_model=BookingDateRangesProjection
     ).to_list()
     return [date_range for booking in bookings for date_range in booking.date_ranges]
 
 
 async def _get_pending_booking_for_guest(guest_id: PydanticObjectId) -> Booking | None:
+    # Lapsed holds first: a guest whose previous checkout timed out is
+    # starting a fresh booking, not resuming a dead one.
+    await expire_pending_bookings()
     return await Booking.find_one({"guest.$id": guest_id, "status": "Pending"})
 
 
@@ -177,6 +203,35 @@ async def _build_display(booking: Booking | BookingDisplaySource, currency: Curr
     )
 
 
+async def _insert_claiming_nights(booking: Booking) -> None:
+    """Store a booking, taking its nights with it — or refuse, naming the
+    dates that are already spoken for.
+
+    Two checks, and both are needed. `find_overlapping_ranges` is the one
+    that can explain itself: it names the conflicting ranges (and covers
+    closures, which claim no nights of their own). The unique index on
+    booked_nights is the one that cannot be raced: between that query and
+    this insert, another guest's checkout may claim the very same nights, and
+    only the index sees both writes. So the query answers "why", and the
+    index guarantees "at most one".
+    """
+    overlapping = await find_overlapping_ranges(booking)
+    if overlapping:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=dates_taken_detail(overlapping)
+        )
+    try:
+        await booking.insert()
+    except DuplicateKeyError as exc:
+        # Lost a photo finish. The dates are gone, and there is nothing to
+        # name them by — the winning booking landed after the query above —
+        # so answer with the same message the guest would have got a
+        # millisecond earlier.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=DATES_TAKEN_MESSAGE
+        ) from exc
+
+
 @router.post(
     "",
     response_model=Booking,
@@ -203,9 +258,13 @@ async def create_booking(
         currency=payload.currency,
         date_ranges=date_ranges,
         cancellation_policy=_snapshot_cancellation_policy(cancellation_policy),
+        # The booking blocks its dates from this moment, for a limited
+        # time — see app.services.availability.
+        booked_nights=nights_of_ranges(date_ranges),
+        pending_expires_at=pending_deadline(),
     )
     booking.charge_schedule = build_charge_schedule(booking)
-    await booking.insert()
+    await _insert_claiming_nights(booking)
     return booking
 
 
@@ -262,8 +321,10 @@ async def cancel_booking(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Booking is already cancelled")
     await settle_cancellation(booking)
     booking.status = "Cancelled"
-    # Release the nights so the dates become bookable again.
+    # Release the nights so the dates become bookable again, and drop the
+    # Pending deadline with them — there is no hold left to expire.
     booking.booked_nights = []
+    booking.pending_expires_at = None
     await booking.save()
     return booking
 
@@ -296,15 +357,24 @@ async def update_booking(
     booking.date_ranges = date_ranges
     booking.cancellation_policy = _snapshot_cancellation_policy(cancellation_policy)
     booking.charge_schedule = build_charge_schedule(booking)
-    # A Pending booking never claims nights, so the unique booked_nights index
-    # can't backstop a date change the way it does for activation. Re-check
-    # the new dates against other Active bookings and closures here instead.
-    if await find_overlapping_ranges(booking):
+    # Moving the stay means giving up the old nights and claiming the new
+    # ones. Same two-step as _insert_claiming_nights: the query names the
+    # conflict, the unique index makes the swap safe against a concurrent
+    # checkout. The hold is restarted too — the guest is actively working on
+    # this booking, and the new dates have only just been taken.
+    booking.booked_nights = nights_of_ranges(date_ranges)
+    booking.pending_expires_at = pending_deadline()
+    overlapping = await find_overlapping_ranges(booking)
+    if overlapping:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="These dates are no longer available",
+            status_code=status.HTTP_409_CONFLICT, detail=dates_taken_detail(overlapping)
         )
-    await booking.save()
+    try:
+        await booking.save()
+    except DuplicateKeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=DATES_TAKEN_MESSAGE
+        ) from exc
     return booking
 
 

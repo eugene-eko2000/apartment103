@@ -81,5 +81,20 @@ class Settings(BaseSettings):
     # into a guest-facing non-CHF currency (see app/services/currency_service.py).
     commission_rate: Decimal = Decimal("0.06")
 
+    # How long a Pending booking holds ("temporarily blocks") its nights
+    # before it is swept away and the dates become bookable again — see
+    # app.services.availability.expire_pending_bookings. A Pending booking is
+    # created the moment a guest reaches checkout, so this is the window a
+    # guest has to finish paying: long enough to fill in details and enter a
+    # card, short enough that an abandoned checkout doesn't sit on the
+    # calendar. The deadline is pushed back when the guest reaches the
+    # payment step (see app.api.routes.payments.create_payment_intent).
+    pending_booking_ttl_minutes: int = 15
+    # How often the sweep job looks for expired Pending bookings. Expired
+    # ones are also cleared on demand by the booking/availability paths, so
+    # this is a bound on how stale the public calendar can get, not the only
+    # thing standing between an abandoned checkout and the dates it holds.
+    pending_booking_sweep_interval_minutes: int = 1
+
 
 settings = Settings()

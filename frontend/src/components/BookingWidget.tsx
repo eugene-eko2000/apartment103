@@ -766,13 +766,13 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   // the guest actually saw on this fresh page anyway, so skipping the
   // animation and opening straight into the natural extended layout is both
   // safer and correct.
-  // checkInOverride exists for the locale-switch resume below: that caller
-  // runs on a freshly mounted widget and has the restored check-in date in
-  // hand, while this closure's own `range` is still at its initial value.
+  // rangeOverride exists for the locale-switch resume below: that caller
+  // runs on a freshly mounted widget and has the restored dates in hand,
+  // while this closure's own `range` is still at its initial value.
   const handleVerified = async (
     identity: VerifiedIdentity,
     animate = true,
-    checkInOverride?: Date
+    rangeOverride?: DateRange
   ) => {
     const preferredLanguage = identity.guestForm.preferred_language;
     if (preferredLanguage && preferredLanguage !== lang) {
@@ -792,8 +792,12 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
         LOCALE_SWITCH_RESUME_KEY,
         JSON.stringify({
           identity,
-          checkIn: range?.from ? format(range.from, "yyyy-MM-dd") : null,
-          checkOut: range?.to ? format(range.to, "yyyy-MM-dd") : null,
+          checkIn: rangeOverride?.from ?? range?.from
+            ? format((rangeOverride?.from ?? range?.from)!, "yyyy-MM-dd")
+            : null,
+          checkOut: rangeOverride?.to ?? range?.to
+            ? format((rangeOverride?.to ?? range?.to)!, "yyyy-MM-dd")
+            : null,
           adults,
           children: children.map((c) => c.age),
         })
@@ -827,15 +831,83 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     // so reading the `plans`/`range` state here would see both at their
     // initial (empty) values, preselect nothing, and leave the plan step
     // with a permanently disabled Next button. Fetch the plans the same way
-    // resumePendingBooking does, and take the check-in date from the caller.
+    // resumePendingBooking does, and take the dates from the caller.
     const availablePlans = plans.length > 0 ? plans : await listPublicPlans().catch(() => plans);
     if (availablePlans !== plans) setPlans(availablePlans);
-    const checkIn = checkInOverride ?? range?.from;
+    const checkIn = rangeOverride?.from ?? range?.from;
+    const checkOut = rangeOverride?.to ?? range?.to;
     const selectablePlans = checkIn
       ? cheapestPerCancellationFee(availablePlans, differenceInCalendarDays(checkIn, today))
       : availablePlans;
-    setSelectedPlanId(selectablePlans[0]?._id ?? null);
+    const defaultPlan = selectablePlans[0] ?? null;
+    setSelectedPlanId(defaultPlan?._id ?? null);
     setGuestStep("plan");
+    await holdDates(identity, defaultPlan, checkIn, checkOut);
+  };
+
+  /**
+   * Take the dates off the market the moment the guest is known, before
+   * they have filled in anything.
+   *
+   * The booking is stored Pending with the details that exist at this point
+   * — the picked dates and the default rate — and nothing else. That is
+   * deliberately incomplete: a Pending booking blocks its nights server-side
+   * for a limited window (see the backend's app.services.availability), so
+   * creating it here is what stops a second guest from starting a checkout
+   * for the same nights while this one is still typing. Everything the guest
+   * enters afterwards lands on this same booking — submitBooking updates it
+   * in place rather than creating a second one.
+   *
+   * If the dates are already spoken for, the guest is told here rather than
+   * at the end, after filling in a whole form for a stay they were never
+   * going to get. The message is the same one the old late check produced.
+   *
+   * Only possible once a Guest record exists, since a booking belongs to
+   * one: a first-time guest has verified an identifier but has no profile
+   * yet, so for them the booking is still created at the end of the details
+   * step (see handleGuestFormSubmit → submitBooking), which is the earliest
+   * moment there is anything to attach it to.
+   */
+  const holdDates = async (
+    identity: VerifiedIdentity,
+    plan: Plan | null,
+    checkIn: Date | undefined,
+    checkOut: Date | undefined
+  ) => {
+    if (!identity.guestId || !plan || !checkIn || !checkOut) return;
+    const bookingCurrency = identity.guestForm.preferred_currency ?? currency;
+    try {
+      const booking = await createBooking(identity.authToken, {
+        guest_id: identity.guestId,
+        plan_name: plan.name,
+        currency: bookingCurrency,
+        date_ranges: [
+          {
+            begin_date: format(checkIn, "yyyy-MM-dd"),
+            end_date: format(checkOut, "yyyy-MM-dd"),
+          },
+        ],
+      });
+      setBookingId(booking._id);
+      setBookingToken(identity.authToken);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        // Somebody else holds these nights. Same treatment as the conflict
+        // that used to surface at payment time: say so in the guest's own
+        // language (the backend's detail is English-only), refresh the
+        // calendar so the days they pick next are the ones actually left,
+        // and close the widget.
+        window.alert(dict.datesTakenMessage);
+        fetchAvailability();
+        handleDone();
+        return;
+      }
+      // Anything else (offline, a 5xx, a plan that vanished) is not a
+      // reason to block the guest here: leave them on the plan step with no
+      // booking id, and let submitBooking create it at the end of the
+      // details step exactly as it did before. That path reports its own
+      // failure, at a point where the guest has something to retry.
+    }
   };
 
   // Only one Pending booking is allowed per guest at a time (enforced
@@ -992,18 +1064,20 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
         children: (number | null)[];
       };
       const resumedCheckIn = resume.checkIn ? parse(resume.checkIn, "yyyy-MM-dd", new Date()) : undefined;
-      if (resumedCheckIn && resume.checkOut) {
-        setRange({
-          from: resumedCheckIn,
-          to: parse(resume.checkOut, "yyyy-MM-dd", new Date()),
-        });
-      }
+      const resumedRange: DateRange | undefined =
+        resumedCheckIn && resume.checkOut
+          ? { from: resumedCheckIn, to: parse(resume.checkOut, "yyyy-MM-dd", new Date()) }
+          : resumedCheckIn
+          ? { from: resumedCheckIn }
+          : undefined;
+      if (resumedRange) setRange(resumedRange);
       setAdults(resume.adults);
       setChildren(resume.children.map((age) => ({ age })));
-      // The restored check-in goes in explicitly: setRange above only takes
+      // The restored dates go in explicitly: setRange above only takes
       // effect on the next render, so handleVerified's own `range` is still
-      // empty and it would otherwise pick the rate for no dates at all.
-      handleVerified(resume.identity, false, resumedCheckIn);
+      // empty and it would otherwise pick the rate for no dates at all —
+      // and hold no dates either.
+      handleVerified(resume.identity, false, resumedRange);
     } catch {
       // Malformed/stale payload — nothing to restore.
     }
