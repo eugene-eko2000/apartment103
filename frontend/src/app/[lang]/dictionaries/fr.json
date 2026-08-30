@@ -452,5 +452,81 @@
       "title": "Fumeur",
       "value": "Non-fumeur"
     }
+  },
+  "location": {
+    "pageTitle": "Emplacement",
+    "subtitle": "Unterterzen, au bord du lac de Walenstadt",
+    "address": "Unterterzen, 8888 Quarten, Suisse",
+    "directions": "Itinéraire",
+    "recenter": "Revenir à l'appartement",
+    "mapHint": "Faites glisser pour déplacer ; zoomez avec ⌘/Ctrl + molette, les boutons +/− ou deux doigts.",
+    "mapUnavailable": "La carte interactive n'est pas disponible pour le moment.",
+    "openInMaps": "Ouvrir dans Google Maps",
+    "apartmentMarker": "Berg See Home",
+    "nearbyTitle": "Aux alentours",
+    "nearbySubtitle": "Distance et temps de trajet en voiture depuis l'appartement.",
+    "driveTime": "{minutes} min en voiture",
+    "distanceUnit": "km",
+    "showOnMap": "afficher sur la carte",
+    "backHome": "Retour à l'accueil",
+    "disclaimer": "Les distances et les temps de trajet sont approximatifs et dépendent du trafic et de l'état des routes.",
+    "pois": {
+      "beach": {
+        "name": "Plage d'Unterterzen",
+        "desc": "Plage publique avec baignade et location de bateaux"
+      },
+      "supermarket": {
+        "name": "Spar Unterterzen",
+        "desc": "Supermarché du village pour les courses du quotidien"
+      },
+      "station": {
+        "name": "Gare d'Unterterzen",
+        "desc": "Trains directs le long du lac vers Zurich et Coire"
+      },
+      "gondola": {
+        "name": "Télécabine du Flumserberg (Unterterzen)",
+        "desc": "Station de départ vers le domaine skiable"
+      },
+      "murg": {
+        "name": "Murg — départ des lacs de Murg",
+        "desc": "Point de départ de la randonnée vers les lacs de Murg"
+      },
+      "walenstadt": {
+        "name": "Walenstadt",
+        "desc": "Ville la plus proche : commerces, restaurants et salle d'escalade"
+      },
+      "amden": {
+        "name": "Amden",
+        "desc": "Terrasse ensoleillée au-dessus du lac, randonnées panoramiques"
+      },
+      "sargans": {
+        "name": "Château de Sargans",
+        "desc": "Château médiéval et nœud ferroviaire régional"
+      },
+      "flumserberg": {
+        "name": "Flumserberg Tannenbodenalm",
+        "desc": "Pistes de ski en hiver, sentiers alpins et piste de luge en été"
+      },
+      "badragaz": {
+        "name": "Bad Ragaz — Tamina Therme",
+        "desc": "Bains thermaux alimentés par les sources des gorges de la Tamina"
+      },
+      "vaduz": {
+        "name": "Vaduz, Liechtenstein",
+        "desc": "Capitale de la principauté, château et musées"
+      },
+      "rapperswil": {
+        "name": "Rapperswil",
+        "desc": "La « ville des roses » au bord du lac de Zurich, vieille ville et château"
+      },
+      "zurich": {
+        "name": "Centre-ville de Zurich",
+        "desc": "Vieille ville, promenade du lac, shopping et musées"
+      },
+      "airport": {
+        "name": "Aéroport de Zurich",
+        "desc": "Aéroport international le plus proche"
+      }
+    }
   }
 }

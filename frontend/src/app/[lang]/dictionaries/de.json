@@ -452,5 +452,81 @@
       "title": "Rauchen",
       "value": "Nichtraucher"
     }
+  },
+  "location": {
+    "pageTitle": "Lage",
+    "subtitle": "Unterterzen, direkt am Walensee",
+    "address": "Unterterzen, 8888 Quarten, Schweiz",
+    "directions": "Route",
+    "recenter": "Zurück zur Wohnung",
+    "mapHint": "Ziehen zum Verschieben; Zoomen mit ⌘/Strg + Scrollen, den +/−-Tasten oder zwei Fingern.",
+    "mapUnavailable": "Die interaktive Karte ist derzeit nicht verfügbar.",
+    "openInMaps": "In Google Maps öffnen",
+    "apartmentMarker": "Berg See Home",
+    "nearbyTitle": "In der Umgebung",
+    "nearbySubtitle": "Fahrdistanz und Fahrzeit ab der Wohnung.",
+    "driveTime": "{minutes} Min. Fahrt",
+    "distanceUnit": "km",
+    "showOnMap": "auf der Karte zeigen",
+    "backHome": "Zurück zur Startseite",
+    "disclaimer": "Distanzen und Fahrzeiten sind Richtwerte und hängen von Verkehr und Strassenverhältnissen ab.",
+    "pois": {
+      "beach": {
+        "name": "Strandbad Unterterzen",
+        "desc": "Öffentliches Seebad mit Badeplatz und Bootsverleih"
+      },
+      "supermarket": {
+        "name": "Spar Unterterzen",
+        "desc": "Dorfladen für Lebensmittel und den täglichen Bedarf"
+      },
+      "station": {
+        "name": "Bahnhof Unterterzen",
+        "desc": "Direkte Züge dem See entlang nach Zürich und Chur"
+      },
+      "gondola": {
+        "name": "Bergbahn Flumserberg (Unterterzen)",
+        "desc": "Talstation der Gondelbahn ins Skigebiet"
+      },
+      "murg": {
+        "name": "Murg — Ausgangspunkt Murgseen",
+        "desc": "Start der Wanderung zu den Murgseen"
+      },
+      "walenstadt": {
+        "name": "Walenstadt",
+        "desc": "Nächstes Städtchen mit Läden, Restaurants und Kletterhalle"
+      },
+      "amden": {
+        "name": "Amden",
+        "desc": "Sonnenterrasse über dem See mit Panoramawanderungen"
+      },
+      "sargans": {
+        "name": "Schloss Sargans",
+        "desc": "Mittelalterliche Burg und regionaler Bahnknotenpunkt"
+      },
+      "flumserberg": {
+        "name": "Flumserberg Tannenbodenalm",
+        "desc": "Skipisten im Winter, Wanderwege und Rodelbahn im Sommer"
+      },
+      "badragaz": {
+        "name": "Bad Ragaz — Tamina Therme",
+        "desc": "Thermalbad mit Wasser aus der Taminaschlucht"
+      },
+      "vaduz": {
+        "name": "Vaduz, Liechtenstein",
+        "desc": "Hauptstadt des Fürstentums, Schloss und Museen"
+      },
+      "rapperswil": {
+        "name": "Rapperswil",
+        "desc": "Die «Rosenstadt» am Zürichsee mit Altstadt und Schloss"
+      },
+      "zurich": {
+        "name": "Zürich Stadtzentrum",
+        "desc": "Altstadt, Seepromenade, Shopping und Museen"
+      },
+      "airport": {
+        "name": "Flughafen Zürich",
+        "desc": "Nächster internationaler Flughafen"
+      }
+    }
   }
 }

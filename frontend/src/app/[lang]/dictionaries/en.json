@@ -452,5 +452,81 @@
       "title": "Smoking",
       "value": "No smoking"
     }
+  },
+  "location": {
+    "pageTitle": "Location",
+    "subtitle": "Unterterzen, on the shore of Lake Walensee",
+    "address": "Unterterzen, 8888 Quarten, Switzerland",
+    "directions": "Directions",
+    "recenter": "Back to the apartment",
+    "mapHint": "Drag to pan; use ⌘/Ctrl + scroll, the +/− control or two fingers to zoom.",
+    "mapUnavailable": "The interactive map isn't available right now.",
+    "openInMaps": "Open in Google Maps",
+    "apartmentMarker": "Berg See Home",
+    "nearbyTitle": "What's nearby",
+    "nearbySubtitle": "Driving distance and time from the apartment.",
+    "driveTime": "{minutes} min drive",
+    "distanceUnit": "km",
+    "showOnMap": "show on map",
+    "backHome": "Back to home",
+    "disclaimer": "Distances and driving times are approximate and depend on traffic and road conditions.",
+    "pois": {
+      "beach": {
+        "name": "Unterterzen lido",
+        "desc": "Public lake beach with swimming and boat hire"
+      },
+      "supermarket": {
+        "name": "Spar Unterterzen",
+        "desc": "Village supermarket for groceries and daily essentials"
+      },
+      "station": {
+        "name": "Unterterzen railway station",
+        "desc": "Direct trains along the lake to Zurich and Chur"
+      },
+      "gondola": {
+        "name": "Flumserberg gondola (Unterterzen)",
+        "desc": "Base station of the cable car up to the ski area"
+      },
+      "murg": {
+        "name": "Murg — Murgsee trailhead",
+        "desc": "Start of the hike to the Murg lakes"
+      },
+      "walenstadt": {
+        "name": "Walenstadt",
+        "desc": "Nearest town for shops, restaurants and the climbing hall"
+      },
+      "amden": {
+        "name": "Amden",
+        "desc": "Sunny terrace above the lake with panoramic hiking"
+      },
+      "sargans": {
+        "name": "Sargans Castle",
+        "desc": "Medieval castle and regional rail hub"
+      },
+      "flumserberg": {
+        "name": "Flumserberg Tannenbodenalm",
+        "desc": "Ski slopes in winter, alpine trails and the toboggan run in summer"
+      },
+      "badragaz": {
+        "name": "Bad Ragaz — Tamina Therme",
+        "desc": "Thermal spa fed by the Tamina gorge springs"
+      },
+      "vaduz": {
+        "name": "Vaduz, Liechtenstein",
+        "desc": "Capital of the principality, castle and museums"
+      },
+      "rapperswil": {
+        "name": "Rapperswil",
+        "desc": "The “city of roses” on Lake Zurich, with its old town and castle"
+      },
+      "zurich": {
+        "name": "Zurich city centre",
+        "desc": "Old town, lake promenade, shopping and museums"
+      },
+      "airport": {
+        "name": "Zurich Airport",
+        "desc": "Nearest international airport"
+      }
+    }
   }
 }
