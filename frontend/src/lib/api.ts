@@ -1,3 +1,5 @@
+import { clearGuestSessionIfToken } from "@/lib/guest-auth";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export type Language = "en" | "de" | "fr" | "it";
@@ -538,6 +540,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     },
   });
   if (!response.ok) {
+    if (response.status === 401) {
+      // The token this call carried is no longer accepted. Drop it here, at
+      // the single point every request goes through, so no caller has to
+      // remember to — see clearGuestSessionIfToken.
+      const authorization = (options.headers as Record<string, string> | undefined)?.Authorization;
+      if (authorization?.startsWith("Bearer ")) clearGuestSessionIfToken(authorization.slice(7));
+    }
     const body = await response.json().catch(() => null);
     const message = typeof body?.detail === "string" ? body.detail : `Request failed (${response.status})`;
     throw new ApiError(response.status, message);

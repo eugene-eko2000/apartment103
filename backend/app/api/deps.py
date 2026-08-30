@@ -75,7 +75,22 @@ async def get_current_principal(
         return Principal(type="admin", id=object_id, admin=admin)
 
     guest = await Guest.get(object_id)
-    if guest is None:
+    # A redacted guest is treated exactly like a deleted one. The document
+    # still exists — the bookings that link to it need it to (see
+    # app.services.data_retention) — but the person it described is gone, so
+    # a token minted before the retention sweep must stop working the moment
+    # it runs. Otherwise a session outliving the wipe would authenticate
+    # against a record full of "[redacted]", pre-fill the booking form with
+    # it, and let the guest edit their details back onto the same document —
+    # exactly the reuse the wipe exists to prevent.
+    #
+    # Rejecting the token is also what makes the return path correct without
+    # the frontend needing to know any of this: it clears the stored session
+    # on a 401 and falls back to the OTP flow, which no longer finds a guest
+    # for the address (it now reads redacted-<id>@invalid) and issues a
+    # pending_guest token instead — a first-time registration, on a new
+    # document, with an empty form.
+    if guest is None or guest.is_redacted:
         raise unauthorized
     return Principal(type="guest", id=object_id, guest=guest)
 

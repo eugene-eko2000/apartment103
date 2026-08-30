@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from beanie import PydanticObjectId
@@ -5,7 +6,7 @@ from beanie.operators import In
 from fastapi import APIRouter, Depends, HTTPException, status
 from pymongo.errors import DuplicateKeyError
 
-from app.api.common import get_or_404
+from app.api.common import ensure_guest_not_redacted, get_or_404
 from app.api.deps import (
     Principal,
     ensure_can_access_booking,
@@ -244,6 +245,7 @@ async def create_booking(
     if not principal.is_admin and payload.guest_id != principal.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Guests may only book for themselves")
     guest = await get_or_404(Guest, payload.guest_id, "Guest")
+    ensure_guest_not_redacted(guest)
     # Only one Pending booking per guest at a time — a returning guest with
     # one already stored is meant to resume straight into paying for it
     # (see the frontend's post-login lookup) rather than start another.
@@ -321,6 +323,10 @@ async def cancel_booking(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Booking is already cancelled")
     await settle_cancellation(booking)
     booking.status = "Cancelled"
+    # The cancellation, not the stay's dates, is now the last thing that
+    # happened to this booking — it is what the retention sweep counts the
+    # guest's month from (see app.services.data_retention).
+    booking.cancelled_at = datetime.now(timezone.utc)
     # Release the nights so the dates become bookable again, and drop the
     # Pending deadline with them — there is no hold left to expire.
     booking.booked_nights = []

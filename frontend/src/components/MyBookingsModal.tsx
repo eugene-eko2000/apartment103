@@ -119,6 +119,12 @@ export default function MyBookingsModal({
           setStatus("loaded");
         })
         .catch((err) => {
+          // Same as ProfileModal: a rejected token is a session that has
+          // ended, not a failure to report.
+          if (err instanceof ApiError && err.status === 401) {
+            setStatus("loggedOut");
+            return;
+          }
           setErrorMessage(err instanceof ApiError ? err.message : String(err));
           setStatus("error");
         });

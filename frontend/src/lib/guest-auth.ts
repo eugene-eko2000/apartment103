@@ -33,6 +33,26 @@ export function saveGuestSession(session: GuestSession): void {
   window.dispatchEvent(new Event(SESSION_EVENT));
 }
 
+// Called when the API rejects a bearer token. If it is the one we have
+// stored, the session is over — most often because it simply expired, but
+// also when the guest's data was wiped by the backend's retention sweep and
+// their record stopped being an account. Either way the stored session is
+// dead, and keeping it would leave the UI showing a signed-in header over an
+// account that answers 401 to everything.
+//
+// Token-matched rather than unconditional: an admin call getting a 401 must
+// not sign a guest out of the same browser.
+export function clearGuestSessionIfToken(token: string): void {
+  if (typeof window === "undefined") return;
+  const raw = window.localStorage.getItem(STORAGE_KEY);
+  if (!raw) return;
+  try {
+    if ((JSON.parse(raw) as GuestSession).token === token) clearGuestSession();
+  } catch {
+    clearGuestSession();
+  }
+}
+
 export function clearGuestSession(): void {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(STORAGE_KEY);

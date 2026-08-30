@@ -207,6 +207,19 @@ class Booking(Document):
     # or claims availability — see
     # app.services.availability.expire_pending_bookings.
     pending_expires_at: datetime | None = None
+    # When this booking became Cancelled — set by every path that flips the
+    # status (the guest/admin cancellation endpoint, and the payment paths
+    # that reject a booking which lost its dates). None on a booking that was
+    # never cancelled.
+    #
+    # Kept because a cancellation, not the checkout date, is the last thing
+    # that happened to a stay that was called off: the retention sweep (see
+    # app.services.data_retention) counts a cancelled booking's month from
+    # here rather than from a stay that never took place, which for a
+    # cancellation made months ahead of check-in is the difference between
+    # holding the guest's data for one more month and holding it for most of
+    # a year.
+    cancelled_at: datetime | None = None
 
     # Stripe/payment state. stripe_payment_method_id is the card saved for
     # this specific booking's off-session accrual charges — deliberately not

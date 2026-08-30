@@ -2,7 +2,7 @@ from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, status
 from pymongo.errors import DuplicateKeyError
 
-from app.api.common import get_or_404, normalize_phone_or_400
+from app.api.common import ensure_guest_not_redacted, get_or_404, normalize_phone_or_400
 from app.api.deps import (
     Principal,
     ensure_can_access_guest,
@@ -124,6 +124,7 @@ async def update_guest(
 ) -> Guest:
     ensure_can_access_guest(principal, guest_id)
     guest = await get_or_404(Guest, guest_id, "Guest")
+    ensure_guest_not_redacted(guest)
     phone_number = normalize_phone_or_400(payload.phone_number)
     email = _normalize_email(payload.email)
     await _ensure_unique_contact(email, phone_number, exclude_id=guest_id)

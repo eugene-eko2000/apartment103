@@ -90,6 +90,15 @@ export default function ProfileModal({
           setStatus("loaded");
         })
         .catch((err) => {
+          // A rejected token means there is no account behind this session
+          // any more (expired, or the guest's data was retired by the
+          // retention sweep). Show the signed-out state, not an error: from
+          // here they log in again, which for a wiped guest means
+          // registering afresh on an empty form.
+          if (err instanceof ApiError && err.status === 401) {
+            setStatus("loggedOut");
+            return;
+          }
           setErrorMessage(err instanceof ApiError ? err.message : String(err));
           setStatus("error");
         });

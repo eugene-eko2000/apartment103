@@ -112,6 +112,7 @@ async def _reject_dates_taken(
     as the same "dates taken" answer.
     """
     booking.status = "Cancelled"
+    booking.cancelled_at = datetime.now(timezone.utc)
     booking.last_payment_error = DATES_TAKEN_MESSAGE
     # Release whatever nights this booking was still holding. It is about to
     # be deleted in the ordinary case, but a booking kept back for a human
