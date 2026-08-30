@@ -1963,8 +1963,14 @@ function promotionTooltipParts(
  * currency have to be closed over. The caller memoizes the result so the
  * grid isn't remounted on every render.
  *
- * The same text is also set as a `title` and an `aria-label`, so touch
- * devices (which never hover) and screen readers get the offer too.
+ * The same text rides along as an `aria-label` so screen readers get the
+ * offer too, and as a `title` while the tooltip is up so the two never
+ * disagree.
+ *
+ * Visibility is driven by pointer state rather than `:hover`/`:focus-within`:
+ * a click has to dismiss the tooltip (it otherwise sat over the calendar for
+ * as long as the day kept focus), and it may only come back once the pointer
+ * has actually left the day and come back.
  */
 function makePromotionDayButton(
   promotions: PublicPromotion[],
@@ -1972,6 +1978,9 @@ function makePromotionDayButton(
   currency: Currency
 ) {
   return function PromotionDayButton({ day, modifiers, ...buttonProps }: DayButtonProps) {
+    // "hidden" until the pointer arrives, "shown" while it is over the day,
+    // and "dismissed" from a click until the pointer leaves again.
+    const [tooltipState, setTooltipState] = useState<"hidden" | "shown" | "dismissed">("hidden");
     const dayPromotions = promotionsForDate(promotions, format(day.date, "yyyy-MM-dd"));
     if (dayPromotions.length === 0 || modifiers.disabled) {
       return <button {...buttonProps} />;
@@ -1989,12 +1998,32 @@ function makePromotionDayButton(
     // scroll box.
     const below = day.date.getDate() <= FIRST_CALENDAR_ROW_LAST_DAY;
 
+    const tooltipVisible = tooltipState === "shown";
+
     return (
-      <span className="relative group block">
-        <button {...buttonProps} title={plainText} aria-label={`${buttonProps["aria-label"] ?? ""} ${plainText}`.trim()} />
+      <span
+        className="relative block"
+        onPointerEnter={(event) => {
+          // Touch taps fire enter/leave around the click, which would flash
+          // the tooltip open; only a real pointer opens it.
+          if (event.pointerType === "mouse") setTooltipState("shown");
+        }}
+        onPointerLeave={() => setTooltipState("hidden")}
+      >
+        <button
+          {...buttonProps}
+          title={tooltipVisible ? plainText : undefined}
+          aria-label={`${buttonProps["aria-label"] ?? ""} ${plainText}`.trim()}
+          onClick={(event) => {
+            setTooltipState("dismissed");
+            buttonProps.onClick?.(event);
+          }}
+        />
         <span
           role="tooltip"
-          className={`pointer-events-none absolute left-1/2 -translate-x-1/2 z-50 hidden w-max max-w-[15rem] rounded-lg bg-gray-900 dark:bg-gray-700 px-2.5 py-1.5 text-left text-xs font-normal leading-snug text-white shadow-xl group-hover:block group-focus-within:block ${
+          className={`pointer-events-none absolute left-1/2 -translate-x-1/2 z-50 w-max max-w-[15rem] rounded-lg bg-gray-900 dark:bg-gray-700 px-2.5 py-1.5 text-left text-xs font-normal leading-snug text-white shadow-xl ${
+            tooltipVisible ? "block" : "hidden"
+          } ${
             below ? "top-full mt-1.5" : "bottom-full mb-1.5"
           }`}
         >
