@@ -38,7 +38,10 @@ body {
    and silently keep its default blue accent. */
 .rdp-root {
   --rdp-accent-color: #059669 !important;
-  --rdp-accent-background-color: #d1fae5 !important;
+  /* Emerald-300, not the emerald-100 react-day-picker suggests: promoted days
+     are filled green-100, which the paler tint was almost indistinguishable
+     from — see the dark-theme note below for the same problem. */
+  --rdp-accent-background-color: #6ee7b7 !important;
   --rdp-day-height: 40px;
   --rdp-day-width: 40px;
   --rdp-day_button-height: 38px;
@@ -47,7 +50,35 @@ body {
 
 [data-theme="dark"] .rdp-root {
   --rdp-accent-color: #2dd4bf !important;
-  --rdp-accent-background-color: #134e4a !important;
+  /* Promoted days carry a fairly bright green (BookingWidget's `promoted`
+     modifier), so the old teal-900 range fill read as a hole punched out of
+     the month rather than as the selection. Teal-700 sits above both the
+     promoted and the plain available fills. */
+  --rdp-accent-background-color: #0f766e !important;
+}
+
+/* A day picked while the range is still open gets nothing from
+   react-day-picker but a ring, which against the calendar's own green fills
+   leaves the one day the guest just chose as the faintest cell in the month.
+   Fill it with the accent, the way a finished range's two ends are filled.
+   Middle days keep the range background so the ends still stand out within
+   the range.
+
+   The `.rdp-root` prefix carries the specificity (0,4,0) that beats
+   react-day-picker's own `.rdp-range_start .rdp-day_button`, whose stylesheet
+   is injected after this one. */
+.rdp-root .rdp-selected:not(.rdp-range_middle) .rdp-day_button,
+.rdp-root .rdp-range_start .rdp-day_button,
+.rdp-root .rdp-range_end .rdp-day_button {
+  background-color: var(--rdp-accent-color);
+  color: #ffffff;
+}
+
+/* Dark ink on the dark theme's accent: white on teal-400 is a 1.7:1 wash. */
+[data-theme="dark"] .rdp-root .rdp-selected:not(.rdp-range_middle) .rdp-day_button,
+[data-theme="dark"] .rdp-root .rdp-range_start .rdp-day_button,
+[data-theme="dark"] .rdp-root .rdp-range_end .rdp-day_button {
+  color: #042f2e;
 }
 
 /* Stack the two calendar months vertically on narrow screens instead of side

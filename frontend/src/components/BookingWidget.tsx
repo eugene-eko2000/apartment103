@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useId, useEffect, useLayoutEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { DayPicker } from "react-day-picker";
 import type { DateRange, DayButtonProps } from "react-day-picker";
 import { format, differenceInCalendarDays, parse, isBefore, isAfter, isSameDay, subDays, addDays } from "date-fns";
@@ -95,10 +96,10 @@ const QUOTE_DEBOUNCE_MS = 150;
 const PRICE_SLOT_CH: Record<"CHF" | "other", number> = { CHF: 6.8, other: 4.6 };
 const priceSlot = (currency: Currency) => `${PRICE_SLOT_CH[currency === "CHF" ? "CHF" : "other"]}ch`;
 
-// Days in the first calendar row have no space above them for a tooltip, so
-// theirs flips below. With showOutsideDays={false} that row holds exactly
-// the first seven days of the month.
-const FIRST_CALENDAR_ROW_LAST_DAY = 7;
+// Breathing room the promotion tooltip keeps from the day it describes and
+// from the window edges it is clamped against.
+const TOOLTIP_GAP = 6;
+const TOOLTIP_MARGIN = 8;
 
 type Child = { age: number | null };
 /** A stay quote together with what it was fetched for. */
@@ -1228,14 +1229,49 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const isPromotedDate = (date: Date) =>
     promotionsForDate(promotions, format(date, "yyyy-MM-dd")).length > 0;
 
-  // Days already covered by the range-selection or hover-preview modifiers
-  // keep their own (teal) styling instead of the green/red availability tint.
-  const isRangeOrHoverDate = (date: Date) =>
-    (!!range?.from && isSameDay(date, range.from)) ||
-    (!!range?.to && isSameDay(date, range.to)) ||
+  // Only the days strictly *between* the two ends — react-day-picker's
+  // `range_middle`, whose accent fill an `!important` Tailwind background
+  // would paint over. The ends themselves, and a lone check-in, stay in their
+  // day category: react-day-picker leaves their cell either unpainted or
+  // half-transparent, so the category fill shows around the accent circle and
+  // the selection sits in the same block of colour as the days beside it.
+  const isRangeMiddleDate = (date: Date) =>
     (!!range?.from && !!range?.to && isAfter(date, range.from) && isBefore(date, range.to)) ||
     (!!range?.from && !range?.to && !!hoverDate && hoverIsValidCheckout &&
-      ((isAfter(date, range.from) && isBefore(date, hoverDate)) || isSameDay(date, hoverDate)));
+      isAfter(date, range.from) && isBefore(date, hoverDate));
+
+  // Every day the selection has claimed — the two ends and everything between
+  // them, or the check-in and the checkout currently being hovered. Their
+  // cells are decoration around a fixed accent circle, so they keep their
+  // category fill but drop its `hover:` variant: without that the day under
+  // the pointer lifts to a brighter tint than the identical cell at the other
+  // end of the bar, which reads as a mismatch rather than as feedback.
+  const isSelectionDate = (date: Date) =>
+    isRangeMiddleDate(date) ||
+    (!!range?.from && isSameDay(date, range.from)) ||
+    (!!range?.to && isSameDay(date, range.to)) ||
+    (!!range?.from && !range?.to && !!hoverDate && hoverIsValidCheckout &&
+      isSameDay(date, hoverDate));
+
+  // The three day categories that carry a `hover:` variant, hoisted so each
+  // can drive both its fill modifier and its hover-only twin.
+  const isPromotedCell = (date: Date) =>
+    !isRangeMiddleDate(date) &&
+    !isPastDate(date) &&
+    !isOccupiedDate(date) &&
+    !isInvalidCheckoutCandidate(date) &&
+    isPromotedDate(date);
+
+  const isAvailableCell = (date: Date) =>
+    !isRangeMiddleDate(date) &&
+    !isPastDate(date) &&
+    !isBookedDate(date) &&
+    !hasNoPrice(date) &&
+    !isInvalidCheckoutCandidate(date) &&
+    !isPromotedDate(date);
+
+  const isOccupiedCheckoutCell = (date: Date) =>
+    !isRangeMiddleDate(date) && isOccupiedValidCheckout(date);
 
   // react-day-picker has no tooltip API, and a native `title` attribute has
   // a ~1s delay and no styling, so the day button is rendered ourselves.
@@ -1326,25 +1362,30 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
               !!hoverDate &&
               hoverIsValidCheckout &&
               isSameDay(date, hoverDate),
+            // The check-in itself while a checkout is being hovered. Without
+            // it the preview bar starts only at the *next* cell's edge, so it
+            // stops a cell-half short of the check-in circle — a gap the
+            // finished range never has, since react-day-picker fills the
+            // inner half of its own `range_start`.
+            hoverRangeStart: (date) =>
+              !!range?.from &&
+              !range?.to &&
+              !!hoverDate &&
+              hoverIsValidCheckout &&
+              isAfter(hoverDate, range.from) &&
+              isSameDay(date, range.from),
             // Listed before `available` so a promoted free day takes the
             // promotion tint rather than the green one.
-            promoted: (date) =>
-              !isRangeOrHoverDate(date) &&
-              !isPastDate(date) &&
-              !isOccupiedDate(date) &&
-              !isInvalidCheckoutCandidate(date) &&
-              isPromotedDate(date),
-            available: (date) =>
-              !isRangeOrHoverDate(date) &&
-              !isPastDate(date) &&
-              !isBookedDate(date) &&
-              !hasNoPrice(date) &&
-              !isInvalidCheckoutCandidate(date) &&
-              !isPromotedDate(date),
-            past: (date) => !isRangeOrHoverDate(date) && isPastDate(date),
-            occupiedCheckout: (date) => !isRangeOrHoverDate(date) && isOccupiedValidCheckout(date),
+            promoted: isPromotedCell,
+            promotedHover: (date) => isPromotedCell(date) && !isSelectionDate(date),
+            available: isAvailableCell,
+            availableHover: (date) => isAvailableCell(date) && !isSelectionDate(date),
+            past: (date) => !isRangeMiddleDate(date) && isPastDate(date),
+            occupiedCheckout: isOccupiedCheckoutCell,
+            occupiedCheckoutHover: (date) =>
+              isOccupiedCheckoutCell(date) && !isSelectionDate(date),
             unavailable: (date) =>
-              !isRangeOrHoverDate(date) &&
+              !isRangeMiddleDate(date) &&
               !isPastDate(date) &&
               !isOccupiedValidCheckout(date) &&
               (isBookedDate(date) || hasNoPrice(date) || isInvalidCheckoutCandidate(date)),
@@ -1352,15 +1393,19 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
           modifiersClassNames={{
             hoverRange: "rdp-range_middle",
             hoverRangeEnd: "rdp-range_end",
-            // Violet: the palette already uses green = available,
-            // red = unavailable, yellow = occupied-but-checkout-able,
-            // teal = selection, grey = past.
+            hoverRangeStart: "rdp-range_start",
+            // A brighter, more saturated green than `available`: on dark
+            // the two sat a hair apart (green-950/40 vs /50) and read as
+            // the same block, so promoted jumps up to green-700/45.
             promoted:
-              "!bg-green-100 dark:!bg-green-950/50 !text-green-800 dark:!text-green-300 " +
-              "hover:!bg-green-200 dark:hover:!bg-green-900/60 !font-semibold",
-            available: "!bg-green-50 dark:!bg-green-950/40 !text-green-800 dark:!text-green-300 hover:!bg-green-100 dark:hover:!bg-green-900/40",
+              "!bg-green-100 dark:!bg-green-700/45 !text-green-800 dark:!text-green-100 " +
+              "!font-semibold",
+            promotedHover: "hover:!bg-green-200 dark:hover:!bg-green-600/55",
+            available: "!bg-green-50 dark:!bg-green-950/40 !text-green-800 dark:!text-green-300",
+            availableHover: "hover:!bg-green-100 dark:hover:!bg-green-900/40",
             past: "!bg-gray-100 dark:!bg-gray-800/60 !text-gray-400 dark:!text-gray-600",
-            occupiedCheckout: "!bg-yellow-50 dark:!bg-yellow-950/40 !text-yellow-800 dark:!text-yellow-400 hover:!bg-yellow-100 dark:hover:!bg-yellow-900/40",
+            occupiedCheckout: "!bg-yellow-50 dark:!bg-yellow-950/40 !text-yellow-800 dark:!text-yellow-400",
+            occupiedCheckoutHover: "hover:!bg-yellow-100 dark:hover:!bg-yellow-900/40",
             unavailable: "!bg-red-50 dark:!bg-red-950/40 !text-red-700 dark:!text-red-400",
           }}
         />
@@ -1971,6 +2016,15 @@ function promotionTooltipParts(
  * a click has to dismiss the tooltip (it otherwise sat over the calendar for
  * as long as the day kept focus), and it may only come back once the pointer
  * has actually left the day and come back.
+ *
+ * The tooltip itself is portaled to `document.body` and positioned `fixed`
+ * against the day's own rect: the calendar sits in two scroll boxes (the
+ * grid's `overflow-x-auto` and the widget's `lg:overflow-y-auto`), which
+ * would otherwise clip a tooltip reaching past a day at the edge — or, worse,
+ * count it as content and grow a scrollbar around it. Positioned in the
+ * window, it can flip below the day when there's no room above it and be
+ * clamped to the window's sides, and it needs no room inside the widget at
+ * all.
  */
 function makePromotionDayButton(
   promotions: PublicPromotion[],
@@ -1981,6 +2035,46 @@ function makePromotionDayButton(
     // "hidden" until the pointer arrives, "shown" while it is over the day,
     // and "dismissed" from a click until the pointer leaves again.
     const [tooltipState, setTooltipState] = useState<"hidden" | "shown" | "dismissed">("hidden");
+    // Window coordinates for the portaled tooltip, measured once it is in the
+    // DOM. Null means "not placed yet", which renders it invisible rather
+    // than in the top-left corner for a frame.
+    const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
+    const anchorRef = useRef<HTMLSpanElement>(null);
+    const tooltipRef = useRef<HTMLSpanElement>(null);
+    const tooltipVisible = tooltipState === "shown";
+
+    // Placed in a layout effect (before paint, so there's no visible jump)
+    // and kept in place while it is up: the page, the widget's own scroll box
+    // and the calendar's horizontal one can all move the day out from under
+    // a fixed tooltip, and `capture` is what picks up those inner scrolls.
+    useLayoutEffect(() => {
+      if (!tooltipVisible) {
+        setTooltipPos(null);
+        return;
+      }
+      const place = () => {
+        const anchor = anchorRef.current?.getBoundingClientRect();
+        const tooltip = tooltipRef.current?.getBoundingClientRect();
+        if (!anchor || !tooltip) return;
+        const above = anchor.top - tooltip.height - TOOLTIP_GAP;
+        setTooltipPos({
+          // Below the day when the window has no room above it.
+          top: above >= TOOLTIP_MARGIN ? above : anchor.bottom + TOOLTIP_GAP,
+          left: Math.min(
+            Math.max(anchor.left + anchor.width / 2 - tooltip.width / 2, TOOLTIP_MARGIN),
+            window.innerWidth - tooltip.width - TOOLTIP_MARGIN
+          ),
+        });
+      };
+      place();
+      window.addEventListener("scroll", place, true);
+      window.addEventListener("resize", place);
+      return () => {
+        window.removeEventListener("scroll", place, true);
+        window.removeEventListener("resize", place);
+      };
+    }, [tooltipVisible]);
+
     const dayPromotions = promotionsForDate(promotions, format(day.date, "yyyy-MM-dd"));
     if (dayPromotions.length === 0 || modifiers.disabled) {
       return <button {...buttonProps} />;
@@ -1993,16 +2087,11 @@ function makePromotionDayButton(
     const plainText = lines
       .map(({ parts }) => `${parts.before}${parts.name}${parts.after}`)
       .join(" · ");
-    // The first calendar row has no room above it, so its tooltip flips
-    // below the day instead of being clipped by the calendar's own
-    // scroll box.
-    const below = day.date.getDate() <= FIRST_CALENDAR_ROW_LAST_DAY;
-
-    const tooltipVisible = tooltipState === "shown";
 
     return (
       <span
-        className="relative block"
+        ref={anchorRef}
+        className="block"
         onPointerEnter={(event) => {
           // Touch taps fire enter/leave around the click, which would flash
           // the tooltip open; only a real pointer opens it.
@@ -2019,23 +2108,32 @@ function makePromotionDayButton(
             buttonProps.onClick?.(event);
           }}
         />
-        <span
-          role="tooltip"
-          className={`pointer-events-none absolute left-1/2 -translate-x-1/2 z-50 w-max max-w-[15rem] rounded-lg bg-gray-900 dark:bg-gray-700 px-2.5 py-1.5 text-left text-xs font-normal leading-snug text-white shadow-xl ${
-            tooltipVisible ? "block" : "hidden"
-          } ${
-            below ? "top-full mt-1.5" : "bottom-full mb-1.5"
-          }`}
-        >
-          <span className="block font-semibold text-violet-200">{dict.specialOffer}</span>
-          {lines.map(({ promotion, parts }) => (
-            <span key={promotion._id} className="block">
-              {parts.before}
-              <strong className="font-semibold">{parts.name}</strong>
-              {parts.after}
-            </span>
-          ))}
-        </span>
+        {tooltipVisible &&
+          createPortal(
+            <span
+              ref={tooltipRef}
+              role="tooltip"
+              className="pointer-events-none fixed z-[200] w-max rounded-lg bg-gray-900 dark:bg-gray-700 px-2.5 py-1.5 text-left text-xs font-normal leading-snug text-white shadow-xl"
+              style={{
+                top: tooltipPos?.top ?? 0,
+                left: tooltipPos?.left ?? 0,
+                // Never wider than the window it is clamped inside, so the
+                // clamp can always find a spot for it.
+                maxWidth: `min(15rem, calc(100vw - ${TOOLTIP_MARGIN * 2}px))`,
+                visibility: tooltipPos ? "visible" : "hidden",
+              }}
+            >
+              <span className="block font-semibold text-violet-200">{dict.specialOffer}</span>
+              {lines.map(({ promotion, parts }) => (
+                <span key={promotion._id} className="block">
+                  {parts.before}
+                  <strong className="font-semibold">{parts.name}</strong>
+                  {parts.after}
+                </span>
+              ))}
+            </span>,
+            document.body
+          )}
       </span>
     );
   };
