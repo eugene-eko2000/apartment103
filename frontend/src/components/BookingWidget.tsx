@@ -1356,8 +1356,8 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
             // red = unavailable, yellow = occupied-but-checkout-able,
             // teal = selection, grey = past.
             promoted:
-              "!bg-violet-100 dark:!bg-violet-950/50 !text-violet-800 dark:!text-violet-300 " +
-              "hover:!bg-violet-200 dark:hover:!bg-violet-900/60 !font-semibold",
+              "!bg-green-100 dark:!bg-green-950/50 !text-green-800 dark:!text-green-300 " +
+              "hover:!bg-green-200 dark:hover:!bg-green-900/60 !font-semibold",
             available: "!bg-green-50 dark:!bg-green-950/40 !text-green-800 dark:!text-green-300 hover:!bg-green-100 dark:hover:!bg-green-900/40",
             past: "!bg-gray-100 dark:!bg-gray-800/60 !text-gray-400 dark:!text-gray-600",
             occupiedCheckout: "!bg-yellow-50 dark:!bg-yellow-950/40 !text-yellow-800 dark:!text-yellow-400 hover:!bg-yellow-100 dark:hover:!bg-yellow-900/40",
