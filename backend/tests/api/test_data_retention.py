@@ -50,20 +50,25 @@ async def _booking(guest, begin: str, end: str, *, status: str = "Active", cance
 
 
 class TestRetentionCutoff:
-    async def test_counts_calendar_months_not_days(self):
-        assert retention_cutoff(date(2026, 8, 30)) == date(2026, 7, 30)
-        assert retention_cutoff(date(2026, 3, 15)) == date(2026, 2, 15)
+    async def test_counts_back_the_configured_number_of_days(self):
+        assert retention_cutoff(date(2026, 8, 30)) == date(2026, 7, 31)
+        assert retention_cutoff(date(2026, 3, 15)) == date(2026, 2, 13)
 
-    async def test_clamps_to_the_length_of_the_shorter_month(self):
-        # No 31 February; the last day of it is as close as the rule gets.
-        assert retention_cutoff(date(2026, 3, 31)) == date(2026, 2, 28)
+    async def test_the_window_is_the_same_length_in_every_month(self):
+        # The point of days over calendar months: February and August give a
+        # guest exactly as long, rather than 28 days in one and 31 in another.
+        for day in (date(2026, 3, 1), date(2026, 9, 1), date(2027, 1, 1)):
+            assert (day - retention_cutoff(day)).days == 30
 
     async def test_crosses_the_year_boundary(self):
-        assert retention_cutoff(date(2026, 1, 15)) == date(2025, 12, 15)
+        assert retention_cutoff(date(2026, 1, 15)) == date(2025, 12, 16)
+
+    async def test_handles_a_leap_day_in_the_window(self):
+        assert retention_cutoff(date(2028, 3, 20)) == date(2028, 2, 19)
 
     async def test_honours_a_longer_configured_window(self, monkeypatch):
-        monkeypatch.setattr(settings, "guest_data_retention_months", 6)
-        assert retention_cutoff(date(2026, 8, 30)) == date(2026, 2, 28)
+        monkeypatch.setattr(settings, "guest_data_retention_days", 180)
+        assert retention_cutoff(date(2026, 8, 30)) == date(2026, 3, 3)
 
 
 class TestWipesGuestsPastTheWindow:
@@ -102,11 +107,18 @@ class TestWipesGuestsPastTheWindow:
         assert not (await Guest.get(guest.id)).is_redacted
 
     async def test_wipes_on_the_day_the_window_closes(self, client, guest):
-        # Checkout exactly one month ago — the cutoff is inclusive.
-        await _booking(guest, "2026-07-25", "2026-07-30")
+        # Checkout exactly 30 days before TODAY — the cutoff is inclusive.
+        await _booking(guest, "2026-07-26", "2026-07-31")
 
         assert await purge_expired_guest_data(TODAY) == 1
         assert (await Guest.get(guest.id)).is_redacted
+
+    async def test_keeps_a_guest_one_day_short_of_the_window(self, client, guest):
+        # The other side of the same boundary: 29 days is not yet 30.
+        await _booking(guest, "2026-07-27", "2026-08-01")
+
+        assert await purge_expired_guest_data(TODAY) == 0
+        assert not (await Guest.get(guest.id)).is_redacted
 
     async def test_leaves_a_guest_who_never_booked(self, client, guest):
         # No booking, no anchor: registrations that never became a stay are

@@ -3,7 +3,7 @@
 A booking is a financial record: the amounts charged, the Stripe
 PaymentIntents behind them and the invoices issued against them have to
 outlive the stay by years. The person is not. This module draws the line
-between the two — after `settings.guest_data_retention_months` with nothing
+between the two — after `settings.guest_data_retention_days` with nothing
 left to serve the guest for, everything identifying them is overwritten in
 place and the booking history is left standing.
 
@@ -41,9 +41,8 @@ bookings collection, so a registration that never became a booking has no
 anchor here and is left alone.
 """
 
-import calendar
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from beanie import PydanticObjectId
 
@@ -79,24 +78,15 @@ def redacted_phone_for(guest_id: PydanticObjectId) -> str:
     return f"redacted-{guest_id}"
 
 
-def _months_before(day: date, months: int) -> date:
-    """`day` minus `months` calendar months, clamped to the shorter month.
-
-    Calendar months, not 30 days: "one month after checkout" should mean the
-    same date next month whatever month it is. 31 March minus one month is 28
-    February (29 in a leap year) by the same convention every date library
-    uses.
-    """
-    month_index = day.month - 1 - months
-    year = day.year + month_index // 12
-    month = month_index % 12 + 1
-    return date(year, month, min(day.day, calendar.monthrange(year, month)[1]))
-
-
 def retention_cutoff(as_of: date | None = None) -> date:
     """The newest anchor date still inside the retention window. A guest
-    whose last stay ended on or before this has run out of it."""
-    return _months_before(as_of or date.today(), settings.guest_data_retention_months)
+    whose last stay ended on or before this has run out of it.
+
+    A fixed number of days back, so the window is the same length whichever
+    month a stay ended in — and so a deployment can widen or narrow it by a
+    day without the arithmetic changing shape.
+    """
+    return (as_of or date.today()) - timedelta(days=settings.guest_data_retention_days)
 
 
 def _midnight(day: date) -> datetime:
@@ -259,9 +249,9 @@ async def purge_expired_guest_data(as_of: date | None = None) -> int:
 
     purged_payloads = await _purge_payment_event_payloads([guest.id for guest in guests])
     logger.info(
-        "Data retention: redacted %d guest(s) past %d month(s), cleared %d payment event payload(s)",
+        "Data retention: redacted %d guest(s) past %d day(s), cleared %d payment event payload(s)",
         len(guests),
-        settings.guest_data_retention_months,
+        settings.guest_data_retention_days,
         purged_payloads,
     )
     return len(guests)

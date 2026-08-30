@@ -2,15 +2,15 @@
 
 The rule and everything behind it live in app.services.data_retention — a
 guest whose last stay ended (or whose last booking was cancelled) more than
-settings.guest_data_retention_months ago has their identifying fields
+settings.guest_data_retention_days ago has their identifying fields
 overwritten in place, while the booking and payment records that link to them
 stay readable.
 
 Unlike the pending-booking sweep, nothing calls this on demand: no request
 path has a reason to notice that a guest's retention window lapsed while it
 was serving something else, so this job is the only thing that makes it
-happen. It runs once a day because the window is measured in months —
-checking more often would find the same nothing.
+happen. It runs once a day because the window is measured in
+weeks — checking more often would find the same nothing.
 
 Runs in-process via APScheduler on the shared scheduler in app.jobs.scheduler
 (one scheduler per process — see the scaling note in
@@ -36,7 +36,7 @@ async def purge_guest_data() -> int:
         return await purge_expired_guest_data()
     except Exception:
         # A failed pass must not take the job down. Retention is measured in
-        # months, so tomorrow's pass wiping what today's couldn't is not a
+        # weeks, so tomorrow's pass wiping what today's couldn't is not a
         # meaningful delay — whereas APScheduler firing this into the same
         # exception forever would be.
         logger.exception("Failed to purge expired guest data")

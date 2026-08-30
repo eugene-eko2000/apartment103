@@ -1,7 +1,7 @@
 """Guest personal data now has an expiry date.
 
 A guest whose bookings have all ended — the last checkout passed, or the last
-booking was cancelled — more than settings.guest_data_retention_months ago has
+booking was cancelled — more than settings.guest_data_retention_days ago has
 their identifying fields overwritten in place by a daily sweep (see
 app.services.data_retention and app.jobs.purge_guest_data). Two things follow
 for data that already exists.

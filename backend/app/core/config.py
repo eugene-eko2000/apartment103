@@ -96,15 +96,15 @@ class Settings(BaseSettings):
     # thing standing between an abandoned checkout and the dates it holds.
     pending_booking_sweep_interval_minutes: int = 1
 
-    # Data retention (see app.services.data_retention). How long a guest's
-    # personal data is kept after the last thing that happened to them — the
-    # checkout of their latest stay, or the moment they cancelled it if that
-    # is the later event. A guest with a stay still ahead of them, or a
-    # checkout in progress, is never touched however old their history is.
-    # Counted in calendar months rather than days so "one month after
-    # checkout" means what a person reading the privacy notice thinks it
-    # means.
-    guest_data_retention_months: int = 1
+    # Data retention (see app.services.data_retention). How many days a
+    # guest's personal data is kept after the last thing that happened to
+    # them — the checkout of their latest stay, or the moment they cancelled
+    # it if that is the later event. A guest with a stay still ahead of them,
+    # or a checkout in progress, is never touched however old their history
+    # is. 30 days is the "one month" the privacy notice promises; raise it
+    # if a longer window is ever required, and every guest already past the
+    # old one stays wiped.
+    guest_data_retention_days: int = 30
     # When the daily retention sweep runs, in the server's local time. Early
     # morning, well clear of the 06:00 payment reconciliation, so the two
     # aren't competing for the same bookings.
