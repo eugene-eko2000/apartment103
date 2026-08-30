@@ -1273,9 +1273,21 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
             // computed range: its own range logic silently swaps check-in to
             // the clicked date whenever the naive selection would cross an
             // occupied date, which would otherwise look like check-in moved.
-            if (range?.from && !range?.to && isAfter(triggerDate, range.from)) {
-              if (isValidCheckout(triggerDate)) setRange({ from: range.from, to: triggerDate });
-              return;
+            if (range?.from && !range?.to) {
+              // A day before the pending check-in restarts the selection from
+              // that day instead of becoming a backwards range: react-day-picker
+              // would turn it into { from: clicked, to: previous check-in },
+              // which completes a stay that was never checked against the
+              // minimum stay of its own check-in date.
+              if (isBefore(triggerDate, range.from)) {
+                setRange({ from: triggerDate, to: undefined });
+                return;
+              }
+              if (isAfter(triggerDate, range.from)) {
+                if (isValidCheckout(triggerDate)) setRange({ from: range.from, to: triggerDate });
+                return;
+              }
+              // Re-clicking the check-in itself falls through, clearing the selection.
             }
             setRange(newRange);
           }}
