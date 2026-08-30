@@ -47,6 +47,14 @@ export interface BookingModalDict {
   successTitle: string;
   successMessage: string;
   emailNotice: string;
+  confirmingTitle: string;
+  confirmingMessage: string;
+  conflictTitle: string;
+  conflictMessage: string;
+  conflictRefundNotice: string;
+  chooseNewDates: string;
+  pendingTitle: string;
+  pendingMessage: string;
   done: string;
   errorTitle: string;
   tryAgain: string;

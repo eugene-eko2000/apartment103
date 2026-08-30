@@ -6,9 +6,10 @@ Two things can make a candidate's dates unavailable:
   public calendar (only Active ones do — see
   app.api.routes.bookings.list_public_booked_date_ranges), so two guests can
   legitimately reach checkout for the same dates at once. The guest who pays
-  first wins: their activation cancels the other guests' overlapping Pending
-  bookings (see cancel_overlapping_pending_bookings), and any loser who tries
-  to pay afterwards is caught in app.api.routes.payments.create_payment_intent.
+  first wins: their activation discards the other guests' overlapping Pending
+  bookings (see discard_overlapping_pending_bookings), and any loser who
+  tries to pay afterwards is caught in
+  app.api.routes.payments.create_payment_intent.
 * a Closure — the stay is booked on Airbnb/Booking.com (imported by
   app.services.calendar_sync) or the host blocked the dates by hand. The
   guest calendar already greys those days out, but it may be working from a
@@ -108,23 +109,30 @@ async def find_overlapping_ranges(booking: Booking) -> list[BookedDateRange]:
     ]
 
 
-async def cancel_overlapping_pending_bookings(booking: Booking) -> int:
-    """Cancel every Pending booking whose stay overlaps `booking`'s dates.
+async def discard_overlapping_pending_bookings(booking: Booking) -> int:
+    """Remove every Pending booking whose stay overlaps `booking`'s dates.
 
     Called right after `booking` becomes Active: the guest who paid first owns
     the dates, so any other guest still mid-checkout on the same nights must
     be stopped. Otherwise they could pay for the same dates moments later and
     double-book.
 
-    Cancelled, deliberately not deleted. These bookings are unpaid, but a
-    losing guest may still confirm a payment on a client secret they obtained
-    moments earlier; app.api.routes.payments then needs the booking on record
-    to refund against, to report the reason on, and to leave an audit trail if
-    that refund itself fails. A Cancelled booking blocks nothing: only Active
-    ones reach the public calendar, and booked_nights stays empty so the
-    unique index ignores it.
+    Deleted, not left behind as Cancelled. A booking that never got its dates
+    is not a record of anything the guest did — leaving it in the list would
+    show them (and the host) a cancellation that never happened. Nothing is
+    lost by removing it: these bookings are Pending, so nothing has been
+    charged against them, and a loser who still confirms a payment on a client
+    secret obtained moments earlier is caught by
+    app.api.routes.payments.stripe_webhook, whose "booking is gone" branch
+    refunds the charge. The Stripe side of that money always remains on record
+    in the payment_events collection.
 
-    One atomic update_many rather than a read plus a save per document, so
+    Defensively scoped to bookings with no charges: a Pending booking should
+    never have any (the opening charge is what activates one), but if the
+    invariant is ever broken the money history has to survive, so such a
+    booking is cancelled the old way instead of deleted.
+
+    Two atomic bulk writes rather than a read plus a save per document, so
     losers can't slip through between the two.
     """
     if not booking.date_ranges:
@@ -133,8 +141,10 @@ async def cancel_overlapping_pending_bookings(booking: Booking) -> int:
         {"date_ranges": {"$elemMatch": clause}}
         for clause in _overlaps_any_clause(booking, "begin_date", "end_date")
     ]
-    result = await Booking.get_pymongo_collection().update_many(
-        {"status": "Pending", "_id": {"$ne": booking.id}, "$or": overlaps_any},
+    losers = {"status": "Pending", "_id": {"$ne": booking.id}, "$or": overlaps_any}
+    collection = Booking.get_pymongo_collection()
+    kept = await collection.update_many(
+        {**losers, "charges.0": {"$exists": True}},
         {
             "$set": {
                 "status": "Cancelled",
@@ -143,4 +153,5 @@ async def cancel_overlapping_pending_bookings(booking: Booking) -> int:
             }
         },
     )
-    return result.modified_count
+    removed = await collection.delete_many({**losers, "charges.0": {"$exists": False}})
+    return kept.modified_count + removed.deleted_count

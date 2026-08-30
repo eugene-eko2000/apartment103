@@ -13,6 +13,8 @@ Follow these exact steps in order:
 * Use `git worktree add /tmp/visual-eval-base main` to create an isolated workspace for the base branch.
 * Navigate to `/tmp/visual-eval-base` and install dependencies.
 * Start the base backend and frontend on dedicated ports, use Backend on 8001, Frontend on 3001. Ensure the frontend is configured to point to the base backend.
+* If the test scenario includes Stripe calls and webhooks (e.g., for payment flows), set up a Stripe dummy 
+  service. It should simulate a successful or failed Stripe call and webhook callback. You can use a local server or a mock service for this purpose. Ensure that both the base and eval environments are configured to use this Stripe dummy service.
 * Wait for both services to become healthy.
 
 ## 2. Setup Eval Environment (Current Branch)

@@ -1,4 +1,5 @@
-"""find_overlapping_ranges: what clashes with a candidate booking.
+"""find_overlapping_ranges: what clashes with a candidate booking, and
+discard_overlapping_pending_bookings: what happens to the guests it beat.
 
 Guards the boundary condition the whole calendar depends on — end_date is an
 exclusive checkout day, so checking out on the morning another stay checks in
@@ -10,10 +11,14 @@ from datetime import date
 
 import pytest
 
-from app.models.booking import Booking, BookingCancellationPolicy, BookingDateRange
+from app.models.booking import Booking, BookingCancellationPolicy, BookingCharge, BookingDateRange
 from app.models.cancellation_policy import CancellationRule
 from app.models.closure import Closure
-from app.services.availability import find_overlapping_ranges
+from app.services.availability import (
+    DATES_TAKEN_MESSAGE,
+    discard_overlapping_pending_bookings,
+    find_overlapping_ranges,
+)
 
 pytestmark = pytest.mark.anyio
 
@@ -157,3 +162,59 @@ class TestClosuresBlockBookings:
         candidate = await _booking(guest, ("2026-10-01", "2026-10-05"), status="Pending")
 
         assert await find_overlapping_ranges(candidate) == []
+
+
+class TestDiscardOverlappingPendingBookings:
+    """What the winner's activation does to everyone still mid-checkout on
+    the same nights.
+
+    They are removed, not parked as cancellations: nothing was ever charged
+    against a Pending booking, and a stay the guest was never granted is not
+    a cancellation they should keep seeing in their bookings (or the host in
+    the admin list).
+    """
+
+    async def test_removes_an_overlapping_pending_booking(self, client, guest, other_guest):
+        winner = await _booking(guest, ("2026-09-01", "2026-09-05"))
+        loser = await _booking(other_guest, ("2026-09-03", "2026-09-07"), status="Pending")
+
+        assert await discard_overlapping_pending_bookings(winner) == 1
+        assert await Booking.get(loser.id) is None
+
+    async def test_leaves_pending_bookings_on_other_dates_alone(self, client, guest, other_guest):
+        winner = await _booking(guest, ("2026-09-01", "2026-09-05"))
+        untouched = await _booking(other_guest, ("2026-09-05", "2026-09-09"), status="Pending")
+
+        assert await discard_overlapping_pending_bookings(winner) == 0
+        assert await Booking.get(untouched.id) is not None
+
+    async def test_never_touches_the_winner_itself(self, client, guest):
+        winner = await _booking(guest, ("2026-09-01", "2026-09-05"))
+
+        assert await discard_overlapping_pending_bookings(winner) == 0
+        assert await Booking.get(winner.id) is not None
+
+    async def test_keeps_a_pending_booking_that_somehow_carries_charges(self, client, guest, other_guest):
+        # The invariant is that a Pending booking has no charges — the
+        # opening charge is what activates one. If it is ever broken, money
+        # history must outlive the race, so such a booking is cancelled the
+        # old way rather than deleted.
+        winner = await _booking(guest, ("2026-09-01", "2026-09-05"))
+        loser = await _booking(other_guest, ("2026-09-03", "2026-09-07"), status="Pending")
+        loser.charges = [
+            BookingCharge(
+                stripe_payment_intent_id="pi_stray",
+                amount=100,
+                currency="CHF",
+                reason="initial_charge",
+                status="succeeded",
+            )
+        ]
+        await loser.save()
+
+        assert await discard_overlapping_pending_bookings(winner) == 1
+        kept = await Booking.get(loser.id)
+        assert kept is not None
+        assert kept.status == "Cancelled"
+        assert kept.last_payment_error == DATES_TAKEN_MESSAGE
+        assert kept.booked_nights == []

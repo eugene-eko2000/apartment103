@@ -49,7 +49,7 @@ export default function PaymentStep({
   lang: Locale;
   guestName: string;
   guestEmail: string;
-  onSuccess: () => void;
+  onSuccess: () => Promise<void>;
   onBack: () => void;
   backLabel: string;
   onCancel: () => void;
@@ -90,7 +90,7 @@ function PaymentForm({
   lang: Locale;
   guestName: string;
   guestEmail: string;
-  onSuccess: () => void;
+  onSuccess: () => Promise<void>;
   onBack: () => void;
   backLabel: string;
   onCancel: () => void;
@@ -120,12 +120,18 @@ function PaymentForm({
         ? await stripe.confirmCardSetup(intent.client_secret, { payment_method: paymentMethod })
         : await stripe.confirmCardPayment(intent.client_secret, { payment_method: paymentMethod });
 
-    setSubmitting(false);
     if (error) {
+      setSubmitting(false);
       setErrorMessage(error.message ?? dict.processing);
       return;
     }
-    onSuccess();
+    // Stripe accepting the card is not the booking being confirmed: the
+    // server still has to apply that payment, and can refuse it if another
+    // guest's payment claimed the same nights first. onSuccess is what waits
+    // for that verdict, so the form stays submitting until it has moved this
+    // step on — the guest must never see a Pay button go idle next to a
+    // charged card.
+    await onSuccess();
   };
 
   const cardElementOptions: StripeCardElementOptions = {

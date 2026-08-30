@@ -19,6 +19,7 @@ import {
   deleteBooking,
   getFromPrice,
   getGuest,
+  getPaymentOutcome,
   getStayQuote,
   listBookings,
   listPublicBookedDateRanges,
@@ -35,6 +36,7 @@ import {
   type GuestInput,
   type Language,
   type PaymentIntentResponse,
+  type PaymentOutcome,
   type Plan,
   type PlanQuote,
   type PublicPrice,
@@ -104,7 +106,25 @@ const TOOLTIP_MARGIN = 8;
 type Child = { age: number | null };
 /** A stay quote together with what it was fetched for. */
 type QuotedStay = { beginDate: string; endDate: string; currency: Currency; quote: StayQuote };
-type GuestFlowStep = "plan" | "form" | "submitting" | "payment" | "success" | "error";
+// "confirming" onwards are the states of the one question Stripe cannot
+// answer: did this booking actually get its dates? See awaitPaymentOutcome.
+type GuestFlowStep =
+  | "plan"
+  | "form"
+  | "submitting"
+  | "payment"
+  | "confirming"
+  | "success"
+  | "conflict"
+  | "pending"
+  | "error";
+
+// How long, and how often, to ask the server what became of a payment the
+// guest has just confirmed. Stripe delivers that verdict to us by webhook,
+// so it lands a beat after the browser is already done — usually within a
+// second or two.
+const OUTCOME_POLL_INTERVAL_MS = 1000;
+const OUTCOME_POLL_TIMEOUT_MS = 30_000;
 
 export interface BookingDict {
   planYourStay: string;
@@ -221,6 +241,12 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   // after using Back from the payment step) updates this booking in place
   // instead of creating a duplicate.
   const [bookingId, setBookingId] = useState<string | null>(null);
+  // The bearer token that created `bookingId`, kept so later calls about the
+  // booking authenticate as its owner. Not always verified.authToken: a
+  // first-time guest reaches the form on a "pending_guest" token, and
+  // registering them mints a new, guest-bound one that submitBooking uses
+  // from then on. Only that one passes the booking's ownership check.
+  const [bookingToken, setBookingToken] = useState<string | null>(null);
   // True while a stored guest session's bearer token is being validated
   // against the API in response to a Book click.
   const [checkingSession, setCheckingSession] = useState(false);
@@ -698,8 +724,18 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     ? dict.yourDataTitle
     : guestStep === "submitting" || guestStep === "payment"
     ? dict.paymentDetailsTitle
+    : guestStep === "confirming"
+    ? dict.modal.confirmingTitle
+    : guestStep === "conflict"
+    ? dict.modal.conflictTitle
+    : guestStep === "pending"
+    ? dict.modal.pendingTitle
     : dict.planYourStay;
   const showFromPrefix = (!extended || guestStep === "plan") && !selectedPlan;
+  // A stay that was never granted has no price to quote. Leaving the total
+  // in the header of the "dates are gone" screen reads as a sum the guest
+  // owes, right beside the line telling them they owe nothing.
+  const showHeaderPrice = guestStep !== "conflict";
   const isFormValid =
     !!range?.from &&
     !!range?.to &&
@@ -847,6 +883,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
       to: endDates.reduce((max, d) => (d > max ? d : max)),
     });
     setBookingId(pendingBooking._id);
+    setBookingToken(identity.authToken);
     setPlans(availablePlans);
     // Bookings don't store a plan id, only a snapshot of the cancellation
     // policy they were made under — match it back to a current plan so
@@ -1002,6 +1039,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     setPending(false);
     setPaymentIntent(null);
     setBookingId(null);
+    setBookingToken(null);
   };
 
   const handleDone = () => {
@@ -1018,8 +1056,8 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   // the UI resets immediately, and a booking that's somehow already gone
   // (e.g. a stale double-click) is simply ignored.
   const cancelBookingFlow = () => {
-    if (bookingId && verified) {
-      deleteBooking(bookingId, verified.authToken).catch(() => {});
+    if (bookingId && bookingToken) {
+      deleteBooking(bookingId, bookingToken).catch(() => {});
     }
     resetBookingFlow();
   };
@@ -1063,6 +1101,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
         ? await updateBooking(bookingId, token, bookingInput)
         : await createBooking(token, bookingInput);
       setBookingId(booking._id);
+      setBookingToken(token);
       const intent = await createPaymentIntent(booking._id, token);
       setPaymentIntent(intent);
       setGuestStep("payment");
@@ -1084,6 +1123,73 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
       }
       setFormError(err instanceof ApiError ? err.message : String(err));
       setGuestStep("error");
+    }
+  };
+
+  /**
+   * Wait for the server's verdict on a payment Stripe has just accepted,
+   * and only then tell the guest anything.
+   *
+   * Stripe answering the browser means the card cleared — not that the
+   * booking is confirmed. A Pending booking doesn't block the calendar, so
+   * two guests can be paying for the same nights at once; the booking is
+   * granted its dates only when the backend applies the matching webhook,
+   * which refuses whoever came second. Rendering the success screen off
+   * Stripe's answer alone is what let both of them be told their
+   * overlapping stay was reserved.
+   *
+   * The webhook arrives a beat behind the browser, so this polls until the
+   * booking resolves one way or the other. Every exit lands on a step that
+   * states what actually happened — never a confirmation the server hasn't
+   * given.
+   */
+  const awaitPaymentOutcome = async () => {
+    setGuestStep("confirming");
+    if (!bookingId || !bookingToken) {
+      setGuestStep("pending");
+      return;
+    }
+    const deadline = Date.now() + OUTCOME_POLL_TIMEOUT_MS;
+    for (;;) {
+      // A request that fails (an offline blip) is not an outcome — treat it
+      // as "not known yet" and keep asking, rather than inventing either a
+      // confirmation or a rejection from it. A rejected token is the one
+      // failure that will never resolve by asking again, so it stops here
+      // instead of burning the whole window on it.
+      let outcome: PaymentOutcome;
+      try {
+        outcome = await getPaymentOutcome(bookingId, bookingToken);
+      } catch (err) {
+        if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+          setGuestStep("pending");
+          return;
+        }
+        outcome = { state: "pending", detail: null };
+      }
+      if (outcome.state === "confirmed") {
+        setGuestStep("success");
+        return;
+      }
+      if (outcome.state === "conflict") {
+        // The nights went to whoever paid first, and this booking is gone
+        // (refunded, if anything had been charged). Refresh the calendar so
+        // the dates the guest picks next are the ones actually left.
+        fetchAvailability();
+        setGuestStep("conflict");
+        return;
+      }
+      if (outcome.state === "failed") {
+        setFormError(outcome.detail ?? dict.modal.errorTitle);
+        setGuestStep("error");
+        return;
+      }
+      if (Date.now() >= deadline) {
+        // Still unresolved. Nothing has gone wrong that we know of, so say
+        // exactly that — a confirmation email follows if it does go through.
+        setGuestStep("pending");
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, OUTCOME_POLL_INTERVAL_MS));
     }
   };
 
@@ -1503,7 +1609,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
         {dict.cancel}
       </button>
     </>
-  ) : guestStep === "success" ? (
+  ) : guestStep === "success" || guestStep === "pending" ? (
     <button
       type="button"
       onClick={handleDone}
@@ -1511,6 +1617,18 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
       style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
     >
       {dict.modal.done}
+    </button>
+  ) : guestStep === "conflict" ? (
+    // handleDone, never cancelBookingFlow: the booking this flow was for is
+    // already gone server-side, so there is nothing left to delete — and it
+    // clears the dead date range, which is the whole point of the button.
+    <button
+      type="button"
+      onClick={handleDone}
+      className="w-full text-white font-semibold py-3 rounded-xl text-sm transition-all shadow-lg cursor-pointer"
+      style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
+    >
+      {dict.modal.chooseNewDates}
     </button>
   ) : guestStep === "error" ? (
     <>
@@ -1586,7 +1704,10 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                 gets from being two independently laid out lines, since the
                 lines are set at different sizes and only one carries the
                 "from" prefix. */}
-            <div className="shrink-0 grid grid-cols-[auto_auto] items-baseline gap-x-1 justify-start lg:justify-end">
+            <div
+              className="shrink-0 grid grid-cols-[auto_auto] items-baseline gap-x-1 justify-start lg:justify-end"
+              hidden={!showHeaderPrice}
+            >
               <div className="text-right whitespace-nowrap">
                 {showFromPrefix && (
                   <span className="text-white/90 text-base mr-1 [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">{dict.fromPrefix}</span>
@@ -1927,12 +2048,23 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                   lang={lang}
                   guestName={`${guestForm.first_name} ${guestForm.family_name}`.trim()}
                   guestEmail={guestForm.email}
-                  onSuccess={() => setGuestStep("success")}
+                  onSuccess={awaitPaymentOutcome}
                   onBack={() => setGuestStep("form")}
                   backLabel={dict.back}
                   onCancel={cancelBookingFlow}
                   cancelLabel={dict.cancel}
                 />
+              )}
+
+              {guestStep === "confirming" && (
+                <div className="text-center py-8 space-y-3">
+                  <div
+                    className="mx-auto h-6 w-6 rounded-full border-2 border-gray-200 dark:border-gray-600 border-t-teal-600 dark:border-t-teal-400 animate-spin"
+                    role="status"
+                    aria-label={dict.modal.confirmingTitle}
+                  />
+                  <p className="text-sm text-gray-600 dark:text-gray-300">{dict.modal.confirmingMessage}</p>
+                </div>
               )}
 
               {guestStep === "success" && (
@@ -1941,6 +2073,30 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                     {dict.modal.successMessage.replace("{name}", guestForm?.first_name ?? "")}
                   </p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">{dict.modal.emailNotice}</p>
+                </div>
+              )}
+
+              {/* The dates went to whoever paid first. Deliberately spells
+                  out all three things the guest needs: that there is no
+                  booking, which nights were lost, and that they are not out
+                  of pocket for it. */}
+              {guestStep === "conflict" && (
+                <div className="text-center py-4 space-y-2">
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                    {dict.modal.conflictMessage.replace(
+                      "{dates}",
+                      dict.modal.cancellationRange
+                        .replace("{startDate}", checkInText)
+                        .replace("{endDate}", checkOutText)
+                    )}
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{dict.modal.conflictRefundNotice}</p>
+                </div>
+              )}
+
+              {guestStep === "pending" && (
+                <div className="text-center py-4 space-y-2">
+                  <p className="text-sm text-gray-700 dark:text-gray-300">{dict.modal.pendingMessage}</p>
                 </div>
               )}
 

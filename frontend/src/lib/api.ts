@@ -369,6 +369,19 @@ export interface PaymentIntentResponse {
   upcoming_charges: UpcomingCharge[];
 }
 
+/**
+ * What became of a payment the guest has just confirmed with Stripe.
+ *
+ * Stripe answers the browser as soon as the card clears, but the booking is
+ * only granted its dates once the backend applies the matching webhook — and
+ * that step can still refuse it if another guest paid for the same nights
+ * first. "pending" means that answer hasn't arrived yet.
+ */
+export interface PaymentOutcome {
+  state: "pending" | "confirmed" | "conflict" | "failed";
+  detail: string | null;
+}
+
 // Response shapes of GET /quotes/public… — every figure is computed
 // server-side from the same code that prices the booking itself, so the
 // widget renders these and multiplies nothing.
@@ -665,6 +678,14 @@ export function listBookingsDisplay(
 
 export function createPaymentIntent(bookingId: string, token: string): Promise<PaymentIntentResponse> {
   return request(`/bookings/${bookingId}/payment/intent`, { method: "POST", headers: authHeaders(token) });
+}
+
+// Polled between "the card was accepted" and any confirmation being shown —
+// see PaymentOutcome. A booking that no longer exists answers "conflict"
+// rather than 404ing, so losing a date race reads as an outcome here, not as
+// a request that failed.
+export function getPaymentOutcome(bookingId: string, token: string): Promise<PaymentOutcome> {
+  return request(`/bookings/${bookingId}/payment/outcome`, { headers: authHeaders(token) });
 }
 
 export function retryPayment(bookingId: string, token: string): Promise<PaymentIntentResponse> {
