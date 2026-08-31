@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import SiteHeader from "./SiteHeader";
 import SiteFooter from "./SiteFooter";
-import LocationMap from "./LocationMap";
-import { POIS, directionsUrl, formatDistance, poisByCategory } from "@/lib/location";
+import LocationMap, { type MapView } from "./LocationMap";
+import { POIS, formatDistance, poisByCategory } from "@/lib/location";
 import type { Dictionary } from "@/app/[lang]/dictionaries";
 import type { Locale } from "@/lib/i18n-config";
 
@@ -19,7 +19,31 @@ export default function LocationOverlay({
   onClose: () => void;
 }) {
   const l = dict.location;
-  const [activePoiId, setActivePoiId] = useState<string | null>(null);
+  /** One piece of state for the whole view: it drives the map, the route the
+   *  map draws, the directions panel inside it, and which row is highlighted.
+   *  Keeping them together is what stops the list and the map disagreeing. */
+  const [view, setView] = useState<MapView>({ kind: "apartment" });
+  const activePoiId = view.kind === "poi" ? view.id : null;
+
+  const showOnMap = (id: string | null) =>
+    setView(id === null ? { kind: "apartment" } : { kind: "poi", id, directions: false });
+
+  /** The Directions control on a row — same route, plus the step list. Already
+   *  showing it is left alone rather than re-set, so a second press does not
+   *  send the route off to be computed again. */
+  const showDirections = (id: string) =>
+    setView((current) =>
+      current.kind === "poi" && current.id === id && current.directions
+        ? current
+        : { kind: "poi", id, directions: true },
+    );
+
+  /** Closing the panel keeps the leg on the map; for the guest's own route
+   *  there is no leg without it, so that one goes back to the apartment. */
+  const hideDirections = () =>
+    setView((current) =>
+      current.kind === "poi" ? { kind: "poi", id: current.id, directions: false } : { kind: "apartment" },
+    );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -68,29 +92,49 @@ export default function LocationOverlay({
                   <span aria-hidden="true">📍</span>
                   <span className="font-medium text-gray-900 dark:text-gray-100">{l.address}</span>
                 </p>
-                <a
-                  href={directionsUrl()}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 rounded-lg bg-teal-600 hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-400 text-white dark:text-teal-950 text-sm font-medium px-4 py-2 transition-colors"
+                {/* Routes the guest from wherever they are to the apartment,
+                    in the map below — it asks the browser for their location
+                    rather than handing them off to Google Maps. */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setView((current) => (current.kind === "toApartment" ? current : { kind: "toApartment" }))
+                  }
+                  aria-pressed={view.kind === "toApartment"}
+                  className="inline-flex items-center gap-2 rounded-lg bg-teal-600 hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-400 text-white dark:text-teal-950 text-sm font-medium px-4 py-2 transition-colors cursor-pointer"
                 >
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                     <path d="M8 1.5 14.5 8 8 14.5 1.5 8 8 1.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
                     <path d="M6 9.5v-2a1.5 1.5 0 0 1 1.5-1.5H10M8.5 4.5 10 6 8.5 7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                   {l.directions}
-                </a>
+                </button>
               </div>
 
               <LocationMap
-                activePoiId={activePoiId}
-                onSelectPoi={setActivePoiId}
+                view={view}
+                onSelectPoi={showOnMap}
+                onHideDirections={hideDirections}
+                locale={lang}
                 labels={{
                   apartment: l.apartmentMarker,
                   recenter: l.recenter,
                   mapHint: l.mapHint,
                   unavailable: l.mapUnavailable,
                   openInMaps: l.openInMaps,
+                  directions: l.directions,
+                  fromApartment: l.directionsFromApartment,
+                  fromYou: l.directionsFromYou,
+                  yourLocation: l.yourLocation,
+                  loading: l.directionsLoading,
+                  locating: l.directionsLocating,
+                  locationFailed: l.directionsLocationFailed,
+                  retry: l.directionsRetry,
+                  routeFailed: l.directionsFailed,
+                  hide: l.directionsHide,
+                  driving: l.modeDriving,
+                  walking: l.modeWalking,
+                  minutes: l.minutes,
                 }}
                 poiNames={poiNames}
               />
@@ -119,12 +163,13 @@ export default function LocationOverlay({
                               active ? "bg-teal-50 dark:bg-teal-900/30" : "hover:bg-gray-50 dark:hover:bg-gray-700/40"
                             }`}
                           >
-                            {/* The row itself is the "show on map" control — the
-                                directions link beside it stays a real anchor so it
-                                can still be opened in a new tab. */}
+                            {/* The row itself is the "show on map" control; the
+                                arrow beside it adds the turn-by-turn panel, both
+                                of them inside the map above rather than in a new
+                                tab. */}
                             <button
                               type="button"
-                              onClick={() => setActivePoiId(active ? null : poi.id)}
+                              onClick={() => showOnMap(active ? null : poi.id)}
                               aria-pressed={active}
                               aria-label={`${text.name} — ${l.showOnMap}`}
                               className="flex flex-1 items-center gap-4 text-left cursor-pointer"
@@ -143,19 +188,19 @@ export default function LocationOverlay({
                                 </span>
                               </span>
                             </button>
-                            <a
-                              href={directionsUrl(poi)}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                            <button
+                              type="button"
+                              onClick={() => showDirections(poi.id)}
+                              aria-pressed={active && view.kind === "poi" && view.directions}
                               aria-label={`${l.directions} — ${text.name}`}
                               title={l.directions}
-                              className="shrink-0 text-gray-400 dark:text-gray-500 hover:text-teal-700 dark:hover:text-teal-400 transition-colors"
+                              className="shrink-0 text-gray-400 dark:text-gray-500 hover:text-teal-700 dark:hover:text-teal-400 transition-colors cursor-pointer"
                             >
                               <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                                 <path d="M8 1.5 14.5 8 8 14.5 1.5 8 8 1.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
                                 <path d="M6 9.5v-2a1.5 1.5 0 0 1 1.5-1.5H10M8.5 4.5 10 6 8.5 7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                               </svg>
-                            </a>
+                            </button>
                           </div>
                         </li>
                       );

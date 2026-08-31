@@ -126,3 +126,18 @@ export function formatDistance(km: number, locale: string): string {
     maximumFractionDigits: km < 10 ? 1 : 0,
   }).format(km);
 }
+
+/** A raw metre figure from the Routes API, rendered for the guest. Only a
+ *  fallback: Google returns its own localised `distance` text alongside every
+ *  route and step, and that is preferred wherever it is present. */
+export function formatMeters(meters: number, locale: string): string {
+  return meters >= 1000
+    ? `${formatDistance(meters / 1000, locale)} km`
+    : `${new Intl.NumberFormat(locale).format(Math.round(meters))} m`;
+}
+
+/** Same idea for a duration: whole minutes, never rounded down to zero, for
+ *  the `{minutes}` slot of a localised template. */
+export function minutesFromMillis(millis: number): number {
+  return Math.max(1, Math.round(millis / 60000));
+}

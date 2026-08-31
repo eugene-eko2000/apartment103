@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "@/lib/theme-context";
 import {
   GOOGLE_MAPS_MAP_ID,
@@ -8,7 +8,71 @@ import {
   loadGoogleMaps,
   onGoogleMapsAuthFailure,
 } from "@/lib/googleMaps";
-import { APARTMENT, DEFAULT_ZOOM, POIS, directionsUrl, travelModeFor } from "@/lib/location";
+import {
+  APARTMENT,
+  DEFAULT_ZOOM,
+  POIS,
+  directionsUrl,
+  formatMeters,
+  minutesFromMillis,
+  travelModeFor,
+  type LatLng,
+} from "@/lib/location";
+
+/** What the map is currently showing.
+ *
+ *  `directions` on a POI is the step list the row's arrow opens — the row
+ *  itself only draws the line, which is the lighter "where is this?" gesture.
+ *  The apartment leg has no such distinction: it exists only because the guest
+ *  asked to be routed there, so it always carries its steps. */
+export type MapView =
+  | { kind: "apartment" }
+  | { kind: "poi"; id: string; directions: boolean }
+  | { kind: "toApartment" };
+
+type TravelMode = "driving" | "walking";
+
+/** `note` is the second line Google appends to some instructions ("Restricted
+ *  usage road", "Destination will be on the right") — a genuine second thought
+ *  rather than part of the turn, and unreadable run onto the end of it. */
+type Step = { instruction: string; note: string | null; distance: string };
+
+/** The leg to draw: where from, where to, how, and whether the guest asked for
+ *  the written steps as well as the line. `key` is the whole of that as one
+ *  string — what an answer is tagged with, so that identity is compared on the
+ *  leg itself rather than on which render happened to build the object. */
+type RouteRequest = {
+  key: string;
+  origin: LatLng;
+  destination: LatLng;
+  mode: TravelMode;
+  withSteps: boolean;
+};
+
+function routeKey(
+  origin: LatLng,
+  destination: LatLng,
+  mode: TravelMode,
+  withSteps: boolean,
+): string {
+  return `${mode}|${origin.lat},${origin.lng}|${destination.lat},${destination.lng}|${withSteps}`;
+}
+
+/** The panel's contents. `null` means no panel at all — the map is either
+ *  idle or drawing a line nobody asked for directions about. */
+type Directions =
+  | { status: "loading" }
+  | { status: "failed" }
+  | { status: "ready"; mode: TravelMode; distance: string; duration: string; steps: Step[] };
+
+/** Where the guest is, for the leg that starts at them rather than at the
+ *  apartment. Only ever asked for once the guest presses Directions — a
+ *  permission prompt on page load would be worse than useless. */
+type Geo =
+  | { status: "idle" }
+  | { status: "locating" }
+  | { status: "ready"; coords: LatLng }
+  | { status: "failed" };
 
 /** Markers are Advanced Markers, whose `content` is ordinary DOM — so the pins
  *  are Tailwind-styled elements rather than sprite images, and they anchor at
@@ -25,6 +89,17 @@ function apartmentContent(label: string): HTMLElement {
        <span class="absolute inline-flex h-10 w-10 animate-ping rounded-full bg-teal-500/40"></span>
        <span class="relative inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-white bg-teal-600 text-base shadow-lg dark:border-gray-900">🏠</span>
      </span>`;
+  root.title = label;
+  return root;
+}
+
+/** The "you are here" dot for a route that starts at the guest. Deliberately
+ *  the blue of every other map's location dot rather than the site's teal —
+ *  the teal is what the route and the apartment already use. */
+function originContent(label: string): HTMLElement {
+  const root = document.createElement("div");
+  root.innerHTML =
+    `<span class="flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-blue-600 shadow-md dark:border-gray-900"></span>`;
   root.title = label;
   return root;
 }
@@ -53,25 +128,103 @@ function poiContent(icon: string): { root: HTMLElement; badge: HTMLElement } {
 
 /** Takes the route's lines off the map. Detaching is the only teardown a
  *  Polyline has, and it has to happen before the map itself goes. */
+/** The site's teal, for the route line. */
+const ROUTE_COLOR = "#0d9488";
+
+/** Recolours whatever Google styled the leg as, rather than replacing it: a
+ *  walking route comes back as a dotted line whose dots carry their own colour
+ *  and whose stroke is invisible, so setting `strokeColor` alone leaves the
+ *  dots Google's blue. Everything else about the default styling — the dot
+ *  spacing, the weight, the dashed/solid choice — is worth keeping. */
+function routePolylineStyle(
+  defaults: google.maps.PolylineOptions,
+): google.maps.PolylineOptions {
+  return {
+    ...defaults,
+    strokeColor: ROUTE_COLOR,
+    icons: defaults.icons?.map((item) =>
+      item.icon
+        ? { ...item, icon: { ...item.icon, strokeColor: ROUTE_COLOR, fillColor: ROUTE_COLOR } }
+        : item,
+    ),
+  };
+}
+
 function detachPolylines(polylines: google.maps.Polyline[]): void {
   for (const polyline of polylines) polyline.setMap(null);
 }
 
+/** Turns a computed route into the panel's contents. Google returns its own
+ *  localised text for every figure; `locale` is only used for the fallback
+ *  when a response arrives without it. */
+function readDirections(
+  route: google.maps.routes.Route,
+  mode: TravelMode,
+  locale: string,
+  minutesLabel: string,
+): Directions {
+  const minutes = (millis: number) =>
+    minutesLabel.replace("{minutes}", String(minutesFromMillis(millis)));
+
+  const steps: Step[] = (route.legs?.[0]?.steps ?? [])
+    .map((step) => {
+      const [instruction = "", ...rest] = (step.instructions ?? "").split("\n");
+      return {
+        instruction,
+        note: rest.join(" ") || null,
+        distance: step.localizedValues?.distance ?? formatMeters(step.distanceMeters, locale),
+      };
+    })
+    // A step with nothing to say ("depart", on some routes) is noise in a list
+    // the guest reads top to bottom.
+    .filter((step) => step.instruction !== "");
+
+  return {
+    status: "ready",
+    mode,
+    distance:
+      route.localizedValues?.distance ??
+      (route.distanceMeters !== undefined ? formatMeters(route.distanceMeters, locale) : "—"),
+    duration:
+      route.localizedValues?.duration ??
+      (route.durationMillis != null ? minutes(route.durationMillis) : "—"),
+    steps,
+  };
+}
+
 export default function LocationMap({
-  activePoiId,
+  view,
   onSelectPoi,
+  onHideDirections,
+  locale,
   labels,
   poiNames,
 }: {
-  /** POI the list has focused, or null for "showing the apartment". */
-  activePoiId: string | null;
+  view: MapView;
   onSelectPoi: (id: string | null) => void;
+  /** Closes the step list without losing the line the guest is looking at. */
+  onHideDirections: () => void;
+  /** BCP-47 tag the route's instructions are asked for in. */
+  locale: string;
   labels: {
     apartment: string;
     recenter: string;
     mapHint: string;
     unavailable: string;
     openInMaps: string;
+    directions: string;
+    fromApartment: string;
+    fromYou: string;
+    yourLocation: string;
+    loading: string;
+    locating: string;
+    locationFailed: string;
+    retry: string;
+    routeFailed: string;
+    hide: string;
+    driving: string;
+    walking: string;
+    minutes: string;
   };
   poiNames: Record<string, string>;
 }) {
@@ -84,11 +237,25 @@ export default function LocationMap({
   const poiBadgesRef = useRef<Map<string, HTMLElement>>(new Map());
   /** The routes library's `Route` class, captured once the library loads. */
   const routeClassRef = useRef<typeof google.maps.routes.Route | null>(null);
+  /** The marker class, kept for the guest's own pin — that one cannot be built
+   *  up front the way the POI pins are, since it needs their location first. */
+  const markerClassRef = useRef<typeof google.maps.marker.AdvancedMarkerElement | null>(null);
+  /** The guest's pin, when a route starts at them. */
+  const originMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
   /** Polylines drawn for the current route, detached when it changes. */
   const routePolylinesRef = useRef<google.maps.Polyline[]>([]);
 
   const [mapReady, setMapReady] = useState(false);
   const [failed, setFailed] = useState(!hasGoogleMapsConfig);
+  /** The last answer Google gave, tagged with the leg it answers. Tagging is
+   *  what lets the panel be derived rather than set: a result whose tag is no
+   *  longer the current leg is simply a result for a question nobody is
+   *  asking, and the panel falls back to "loading" on its own. */
+  const [routeResult, setRouteResult] = useState<{ key: string; value: Directions } | null>(null);
+  const [geo, setGeo] = useState<Geo>({ status: "idle" });
+
+  const activeId = view.kind === "poi" ? view.id : null;
+  const panelOpen = view.kind === "toApartment" || (view.kind === "poi" && view.directions);
 
   // Latest props for the build effect, which must not re-run on every render.
   const onSelectPoiRef = useRef(onSelectPoi);
@@ -171,6 +338,7 @@ export default function LocationMap({
         // per result, so there is nothing to construct up front — only the
         // class itself is kept, and only if this build of the API has it.
         routeClassRef.current = routes.Route ?? null;
+        markerClassRef.current = AdvancedMarkerElement;
 
         mapRef.current = map;
         setMapReady(true);
@@ -193,11 +361,14 @@ export default function LocationMap({
         // (StrictMode's double mount and the dark-mode rebuild both hit this).
         for (const marker of poiMarkers.values()) marker.map = null;
         if (apartmentMarkerRef.current) apartmentMarkerRef.current.map = null;
+        if (originMarkerRef.current) originMarkerRef.current.map = null;
       } catch {
         // Already broken — nothing left to clean up on the Google side.
       }
       routePolylinesRef.current = [];
       routeClassRef.current = null;
+      markerClassRef.current = null;
+      originMarkerRef.current = null;
       poiMarkers.clear();
       poiBadges.clear();
       apartmentMarkerRef.current = null;
@@ -206,10 +377,70 @@ export default function LocationMap({
     };
   }, [resolvedTheme]);
 
-  // Selecting a POI draws the real route from the apartment to it and frames
-  // that route; clearing the selection returns to the apartment. The mode
-  // matches the one the row's directions link opens in, so the line on the map
-  // and the route Google Maps hands the guest are the same journey.
+  /** Asks the browser where the guest is. Kept out of the effect below so the
+   *  "try again" button can re-run exactly the same request: a denied prompt
+   *  is often a mis-click, and there is no other way back from it. */
+  const askForLocation = useCallback(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setGeo({ status: "failed" });
+      return;
+    }
+    setGeo({ status: "locating" });
+    navigator.geolocation.getCurrentPosition(
+      (position) =>
+        setGeo({
+          status: "ready",
+          coords: { lat: position.coords.latitude, lng: position.coords.longitude },
+        }),
+      // Denied, timed out, or unavailable all land the guest in the same
+      // place: a route that cannot start where they are.
+      () => setGeo({ status: "failed" }),
+      { timeout: 10000, maximumAge: 5 * 60000 },
+    );
+  }, []);
+
+  // Asked for on the first "Directions to the apartment" only. Guarded by a
+  // ref rather than by `geo.status` so that the status changes this effect
+  // causes cannot feed back into its own dependencies.
+  const locationAskedRef = useRef(false);
+  useEffect(() => {
+    if (view.kind !== "toApartment" || locationAskedRef.current) return;
+    locationAskedRef.current = true;
+    askForLocation();
+  }, [view.kind, askForLocation]);
+
+  /** The leg to draw, or null when there is nothing to route — the plain
+   *  apartment view, or a guest whose location has not come back yet. */
+  const request = useMemo((): RouteRequest | null => {
+    if (view.kind === "poi") {
+      const poi = POIS.find((p) => p.id === view.id);
+      if (!poi) return null;
+      const destination = { lat: poi.lat, lng: poi.lng };
+      const mode = travelModeFor(poi);
+      return {
+        key: routeKey(APARTMENT, destination, mode, view.directions),
+        origin: APARTMENT,
+        destination,
+        mode,
+        withSteps: view.directions,
+      };
+    }
+    if (view.kind === "toApartment" && geo.status === "ready") {
+      // Whatever the distance, a guest arriving from elsewhere is driving.
+      return {
+        key: routeKey(geo.coords, APARTMENT, "driving", true),
+        origin: geo.coords,
+        destination: APARTMENT,
+        mode: "driving",
+        withSteps: true,
+      };
+    }
+    return null;
+  }, [view, geo]);
+
+  // Drawing the current leg: the real route from origin to destination, framed
+  // to fit, plus — when the guest asked for directions rather than just "show
+  // me where this is" — the turn-by-turn list under the map.
   useEffect(() => {
     // `failed` matters as well as the refs: an auth failure swaps in the
     // fallback without re-running the build effect, so the refs below still
@@ -221,17 +452,16 @@ export default function LocationMap({
 
     for (const poi of POIS) {
       const badge = poiBadgesRef.current.get(poi.id);
-      if (badge) badge.className = poiBadgeClass(poi.id === activePoiId);
+      if (badge) badge.className = poiBadgeClass(poi.id === activeId);
     }
 
     let stale = false;
-    const target = POIS.find((p) => p.id === activePoiId);
 
-    /** Frame the apartment and the POI together — used when there is no route
-     *  to draw, either because none was requested or the request failed. */
-    const frameBoth = (to: { lat: number; lng: number }) => {
+    /** Frame the two ends together — used when there is no route to draw,
+     *  either because none was requested or the request failed. */
+    const frameBoth = (from: LatLng, to: LatLng) => {
       const bounds = new google.maps.LatLngBounds();
-      bounds.extend(APARTMENT);
+      bounds.extend(from);
       bounds.extend(to);
       map.fitBounds(bounds, 60);
     };
@@ -242,30 +472,66 @@ export default function LocationMap({
     try {
       detachPolylines(routePolylinesRef.current);
       routePolylinesRef.current = [];
+      if (originMarkerRef.current) {
+        originMarkerRef.current.map = null;
+        originMarkerRef.current = null;
+      }
 
-      if (!target) {
-        map.panTo(APARTMENT);
-        map.setZoom(DEFAULT_ZOOM);
+      if (!request) {
+        // Waiting on the browser's location prompt is not a reason to throw
+        // the guest's view back to the apartment — only an empty view is.
+        if (view.kind === "apartment") {
+          map.panTo(APARTMENT);
+          map.setZoom(DEFAULT_ZOOM);
+        }
         return;
       }
 
-      const to = { lat: target.lat, lng: target.lng };
+      const { key, origin, destination, mode, withSteps } = request;
+
+      // The apartment and every POI already have a pin; only a route that
+      // starts at the guest introduces a point the map has never drawn.
+      const Marker = markerClassRef.current;
+      if (view.kind === "toApartment" && Marker) {
+        originMarkerRef.current = new Marker({
+          map,
+          position: origin,
+          content: originContent(labels.yourLocation),
+          title: labels.yourLocation,
+          zIndex: 999,
+        });
+      }
+
       // computeRoutes() returns a promise only on a healthy library; a rejected
       // key can hand back undefined instead, which must not be chained onto.
-      const pending = Route.computeRoutes({
-        origin: APARTMENT,
-        destination: to,
-        // The field mask is mandatory, and asking for only what is drawn keeps
+      const computing = Route.computeRoutes({
+        origin,
+        destination,
+        // The field mask is mandatory, and asking for only what is used keeps
         // the response small: `path` is the line, `viewport` is Google's own
-        // framing for it.
-        fields: ["path", "viewport"],
-        travelMode: travelModeFor(target) === "walking" ? "WALKING" : "DRIVING",
+        // framing for it, and the rest is the panel — requested only when the
+        // panel is open. `legs` carries the steps and their own localised text.
+        fields: withSteps
+          ? ["path", "viewport", "legs", "localizedValues", "distanceMeters", "durationMillis"]
+          : ["path", "viewport"],
+        travelMode: mode === "walking" ? "WALKING" : "DRIVING",
+        // Instructions come back written in the guest's own language, and in
+        // the units the country they are standing in actually uses.
+        language: locale,
+        region: "CH",
+        units: google.maps.UnitSystem.METRIC,
       });
 
-      if (!pending?.then) {
-        frameBoth(to);
-        return;
-      }
+      // computeRoutes() returns a promise only on a healthy library; a rejected
+      // key can hand back undefined instead. Turning that into a rejection
+      // rather than an early return keeps every outcome on one path — and
+      // keeps the panel's state out of this effect's synchronous body.
+      const pending =
+        typeof (computing as { then?: unknown } | undefined)?.then === "function"
+          ? computing
+          : Promise.reject<Awaited<typeof computing>>(
+              new Error("The routes library is not usable."),
+            );
 
       pending
         .then(({ routes }) => {
@@ -275,31 +541,36 @@ export default function LocationMap({
           // the same guard as the synchronous part: the map may be gone.
           try {
             if (!route) {
-              frameBoth(to);
+              frameBoth(origin, destination);
+              setRouteResult({ key, value: { status: "failed" } });
               return;
             }
-            // Only the line is drawn: the apartment and the POI already have
-            // their own pins, and createWaypointAdvancedMarkers() would stack
-            // Google's A/B markers on top of them.
-            const polylines = route.createPolylines({
-              polylineOptions: { strokeColor: "#0d9488", strokeOpacity: 0.9, strokeWeight: 5 },
-            });
+            // Only the line is drawn: both ends already have their own pins,
+            // and createWaypointAdvancedMarkers() would stack Google's A/B
+            // markers on top of them.
+            const polylines = route.createPolylines({ polylineOptions: routePolylineStyle });
             for (const polyline of polylines) polyline.setMap(map);
             routePolylinesRef.current = polylines;
 
             // Replaces the old renderer's preserveViewport: false.
             if (route.viewport) map.fitBounds(route.viewport, 60);
-            else frameBoth(to);
+            else frameBoth(origin, destination);
+
+            if (withSteps) {
+              setRouteResult({ key, value: readDirections(route, mode, locale, labels.minutes) });
+            }
           } catch {
             // Map is gone; the selection simply shows no route.
           }
         })
         .catch(() => {
-          // The Routes API may not be enabled on the key — the route line is a
-          // bonus, so fall back to simply framing the two points.
+          // The Routes API may not be enabled on the key. The line is a bonus,
+          // so fall back to framing the two points — but the step list is the
+          // whole point of the panel, so that says so plainly.
           if (stale) return;
+          setRouteResult({ key, value: { status: "failed" } });
           try {
-            frameBoth(to);
+            frameBoth(origin, destination);
           } catch {
             // Map is gone; the selection simply shows no route.
           }
@@ -311,7 +582,45 @@ export default function LocationMap({
     return () => {
       stale = true;
     };
-  }, [activePoiId, mapReady, failed]);
+    // `labels` and `locale` are read on every run but never worth re-routing
+    // for on their own — a language switch re-mounts the overlay anyway.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [request?.key, request, activeId, view.kind, mapReady, failed]);
+
+  // The panel is open whenever the guest asked to be routed somewhere — while
+  // the browser is still finding them, while Google is still answering, and
+  // once there is something to read. Its contents are derived rather than
+  // stored: anything but a fresh answer to the leg on screen reads as "still
+  // working on it".
+  const locating = view.kind === "toApartment" && geo.status !== "ready";
+  const directions: Directions | null = !panelOpen
+    ? null
+    : routeResult && request && routeResult.key === request.key
+      ? routeResult.value
+      : { status: "loading" };
+
+  // A Directions press from far down the nearby list would otherwise answer
+  // off-screen: the panel opens against a map the guest has scrolled past. The
+  // whole widget is brought into view, and `nearest` makes that a no-op when it
+  // already is — a marker click must not yank the page around.
+  //
+  // Keyed on which route was asked for, not merely on the panel being open:
+  // pressing Directions on a second POI while the first one's panel is still up
+  // is the same gesture from the same place in the list, and needs the same
+  // answer brought back into view.
+  const panelKey = !panelOpen ? null : view.kind === "poi" ? `poi:${view.id}` : "apartment";
+  const widgetRef = useRef<HTMLDivElement | null>(null);
+  const shownPanelKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (panelKey !== null && panelKey !== shownPanelKey.current) {
+      widgetRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+    shownPanelKey.current = panelKey;
+  }, [panelKey]);
+
+  /** Google Maps itself, for the cases the in-page route cannot cover. */
+  const fallbackUrl =
+    view.kind === "poi" ? directionsUrl(POIS.find((p) => p.id === view.id)) : directionsUrl();
 
   if (failed) {
     // No key, no Map ID, or the API refused to load — the view still has to
@@ -320,7 +629,7 @@ export default function LocationMap({
       <div className="rounded-2xl border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 px-6 py-10 text-center">
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{labels.unavailable}</p>
         <a
-          href={directionsUrl()}
+          href={fallbackUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:text-teal-700 dark:hover:text-teal-400 transition-colors"
@@ -331,8 +640,37 @@ export default function LocationMap({
     );
   }
 
+  const destinationName =
+    view.kind === "poi" ? (poiNames[view.id] ?? view.id) : labels.apartment;
+  const originName = view.kind === "toApartment" ? labels.fromYou : labels.fromApartment;
+
+  const note = (text: string, retry: boolean) => (
+    <div className="px-4 pb-4 text-sm text-gray-500 dark:text-gray-400">
+      <p>{text}</p>
+      <div className="mt-2 flex flex-wrap items-center gap-4 text-xs font-medium">
+        {retry && (
+          <button
+            type="button"
+            onClick={askForLocation}
+            className="text-teal-700 dark:text-teal-400 hover:underline cursor-pointer"
+          >
+            {labels.retry}
+          </button>
+        )}
+        <a
+          href={fallbackUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-teal-700 dark:text-teal-400 hover:underline"
+        >
+          {labels.openInMaps}
+        </a>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="relative">
+    <div className="relative" ref={widgetRef}>
       <div
         // Keyed on the theme so a rebuild gets a brand-new node: the Maps API
         // has no destroy(), and hand-clearing a reused container pulls the DOM
@@ -349,6 +687,77 @@ export default function LocationMap({
       >
         {labels.recenter}
       </button>
+
+      {panelOpen && (
+        <section
+          data-testid="directions-panel"
+          aria-label={labels.directions}
+          className="mt-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 overflow-hidden"
+        >
+          <div className="flex items-start justify-between gap-3 px-4 pt-3 pb-2">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+                {destinationName}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{originName}</p>
+            </div>
+            <button
+              type="button"
+              onClick={onHideDirections}
+              className="shrink-0 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-teal-700 dark:hover:text-teal-400 transition-colors cursor-pointer"
+            >
+              {labels.hide}
+            </button>
+          </div>
+
+          {locating && geo.status === "failed"
+            ? note(labels.locationFailed, true)
+            : locating || directions?.status === "loading"
+              ? <p className="px-4 pb-4 text-sm text-gray-500 dark:text-gray-400">{labels.locating}</p>
+              : directions?.status === "failed"
+                ? note(labels.routeFailed, false)
+                : directions?.status === "ready" && (
+                    <>
+                      <div className="flex flex-wrap items-center gap-2 px-4 pb-3 text-xs text-gray-600 dark:text-gray-300">
+                        <span className="rounded-full bg-teal-600/10 dark:bg-teal-400/15 px-2 py-0.5 font-medium text-teal-700 dark:text-teal-300">
+                          {directions.mode === "walking" ? labels.walking : labels.driving}
+                        </span>
+                        <span className="font-semibold tabular-nums text-gray-900 dark:text-gray-100">
+                          {directions.distance}
+                        </span>
+                        <span aria-hidden="true">·</span>
+                        <span className="tabular-nums">{directions.duration}</span>
+                      </div>
+                      {directions.steps.length > 0 && (
+                        <ol className="max-h-56 overflow-y-auto border-t border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700">
+                          {directions.steps.map((step, index) => (
+                            <li
+                              key={index}
+                              className="flex items-baseline gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200"
+                            >
+                              <span className="w-4 shrink-0 text-xs tabular-nums text-gray-400 dark:text-gray-500">
+                                {index + 1}
+                              </span>
+                              <span className="flex-1">
+                                {step.instruction}
+                                {step.note && (
+                                  <span className="block text-xs text-gray-500 dark:text-gray-400">
+                                    {step.note}
+                                  </span>
+                                )}
+                              </span>
+                              <span className="shrink-0 text-xs tabular-nums text-gray-500 dark:text-gray-400">
+                                {step.distance}
+                              </span>
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                    </>
+                  )}
+        </section>
+      )}
+
       <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">{labels.mapHint}</p>
     </div>
   );
