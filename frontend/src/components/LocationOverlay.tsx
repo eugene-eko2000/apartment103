@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import SiteHeader from "./SiteHeader";
 import SiteFooter from "./SiteFooter";
 import LocationMap from "./LocationMap";
-import { POIS, directionsUrl, formatDistance } from "@/lib/location";
+import { POIS, directionsUrl, formatDistance, poisByCategory } from "@/lib/location";
 import type { Dictionary } from "@/app/[lang]/dictionaries";
 import type { Locale } from "@/lib/i18n-config";
 
@@ -100,59 +100,70 @@ export default function LocationOverlay({
             <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-1">{l.nearbyTitle}</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{l.nearbySubtitle}</p>
 
-            <ul className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700 overflow-hidden">
-              {POIS.map((poi) => {
-                const text = l.pois[poi.id as keyof typeof l.pois];
-                const active = poi.id === activePoiId;
-                return (
-                  <li key={poi.id}>
-                    <div
-                      className={`flex items-center gap-4 px-4 sm:px-5 py-3 transition-colors ${
-                        active ? "bg-teal-50 dark:bg-teal-900/30" : "hover:bg-gray-50 dark:hover:bg-gray-700/40"
-                      }`}
-                    >
-                      {/* The row itself is the "show on map" control — the
-                          directions link beside it stays a real anchor so it
-                          can still be opened in a new tab. */}
-                      <button
-                        type="button"
-                        onClick={() => setActivePoiId(active ? null : poi.id)}
-                        aria-pressed={active}
-                        aria-label={`${text.name} — ${l.showOnMap}`}
-                        className="flex flex-1 items-center gap-4 text-left cursor-pointer"
-                      >
-                        <span aria-hidden="true" className="text-xl shrink-0 w-7 text-center">{poi.icon}</span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{text.name}</span>
-                          <span className="block text-xs text-gray-500 dark:text-gray-400 truncate">{text.desc}</span>
-                        </span>
-                        <span className="shrink-0 text-right">
-                          <span className="block text-sm font-semibold text-gray-900 dark:text-gray-100 tabular-nums">
-                            {formatDistance(poi.distanceKm, lang)} {l.distanceUnit}
-                          </span>
-                          <span className="block text-xs text-gray-500 dark:text-gray-400 tabular-nums">
-                            {l.driveTime.replace("{minutes}", String(poi.driveMinutes))}
-                          </span>
-                        </span>
-                      </button>
-                      <a
-                        href={directionsUrl(poi)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label={`${l.directions} — ${text.name}`}
-                        title={l.directions}
-                        className="shrink-0 text-gray-400 dark:text-gray-500 hover:text-teal-700 dark:hover:text-teal-400 transition-colors"
-                      >
-                        <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                          <path d="M8 1.5 14.5 8 8 14.5 1.5 8 8 1.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-                          <path d="M6 9.5v-2a1.5 1.5 0 0 1 1.5-1.5H10M8.5 4.5 10 6 8.5 7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </a>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+            {/* One card per category, in POI_CATEGORIES order; inside a card
+                the POIs stay nearest-first. */}
+            <div className="space-y-6">
+              {poisByCategory().map(({ category, pois }) => (
+                <section key={category}>
+                  <h3 className="px-1 mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    {l.categories[category]}
+                  </h3>
+                  <ul className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700 overflow-hidden">
+                    {pois.map((poi) => {
+                      const text = l.pois[poi.id as keyof typeof l.pois];
+                      const active = poi.id === activePoiId;
+                      return (
+                        <li key={poi.id}>
+                          <div
+                            className={`flex items-center gap-4 px-4 sm:px-5 py-3 transition-colors ${
+                              active ? "bg-teal-50 dark:bg-teal-900/30" : "hover:bg-gray-50 dark:hover:bg-gray-700/40"
+                            }`}
+                          >
+                            {/* The row itself is the "show on map" control — the
+                                directions link beside it stays a real anchor so it
+                                can still be opened in a new tab. */}
+                            <button
+                              type="button"
+                              onClick={() => setActivePoiId(active ? null : poi.id)}
+                              aria-pressed={active}
+                              aria-label={`${text.name} — ${l.showOnMap}`}
+                              className="flex flex-1 items-center gap-4 text-left cursor-pointer"
+                            >
+                              <span aria-hidden="true" className="text-xl shrink-0 w-7 text-center">{poi.icon}</span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{text.name}</span>
+                                <span className="block text-xs text-gray-500 dark:text-gray-400 truncate">{text.desc}</span>
+                              </span>
+                              <span className="shrink-0 text-right">
+                                <span className="block text-sm font-semibold text-gray-900 dark:text-gray-100 tabular-nums">
+                                  {formatDistance(poi.distanceKm, lang)} {l.distanceUnit}
+                                </span>
+                                <span className="block text-xs text-gray-500 dark:text-gray-400 tabular-nums">
+                                  {l.driveTime.replace("{minutes}", String(poi.driveMinutes))}
+                                </span>
+                              </span>
+                            </button>
+                            <a
+                              href={directionsUrl(poi)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label={`${l.directions} — ${text.name}`}
+                              title={l.directions}
+                              className="shrink-0 text-gray-400 dark:text-gray-500 hover:text-teal-700 dark:hover:text-teal-400 transition-colors"
+                            >
+                              <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                <path d="M8 1.5 14.5 8 8 14.5 1.5 8 8 1.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+                                <path d="M6 9.5v-2a1.5 1.5 0 0 1 1.5-1.5H10M8.5 4.5 10 6 8.5 7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </a>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              ))}
+            </div>
 
             <p className="mt-4 text-xs text-gray-400 dark:text-gray-500">{l.disclaimer}</p>
           </div>

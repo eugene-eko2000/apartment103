@@ -9,10 +9,29 @@
 
 export type LatLng = { lat: number; lng: number };
 
+/** The groups the nearby list is broken into, in the order they are shown.
+ *  Each id is a key into `dict.location.categories` — keep the two in sync.
+ *  `essentials` is the practical tail of the list: the stops a guest needs at
+ *  some point but would not call an outing. */
+export const POI_CATEGORIES = [
+  "beaches",
+  "skiResorts",
+  "hiking",
+  "spa",
+  "landmarks",
+  "nature",
+  "cities",
+  "essentials",
+] as const;
+
+export type PoiCategory = (typeof POI_CATEGORIES)[number];
+
 export type Poi = LatLng & {
   /** Key into `dict.location.pois` — keep the two in sync when editing. */
   id: string;
   icon: string;
+  /** The group the POI is listed under; see `POI_CATEGORIES`. */
+  category: PoiCategory;
   /** Road distance from the apartment in km (not straight-line). */
   distanceKm: number;
   /** Typical driving time in minutes. */
@@ -42,21 +61,31 @@ export const DEFAULT_ZOOM = 14;
  *  measurement rather than the drive scaled down. Re-measure them if
  *  APARTMENT moves. */
 export const POIS: Poi[] = [
-  { id: "beach", icon: "🏖", lat: 47.11518, lng: 9.25473, distanceKm: 0.5, driveMinutes: 2, walkMinutes: 5 },
-  { id: "supermarket", icon: "🛒", lat: 47.11272, lng: 9.24995, distanceKm: 0.5, driveMinutes: 1, walkMinutes: 4 },
-  { id: "station", icon: "🚉", lat: 47.11382, lng: 9.25500, distanceKm: 0.7, driveMinutes: 2, walkMinutes: 4 },
-  { id: "gondola", icon: "🚡", lat: 47.11329, lng: 9.25505, distanceKm: 0.8, driveMinutes: 2, walkMinutes: 4 },
-  { id: "murg", icon: "🥾", lat: 47.11313, lng: 9.21505, distanceKm: 3.2, driveMinutes: 4, walkMinutes: 40 },
-  { id: "walenstadt", icon: "🏘", lat: 47.12290, lng: 9.31401, distanceKm: 5.7, driveMinutes: 7, walkMinutes: 68 },
-  { id: "amden", icon: "🏔", lat: 47.14963, lng: 9.14112, distanceKm: 19, driveMinutes: 21 },
-  { id: "sargans", icon: "🏰", lat: 47.04995, lng: 9.43767, distanceKm: 20, driveMinutes: 20 },
-  { id: "flumserberg", icon: "🎿", lat: 47.09366, lng: 9.28425, distanceKm: 21, driveMinutes: 24 },
-  { id: "badragaz", icon: "♨️", lat: 46.99985, lng: 9.50516, distanceKm: 27, driveMinutes: 25 },
-  { id: "vaduz", icon: "🇱🇮", lat: 47.13929, lng: 9.52280, distanceKm: 36, driveMinutes: 30 },
-  { id: "rapperswil", icon: "🌹", lat: 47.22665, lng: 8.81640, distanceKm: 43, driveMinutes: 34 },
-  { id: "zurich", icon: "🏙", lat: 47.37445, lng: 8.54104, distanceKm: 74, driveMinutes: 55 },
-  { id: "airport", icon: "✈️", lat: 47.45061, lng: 8.56185, distanceKm: 85, driveMinutes: 67 },
+  { id: "beach", category: "beaches", icon: "🏖", lat: 47.115333, lng: 9.254743, distanceKm: 0.5, driveMinutes: 2, walkMinutes: 5 },
+  { id: "supermarket", category: "essentials", icon: "🛒", lat: 47.11272, lng: 9.24995, distanceKm: 0.5, driveMinutes: 1, walkMinutes: 4 },
+  { id: "station", category: "essentials", icon: "🚉", lat: 47.11382, lng: 9.25500, distanceKm: 0.7, driveMinutes: 2, walkMinutes: 4 },
+  { id: "gondola", category: "skiResorts", icon: "🚡", lat: 47.11329, lng: 9.25505, distanceKm: 0.8, driveMinutes: 2, walkMinutes: 4 },
+  { id: "murg", category: "hiking", icon: "🥾", lat: 47.11313, lng: 9.21505, distanceKm: 3.2, driveMinutes: 4, walkMinutes: 40 },
+  { id: "walenstadt", category: "cities", icon: "🏘", lat: 47.12290, lng: 9.31401, distanceKm: 5.7, driveMinutes: 7, walkMinutes: 68 },
+  { id: "amden", category: "hiking", icon: "🏔", lat: 47.14963, lng: 9.14112, distanceKm: 19, driveMinutes: 21 },
+  { id: "sargans", category: "landmarks", icon: "🏰", lat: 47.04995, lng: 9.43767, distanceKm: 20, driveMinutes: 20 },
+  { id: "flumserberg", category: "skiResorts", icon: "🎿", lat: 47.09366, lng: 9.28425, distanceKm: 21, driveMinutes: 24 },
+  { id: "badragaz", category: "spa", icon: "♨️", lat: 46.99985, lng: 9.50516, distanceKm: 27, driveMinutes: 25 },
+  { id: "vaduz", category: "cities", icon: "🇱🇮", lat: 47.13929, lng: 9.52280, distanceKm: 36, driveMinutes: 30 },
+  { id: "rapperswil", category: "cities", icon: "🌹", lat: 47.22665, lng: 8.81640, distanceKm: 43, driveMinutes: 34 },
+  { id: "zurich", category: "cities", icon: "🏙", lat: 47.37445, lng: 8.54104, distanceKm: 74, driveMinutes: 55 },
+  { id: "airport", category: "essentials", icon: "✈️", lat: 47.45061, lng: 8.56185, distanceKm: 85, driveMinutes: 67 },
 ];
+
+/** The POIs split into their categories: categories in `POI_CATEGORIES` order,
+ *  POIs still nearest-first inside each. Categories nothing falls into are
+ *  dropped, so the list never shows an empty heading. */
+export function poisByCategory(): { category: PoiCategory; pois: Poi[] }[] {
+  return POI_CATEGORIES.map((category) => ({
+    category,
+    pois: POIS.filter((poi) => poi.category === category),
+  })).filter((group) => group.pois.length > 0);
+}
 
 const coord = ({ lat, lng }: LatLng) => `${lat},${lng}`;
 

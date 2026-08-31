@@ -470,6 +470,16 @@
     "showOnMap": "show on map",
     "backHome": "Back to home",
     "disclaimer": "Distances and driving times are approximate and depend on traffic and road conditions.",
+    "categories": {
+      "beaches": "Beaches",
+      "skiResorts": "Ski resorts",
+      "hiking": "Hiking areas",
+      "spa": "Spas",
+      "landmarks": "Landmarks & museums",
+      "nature": "Natural landmarks",
+      "cities": "Towns & cities",
+      "essentials": "Everyday & getting around"
+    },
     "pois": {
       "beach": {
         "name": "Unterterzen lido",

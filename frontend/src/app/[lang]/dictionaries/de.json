@@ -470,6 +470,16 @@
     "showOnMap": "auf der Karte zeigen",
     "backHome": "Zurück zur Startseite",
     "disclaimer": "Distanzen und Fahrzeiten sind Richtwerte und hängen von Verkehr und Strassenverhältnissen ab.",
+    "categories": {
+      "beaches": "Strände",
+      "skiResorts": "Skigebiete",
+      "hiking": "Wandergebiete",
+      "spa": "Thermen & Spas",
+      "landmarks": "Sehenswürdigkeiten & Museen",
+      "nature": "Naturdenkmäler",
+      "cities": "Städte & Orte",
+      "essentials": "Alltag & Anreise"
+    },
     "pois": {
       "beach": {
         "name": "Strandbad Unterterzen",

@@ -470,6 +470,16 @@
     "showOnMap": "afficher sur la carte",
     "backHome": "Retour à l'accueil",
     "disclaimer": "Les distances et les temps de trajet sont approximatifs et dépendent du trafic et de l'état des routes.",
+    "categories": {
+      "beaches": "Plages",
+      "skiResorts": "Stations de ski",
+      "hiking": "Zones de randonnée",
+      "spa": "Thermes & spas",
+      "landmarks": "Monuments & musées",
+      "nature": "Sites naturels",
+      "cities": "Villes & villages",
+      "essentials": "Quotidien & déplacements"
+    },
     "pois": {
       "beach": {
         "name": "Plage d'Unterterzen",

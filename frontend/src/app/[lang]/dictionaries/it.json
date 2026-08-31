@@ -470,6 +470,16 @@
     "showOnMap": "mostra sulla mappa",
     "backHome": "Torna alla home",
     "disclaimer": "Distanze e tempi di percorrenza sono indicativi e dipendono dal traffico e dalle condizioni stradali.",
+    "categories": {
+      "beaches": "Spiagge",
+      "skiResorts": "Comprensori sciistici",
+      "hiking": "Zone escursionistiche",
+      "spa": "Terme & spa",
+      "landmarks": "Monumenti & musei",
+      "nature": "Monumenti naturali",
+      "cities": "Città & paesi",
+      "essentials": "Quotidiano & spostamenti"
+    },
     "pois": {
       "beach": {
         "name": "Lido di Unterterzen",
