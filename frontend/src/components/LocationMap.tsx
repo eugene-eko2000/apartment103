@@ -51,6 +51,12 @@ function poiContent(icon: string): { root: HTMLElement; badge: HTMLElement } {
   return { root, badge };
 }
 
+/** Takes the route's lines off the map. Detaching is the only teardown a
+ *  Polyline has, and it has to happen before the map itself goes. */
+function detachPolylines(polylines: google.maps.Polyline[]): void {
+  for (const polyline of polylines) polyline.setMap(null);
+}
+
 export default function LocationMap({
   activePoiId,
   onSelectPoi,
@@ -76,8 +82,10 @@ export default function LocationMap({
   const apartmentMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
   /** The badge span inside each POI marker, restyled on selection. */
   const poiBadgesRef = useRef<Map<string, HTMLElement>>(new Map());
-  const directionsServiceRef = useRef<google.maps.DirectionsService | null>(null);
-  const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
+  /** The routes library's `Route` class, captured once the library loads. */
+  const routeClassRef = useRef<typeof google.maps.routes.Route | null>(null);
+  /** Polylines drawn for the current route, detached when it changes. */
+  const routePolylinesRef = useRef<google.maps.Polyline[]>([]);
 
   const [mapReady, setMapReady] = useState(false);
   const [failed, setFailed] = useState(!hasGoogleMapsConfig);
@@ -151,20 +159,18 @@ export default function LocationMap({
             title: poiNamesRef.current[poi.id] ?? poi.id,
             gmpClickable: true,
           });
-          marker.addListener("click", () => onSelectPoiRef.current(poi.id));
+          // "gmp-click" rather than addListener("click", …): an Advanced Marker
+          // is a custom element, and the DOM click event is the legacy path it
+          // now warns about. `gmpClickable` above is what emits this event.
+          marker.addEventListener("gmp-click", () => onSelectPoiRef.current(poi.id));
           poiMarkers.set(poi.id, marker);
           poiBadges.set(poi.id, badge);
         }
 
-        directionsServiceRef.current = new routes.DirectionsService();
-        directionsRendererRef.current = new routes.DirectionsRenderer({
-          map,
-          // The apartment and the POI already have their own pins; Google's
-          // default A/B markers would just stack on top of them.
-          suppressMarkers: true,
-          preserveViewport: false,
-          polylineOptions: { strokeColor: "#0d9488", strokeOpacity: 0.9, strokeWeight: 5 },
-        });
+        // Route.computeRoutes() is a static call and its polylines are created
+        // per result, so there is nothing to construct up front — only the
+        // class itself is kept, and only if this build of the API has it.
+        routeClassRef.current = routes.Route ?? null;
 
         mapRef.current = map;
         setMapReady(true);
@@ -180,7 +186,7 @@ export default function LocationMap({
       // A failed teardown must not take the page down with it, so each step is
       // best-effort: the map and markers are being discarded either way.
       try {
-        directionsRendererRef.current?.setMap(null);
+        detachPolylines(routePolylinesRef.current);
         // Every marker has to be detached before the map goes, including the
         // apartment's: a marker left pointing at a torn-down map keeps async
         // work queued inside the Maps API and throws when it finally runs
@@ -190,8 +196,8 @@ export default function LocationMap({
       } catch {
         // Already broken — nothing left to clean up on the Google side.
       }
-      directionsRendererRef.current = null;
-      directionsServiceRef.current = null;
+      routePolylinesRef.current = [];
+      routeClassRef.current = null;
       poiMarkers.clear();
       poiBadges.clear();
       apartmentMarkerRef.current = null;
@@ -210,9 +216,8 @@ export default function LocationMap({
     // hold Maps objects that are no longer usable.
     if (failed) return;
     const map = mapRef.current;
-    const renderer = directionsRendererRef.current;
-    const service = directionsServiceRef.current;
-    if (!map || !renderer || !service) return;
+    const Route = routeClassRef.current;
+    if (!map || !Route) return;
 
     for (const poi of POIS) {
       const badge = poiBadgesRef.current.get(poi.id);
@@ -235,23 +240,26 @@ export default function LocationMap({
     // a map that failed to initialise. Nothing in this effect is worth
     // crashing the whole Location view for.
     try {
+      detachPolylines(routePolylinesRef.current);
+      routePolylinesRef.current = [];
+
       if (!target) {
-        renderer.set("directions", null);
         map.panTo(APARTMENT);
         map.setZoom(DEFAULT_ZOOM);
         return;
       }
 
       const to = { lat: target.lat, lng: target.lng };
-      // route() returns a promise only on a healthy service; a rejected key
-      // can hand back undefined instead, which must not be chained onto.
-      const pending = service.route({
+      // computeRoutes() returns a promise only on a healthy library; a rejected
+      // key can hand back undefined instead, which must not be chained onto.
+      const pending = Route.computeRoutes({
         origin: APARTMENT,
         destination: to,
-        travelMode:
-          travelModeFor(target) === "walking"
-            ? google.maps.TravelMode.WALKING
-            : google.maps.TravelMode.DRIVING,
+        // The field mask is mandatory, and asking for only what is drawn keeps
+        // the response small: `path` is the line, `viewport` is Google's own
+        // framing for it.
+        fields: ["path", "viewport"],
+        travelMode: travelModeFor(target) === "walking" ? "WALKING" : "DRIVING",
       });
 
       if (!pending?.then) {
@@ -260,15 +268,37 @@ export default function LocationMap({
       }
 
       pending
-        .then((result) => {
-          if (!stale) renderer.setDirections(result);
+        .then(({ routes }) => {
+          if (stale) return;
+          const route = routes?.[0];
+          // Drawing happens a tick later than the checks above, so it needs
+          // the same guard as the synchronous part: the map may be gone.
+          try {
+            if (!route) {
+              frameBoth(to);
+              return;
+            }
+            // Only the line is drawn: the apartment and the POI already have
+            // their own pins, and createWaypointAdvancedMarkers() would stack
+            // Google's A/B markers on top of them.
+            const polylines = route.createPolylines({
+              polylineOptions: { strokeColor: "#0d9488", strokeOpacity: 0.9, strokeWeight: 5 },
+            });
+            for (const polyline of polylines) polyline.setMap(map);
+            routePolylinesRef.current = polylines;
+
+            // Replaces the old renderer's preserveViewport: false.
+            if (route.viewport) map.fitBounds(route.viewport, 60);
+            else frameBoth(to);
+          } catch {
+            // Map is gone; the selection simply shows no route.
+          }
         })
         .catch(() => {
-          // The Directions API may not be enabled on the key — the route line
-          // is a bonus, so fall back to simply framing the two points.
+          // The Routes API may not be enabled on the key — the route line is a
+          // bonus, so fall back to simply framing the two points.
           if (stale) return;
           try {
-            renderer.set("directions", null);
             frameBoth(to);
           } catch {
             // Map is gone; the selection simply shows no route.

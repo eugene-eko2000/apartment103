@@ -47,7 +47,7 @@ export type Poi = LatLng & {
  *  Currently the centre of Unterterzen; replace with the building's own
  *  coordinates to place the pin exactly. Both the map and every directions
  *  link read from this one value. */
-export const APARTMENT: LatLng = { lat: 47.11395, lng: 9.25229 };
+export const APARTMENT: LatLng = { lat: 47.11491, lng: 9.25606 };
 
 /** Zoom that fits the village and the lake shore around it. */
 export const DEFAULT_ZOOM = 14;
