@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "@/lib/theme-context";
 import {
   GOOGLE_MAPS_MAP_ID,
@@ -22,13 +22,10 @@ import {
 /** What the map is currently showing.
  *
  *  `directions` on a POI is the step list the row's arrow opens — the row
- *  itself only draws the line, which is the lighter "where is this?" gesture.
- *  The apartment leg has no such distinction: it exists only because the guest
- *  asked to be routed there, so it always carries its steps. */
+ *  itself only draws the line, which is the lighter "where is this?" gesture. */
 export type MapView =
   | { kind: "apartment" }
-  | { kind: "poi"; id: string; directions: boolean }
-  | { kind: "toApartment" };
+  | { kind: "poi"; id: string; directions: boolean };
 
 type TravelMode = "driving" | "walking";
 
@@ -65,15 +62,6 @@ type Directions =
   | { status: "failed" }
   | { status: "ready"; mode: TravelMode; distance: string; duration: string; steps: Step[] };
 
-/** Where the guest is, for the leg that starts at them rather than at the
- *  apartment. Only ever asked for once the guest presses Directions — a
- *  permission prompt on page load would be worse than useless. */
-type Geo =
-  | { status: "idle" }
-  | { status: "locating" }
-  | { status: "ready"; coords: LatLng }
-  | { status: "failed" };
-
 /** Markers are Advanced Markers, whose `content` is ordinary DOM — so the pins
  *  are Tailwind-styled elements rather than sprite images, and they anchor at
  *  their own bottom centre the way a map pin should.
@@ -89,17 +77,6 @@ function apartmentContent(label: string): HTMLElement {
        <span class="absolute inline-flex h-10 w-10 animate-ping rounded-full bg-teal-500/40"></span>
        <span class="relative inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-white bg-teal-600 text-base shadow-lg dark:border-gray-900">🏠</span>
      </span>`;
-  root.title = label;
-  return root;
-}
-
-/** The "you are here" dot for a route that starts at the guest. Deliberately
- *  the blue of every other map's location dot rather than the site's teal —
- *  the teal is what the route and the apartment already use. */
-function originContent(label: string): HTMLElement {
-  const root = document.createElement("div");
-  root.innerHTML =
-    `<span class="flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-blue-600 shadow-md dark:border-gray-900"></span>`;
   root.title = label;
   return root;
 }
@@ -214,12 +191,7 @@ export default function LocationMap({
     openInMaps: string;
     directions: string;
     fromApartment: string;
-    fromYou: string;
-    yourLocation: string;
     loading: string;
-    locating: string;
-    locationFailed: string;
-    retry: string;
     routeFailed: string;
     hide: string;
     driving: string;
@@ -237,11 +209,6 @@ export default function LocationMap({
   const poiBadgesRef = useRef<Map<string, HTMLElement>>(new Map());
   /** The routes library's `Route` class, captured once the library loads. */
   const routeClassRef = useRef<typeof google.maps.routes.Route | null>(null);
-  /** The marker class, kept for the guest's own pin — that one cannot be built
-   *  up front the way the POI pins are, since it needs their location first. */
-  const markerClassRef = useRef<typeof google.maps.marker.AdvancedMarkerElement | null>(null);
-  /** The guest's pin, when a route starts at them. */
-  const originMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
   /** Polylines drawn for the current route, detached when it changes. */
   const routePolylinesRef = useRef<google.maps.Polyline[]>([]);
 
@@ -252,10 +219,9 @@ export default function LocationMap({
    *  longer the current leg is simply a result for a question nobody is
    *  asking, and the panel falls back to "loading" on its own. */
   const [routeResult, setRouteResult] = useState<{ key: string; value: Directions } | null>(null);
-  const [geo, setGeo] = useState<Geo>({ status: "idle" });
 
   const activeId = view.kind === "poi" ? view.id : null;
-  const panelOpen = view.kind === "toApartment" || (view.kind === "poi" && view.directions);
+  const panelOpen = view.kind === "poi" && view.directions;
 
   // Latest props for the build effect, which must not re-run on every render.
   const onSelectPoiRef = useRef(onSelectPoi);
@@ -338,7 +304,6 @@ export default function LocationMap({
         // per result, so there is nothing to construct up front — only the
         // class itself is kept, and only if this build of the API has it.
         routeClassRef.current = routes.Route ?? null;
-        markerClassRef.current = AdvancedMarkerElement;
 
         mapRef.current = map;
         setMapReady(true);
@@ -361,14 +326,11 @@ export default function LocationMap({
         // (StrictMode's double mount and the dark-mode rebuild both hit this).
         for (const marker of poiMarkers.values()) marker.map = null;
         if (apartmentMarkerRef.current) apartmentMarkerRef.current.map = null;
-        if (originMarkerRef.current) originMarkerRef.current.map = null;
       } catch {
         // Already broken — nothing left to clean up on the Google side.
       }
       routePolylinesRef.current = [];
       routeClassRef.current = null;
-      markerClassRef.current = null;
-      originMarkerRef.current = null;
       poiMarkers.clear();
       poiBadges.clear();
       apartmentMarkerRef.current = null;
@@ -377,40 +339,7 @@ export default function LocationMap({
     };
   }, [resolvedTheme]);
 
-  /** Asks the browser where the guest is. Kept out of the effect below so the
-   *  "try again" button can re-run exactly the same request: a denied prompt
-   *  is often a mis-click, and there is no other way back from it. */
-  const askForLocation = useCallback(() => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setGeo({ status: "failed" });
-      return;
-    }
-    setGeo({ status: "locating" });
-    navigator.geolocation.getCurrentPosition(
-      (position) =>
-        setGeo({
-          status: "ready",
-          coords: { lat: position.coords.latitude, lng: position.coords.longitude },
-        }),
-      // Denied, timed out, or unavailable all land the guest in the same
-      // place: a route that cannot start where they are.
-      () => setGeo({ status: "failed" }),
-      { timeout: 10000, maximumAge: 5 * 60000 },
-    );
-  }, []);
-
-  // Asked for on the first "Directions to the apartment" only. Guarded by a
-  // ref rather than by `geo.status` so that the status changes this effect
-  // causes cannot feed back into its own dependencies.
-  const locationAskedRef = useRef(false);
-  useEffect(() => {
-    if (view.kind !== "toApartment" || locationAskedRef.current) return;
-    locationAskedRef.current = true;
-    askForLocation();
-  }, [view.kind, askForLocation]);
-
-  /** The leg to draw, or null when there is nothing to route — the plain
-   *  apartment view, or a guest whose location has not come back yet. */
+  /** The leg to draw, or null when the map is just showing the apartment. */
   const request = useMemo((): RouteRequest | null => {
     if (view.kind === "poi") {
       const poi = POIS.find((p) => p.id === view.id);
@@ -425,18 +354,8 @@ export default function LocationMap({
         withSteps: view.directions,
       };
     }
-    if (view.kind === "toApartment" && geo.status === "ready") {
-      // Whatever the distance, a guest arriving from elsewhere is driving.
-      return {
-        key: routeKey(geo.coords, APARTMENT, "driving", true),
-        origin: geo.coords,
-        destination: APARTMENT,
-        mode: "driving",
-        withSteps: true,
-      };
-    }
     return null;
-  }, [view, geo]);
+  }, [view]);
 
   // Drawing the current leg: the real route from origin to destination, framed
   // to fit, plus — when the guest asked for directions rather than just "show
@@ -472,35 +391,14 @@ export default function LocationMap({
     try {
       detachPolylines(routePolylinesRef.current);
       routePolylinesRef.current = [];
-      if (originMarkerRef.current) {
-        originMarkerRef.current.map = null;
-        originMarkerRef.current = null;
-      }
 
       if (!request) {
-        // Waiting on the browser's location prompt is not a reason to throw
-        // the guest's view back to the apartment — only an empty view is.
-        if (view.kind === "apartment") {
-          map.panTo(APARTMENT);
-          map.setZoom(DEFAULT_ZOOM);
-        }
+        map.panTo(APARTMENT);
+        map.setZoom(DEFAULT_ZOOM);
         return;
       }
 
       const { key, origin, destination, mode, withSteps } = request;
-
-      // The apartment and every POI already have a pin; only a route that
-      // starts at the guest introduces a point the map has never drawn.
-      const Marker = markerClassRef.current;
-      if (view.kind === "toApartment" && Marker) {
-        originMarkerRef.current = new Marker({
-          map,
-          position: origin,
-          content: originContent(labels.yourLocation),
-          title: labels.yourLocation,
-          zIndex: 999,
-        });
-      }
 
       // computeRoutes() returns a promise only on a healthy library; a rejected
       // key can hand back undefined instead, which must not be chained onto.
@@ -587,12 +485,10 @@ export default function LocationMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request?.key, request, activeId, view.kind, mapReady, failed]);
 
-  // The panel is open whenever the guest asked to be routed somewhere — while
-  // the browser is still finding them, while Google is still answering, and
-  // once there is something to read. Its contents are derived rather than
-  // stored: anything but a fresh answer to the leg on screen reads as "still
-  // working on it".
-  const locating = view.kind === "toApartment" && geo.status !== "ready";
+  // The panel is open from the moment the guest asks for directions, through
+  // Google still answering, to there being something to read. Its contents are
+  // derived rather than stored: anything but a fresh answer to the leg on
+  // screen reads as "still working on it".
   const directions: Directions | null = !panelOpen
     ? null
     : routeResult && request && routeResult.key === request.key
@@ -608,7 +504,7 @@ export default function LocationMap({
   // pressing Directions on a second POI while the first one's panel is still up
   // is the same gesture from the same place in the list, and needs the same
   // answer brought back into view.
-  const panelKey = !panelOpen ? null : view.kind === "poi" ? `poi:${view.id}` : "apartment";
+  const panelKey = panelOpen && view.kind === "poi" ? `poi:${view.id}` : null;
   const widgetRef = useRef<HTMLDivElement | null>(null);
   const shownPanelKey = useRef<string | null>(null);
   useEffect(() => {
@@ -642,21 +538,11 @@ export default function LocationMap({
 
   const destinationName =
     view.kind === "poi" ? (poiNames[view.id] ?? view.id) : labels.apartment;
-  const originName = view.kind === "toApartment" ? labels.fromYou : labels.fromApartment;
 
-  const note = (text: string, retry: boolean) => (
+  const note = (text: string) => (
     <div className="px-4 pb-4 text-sm text-gray-500 dark:text-gray-400">
       <p>{text}</p>
       <div className="mt-2 flex flex-wrap items-center gap-4 text-xs font-medium">
-        {retry && (
-          <button
-            type="button"
-            onClick={askForLocation}
-            className="text-teal-700 dark:text-teal-400 hover:underline cursor-pointer"
-          >
-            {labels.retry}
-          </button>
-        )}
         <a
           href={fallbackUrl}
           target="_blank"
@@ -699,7 +585,9 @@ export default function LocationMap({
               <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
                 {destinationName}
               </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{originName}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                {labels.fromApartment}
+              </p>
             </div>
             <button
               type="button"
@@ -710,13 +598,12 @@ export default function LocationMap({
             </button>
           </div>
 
-          {locating && geo.status === "failed"
-            ? note(labels.locationFailed, true)
-            : locating || directions?.status === "loading"
-              ? <p className="px-4 pb-4 text-sm text-gray-500 dark:text-gray-400">{labels.locating}</p>
-              : directions?.status === "failed"
-                ? note(labels.routeFailed, false)
-                : directions?.status === "ready" && (
+          {directions?.status === "loading" ? (
+            <p className="px-4 pb-4 text-sm text-gray-500 dark:text-gray-400">{labels.loading}</p>
+          ) : directions?.status === "failed" ? (
+            note(labels.routeFailed)
+          ) : (
+            directions?.status === "ready" && (
                     <>
                       <div className="flex flex-wrap items-center gap-2 px-4 pb-3 text-xs text-gray-600 dark:text-gray-300">
                         <span className="rounded-full bg-teal-600/10 dark:bg-teal-400/15 px-2 py-0.5 font-medium text-teal-700 dark:text-teal-300">
@@ -754,7 +641,8 @@ export default function LocationMap({
                         </ol>
                       )}
                     </>
-                  )}
+            )
+          )}
         </section>
       )}
 

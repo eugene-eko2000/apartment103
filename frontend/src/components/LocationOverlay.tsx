@@ -38,11 +38,10 @@ export default function LocationOverlay({
         : { kind: "poi", id, directions: true },
     );
 
-  /** Closing the panel keeps the leg on the map; for the guest's own route
-   *  there is no leg without it, so that one goes back to the apartment. */
+  /** Closing the panel keeps the leg the guest is looking at on the map. */
   const hideDirections = () =>
     setView((current) =>
-      current.kind === "poi" ? { kind: "poi", id: current.id, directions: false } : { kind: "apartment" },
+      current.kind === "poi" ? { kind: "poi", id: current.id, directions: false } : current,
     );
 
   useEffect(() => {
@@ -87,29 +86,10 @@ export default function LocationOverlay({
 
             {/* ── MAP ─────────────────────────────────────── */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 sm:p-5 mb-8">
-              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                <p className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-                  <span aria-hidden="true">📍</span>
-                  <span className="font-medium text-gray-900 dark:text-gray-100">{l.address}</span>
-                </p>
-                {/* Routes the guest from wherever they are to the apartment,
-                    in the map below — it asks the browser for their location
-                    rather than handing them off to Google Maps. */}
-                <button
-                  type="button"
-                  onClick={() =>
-                    setView((current) => (current.kind === "toApartment" ? current : { kind: "toApartment" }))
-                  }
-                  aria-pressed={view.kind === "toApartment"}
-                  className="inline-flex items-center gap-2 rounded-lg bg-teal-600 hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-400 text-white dark:text-teal-950 text-sm font-medium px-4 py-2 transition-colors cursor-pointer"
-                >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                    <path d="M8 1.5 14.5 8 8 14.5 1.5 8 8 1.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-                    <path d="M6 9.5v-2a1.5 1.5 0 0 1 1.5-1.5H10M8.5 4.5 10 6 8.5 7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  {l.directions}
-                </button>
-              </div>
+              <p className="flex items-center gap-2 mb-4 text-sm text-gray-600 dark:text-gray-300">
+                <span aria-hidden="true">📍</span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">{l.address}</span>
+              </p>
 
               <LocationMap
                 view={view}
@@ -124,12 +104,7 @@ export default function LocationOverlay({
                   openInMaps: l.openInMaps,
                   directions: l.directions,
                   fromApartment: l.directionsFromApartment,
-                  fromYou: l.directionsFromYou,
-                  yourLocation: l.yourLocation,
                   loading: l.directionsLoading,
-                  locating: l.directionsLocating,
-                  locationFailed: l.directionsLocationFailed,
-                  retry: l.directionsRetry,
                   routeFailed: l.directionsFailed,
                   hide: l.directionsHide,
                   driving: l.modeDriving,
@@ -159,7 +134,7 @@ export default function LocationOverlay({
                       return (
                         <li key={poi.id}>
                           <div
-                            className={`flex items-center gap-4 px-4 sm:px-5 py-3 transition-colors ${
+                            className={`flex items-center gap-3 sm:gap-4 px-4 sm:px-5 py-3 transition-colors ${
                               active ? "bg-teal-50 dark:bg-teal-900/30" : "hover:bg-gray-50 dark:hover:bg-gray-700/40"
                             }`}
                           >
@@ -172,14 +147,20 @@ export default function LocationOverlay({
                               onClick={() => showOnMap(active ? null : poi.id)}
                               aria-pressed={active}
                               aria-label={`${text.name} — ${l.showOnMap}`}
-                              className="flex flex-1 items-center gap-4 text-left cursor-pointer"
+                              className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4 text-left cursor-pointer"
                             >
                               <span aria-hidden="true" className="text-xl shrink-0 w-7 text-center">{poi.icon}</span>
+                              {/* Wraps rather than truncates: on a phone the
+                                  column is too narrow for these names, and an
+                                  ellipsis hides the very thing the row is for. */}
                               <span className="min-w-0 flex-1">
-                                <span className="block text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{text.name}</span>
-                                <span className="block text-xs text-gray-500 dark:text-gray-400 truncate">{text.desc}</span>
+                                <span className="block text-sm font-medium text-gray-900 dark:text-gray-100">{text.name}</span>
+                                <span className="block text-xs text-gray-500 dark:text-gray-400">{text.desc}</span>
                               </span>
-                              <span className="shrink-0 text-right">
+                              {/* The figures are the one thing that must never
+                                  wrap — "2 Min. Fahrt" broken over two lines
+                                  reads as two separate numbers. */}
+                              <span className="shrink-0 text-right whitespace-nowrap">
                                 <span className="block text-sm font-semibold text-gray-900 dark:text-gray-100 tabular-nums">
                                   {formatDistance(poi.distanceKm, lang)} {l.distanceUnit}
                                 </span>
