@@ -89,16 +89,28 @@ export function poisByCategory(): { category: PoiCategory; pois: Poi[] }[] {
 
 const coord = ({ lat, lng }: LatLng) => `${lat},${lng}`;
 
+export type TravelMode = "walking" | "driving";
+
 /** A guest walks anything within a quarter of an hour and drives the rest —
  *  the cutoff that picks the travel mode for a POI's directions. */
 export const WALKABLE_MINUTES = 15;
 
-/** The mode to open a POI's route in. Anything without a `walkMinutes` figure
+/** How a guest actually gets to a POI, and how long it takes them: the walk
+ *  where the walk is under the cutoff, the drive everywhere else. One function
+ *  for both halves so the figure in the list can never disagree with the mode
+ *  the map routes in — a row reading "4 min walk" beside a driving route was
+ *  exactly the mismatch this replaces. Anything without a `walkMinutes` figure
  *  is hours away on foot, so it drives. */
-export function travelModeFor(poi: Poi): "walking" | "driving" {
+export function travelTimeFor(poi: Poi): { mode: TravelMode; minutes: number } {
   return poi.walkMinutes !== undefined && poi.walkMinutes <= WALKABLE_MINUTES
-    ? "walking"
-    : "driving";
+    ? { mode: "walking", minutes: poi.walkMinutes }
+    : { mode: "driving", minutes: poi.driveMinutes };
+}
+
+/** The mode to open a POI's route in — the map, the directions panel and the
+ *  Google Maps link all pick their mode here. */
+export function travelModeFor(poi: Poi): TravelMode {
+  return travelTimeFor(poi).mode;
 }
 
 /** Google Maps directions, defaulting to "get me to the apartment" by car.

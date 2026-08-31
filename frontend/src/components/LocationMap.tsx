@@ -17,6 +17,7 @@ import {
   minutesFromMillis,
   travelModeFor,
   type LatLng,
+  type TravelMode,
 } from "@/lib/location";
 
 /** What the map is currently showing.
@@ -26,8 +27,6 @@ import {
 export type MapView =
   | { kind: "apartment" }
   | { kind: "poi"; id: string; directions: boolean };
-
-type TravelMode = "driving" | "walking";
 
 /** `note` is the second line Google appends to some instructions ("Restricted
  *  usage road", "Destination will be on the right") — a genuine second thought
@@ -103,30 +102,51 @@ function poiContent(icon: string): { root: HTMLElement; badge: HTMLElement } {
   return { root, badge };
 }
 
-/** Takes the route's lines off the map. Detaching is the only teardown a
- *  Polyline has, and it has to happen before the map itself goes. */
 /** The site's teal, for the route line. */
 const ROUTE_COLOR = "#0d9488";
 
-/** Recolours whatever Google styled the leg as, rather than replacing it: a
- *  walking route comes back as a dotted line whose dots carry their own colour
- *  and whose stroke is invisible, so setting `strokeColor` alone leaves the
- *  dots Google's blue. Everything else about the default styling — the dot
- *  spacing, the weight, the dashed/solid choice — is worth keeping. */
-function routePolylineStyle(
-  defaults: google.maps.PolylineOptions,
-): google.maps.PolylineOptions {
-  return {
+/** The route line, styled from the mode *we* asked for rather than from what
+ *  Google inferred. `createPolylines` only knows a section's travel mode when
+ *  the response carries `legs`, which is only requested when the directions
+ *  panel is open — so the same walk came back dotted from the panel's arrow
+ *  and solid from a tap on the POI, one leg drawn two different ways. Deciding
+ *  it here makes a walk dotted and a drive solid however the guest got there.
+ *
+ *  Called only from inside the drawing effect, so `google.maps` is loaded by
+ *  the time the symbol below is read. */
+function routePolylineStyle(mode: TravelMode) {
+  return (defaults: google.maps.PolylineOptions): google.maps.PolylineOptions => ({
     ...defaults,
     strokeColor: ROUTE_COLOR,
-    icons: defaults.icons?.map((item) =>
-      item.icon
-        ? { ...item, icon: { ...item.icon, strokeColor: ROUTE_COLOR, fillColor: ROUTE_COLOR } }
-        : item,
-    ),
-  };
+    // Both branches set everything the other touches: Google's own dotted
+    // styling left in `defaults` would otherwise bead a solid drive, and its
+    // transparent stroke would leave a walk with no line under the dots.
+    ...(mode === "walking"
+      ? {
+          // A dotted line is a fully transparent stroke with a circle repeated
+          // along it — any stroke left visible shows through the gaps.
+          strokeOpacity: 0,
+          icons: [
+            {
+              icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                fillColor: ROUTE_COLOR,
+                fillOpacity: 1,
+                strokeColor: ROUTE_COLOR,
+                strokeOpacity: 1,
+                scale: 3.5,
+              },
+              offset: "0",
+              repeat: "12px",
+            },
+          ],
+        }
+      : { strokeOpacity: 1, icons: [] }),
+  });
 }
 
+/** Takes the route's lines off the map. Detaching is the only teardown a
+ *  Polyline has, and it has to happen before the map itself goes. */
 function detachPolylines(polylines: google.maps.Polyline[]): void {
   for (const polyline of polylines) polyline.setMap(null);
 }
@@ -446,7 +466,7 @@ export default function LocationMap({
             // Only the line is drawn: both ends already have their own pins,
             // and createWaypointAdvancedMarkers() would stack Google's A/B
             // markers on top of them.
-            const polylines = route.createPolylines({ polylineOptions: routePolylineStyle });
+            const polylines = route.createPolylines({ polylineOptions: routePolylineStyle(mode) });
             for (const polyline of polylines) polyline.setMap(map);
             routePolylinesRef.current = polylines;
 

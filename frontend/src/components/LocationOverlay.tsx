@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import SiteHeader from "./SiteHeader";
 import SiteFooter from "./SiteFooter";
 import LocationMap, { type MapView } from "./LocationMap";
-import { POIS, formatDistance, poisByCategory } from "@/lib/location";
+import { POIS, formatDistance, poisByCategory, travelTimeFor } from "@/lib/location";
 import type { Dictionary } from "@/app/[lang]/dictionaries";
 import type { Locale } from "@/lib/i18n-config";
 
@@ -131,6 +131,11 @@ export default function LocationOverlay({
                     {pois.map((poi) => {
                       const text = l.pois[poi.id as keyof typeof l.pois];
                       const active = poi.id === activePoiId;
+                      // The row's figure follows the way a guest would actually
+                      // go: a walk under the cutoff is a walk, everything else
+                      // is a drive — the same call the map routes with, so the
+                      // label and the line on the map always agree.
+                      const travel = travelTimeFor(poi);
                       return (
                         <li key={poi.id}>
                           <div
@@ -165,7 +170,7 @@ export default function LocationOverlay({
                                   {formatDistance(poi.distanceKm, lang)} {l.distanceUnit}
                                 </span>
                                 <span className="block text-xs text-gray-500 dark:text-gray-400 tabular-nums">
-                                  {l.driveTime.replace("{minutes}", String(poi.driveMinutes))}
+                                  {(travel.mode === "walking" ? l.walkTime : l.driveTime).replace("{minutes}", String(travel.minutes))}
                                 </span>
                               </span>
                             </button>
