@@ -8,7 +8,7 @@ import {
   loadGoogleMaps,
   onGoogleMapsAuthFailure,
 } from "@/lib/googleMaps";
-import { APARTMENT, DEFAULT_ZOOM, POIS, directionsUrl } from "@/lib/location";
+import { APARTMENT, DEFAULT_ZOOM, POIS, directionsUrl, travelModeFor } from "@/lib/location";
 
 /** Markers are Advanced Markers, whose `content` is ordinary DOM — so the pins
  *  are Tailwind-styled elements rather than sprite images, and they anchor at
@@ -200,8 +200,10 @@ export default function LocationMap({
     };
   }, [resolvedTheme]);
 
-  // Selecting a POI draws the real driving route from the apartment to it and
-  // frames that route; clearing the selection returns to the apartment.
+  // Selecting a POI draws the real route from the apartment to it and frames
+  // that route; clearing the selection returns to the apartment. The mode
+  // matches the one the row's directions link opens in, so the line on the map
+  // and the route Google Maps hands the guest are the same journey.
   useEffect(() => {
     // `failed` matters as well as the refs: an auth failure swaps in the
     // fallback without re-running the build effect, so the refs below still
@@ -246,7 +248,10 @@ export default function LocationMap({
       const pending = service.route({
         origin: APARTMENT,
         destination: to,
-        travelMode: google.maps.TravelMode.DRIVING,
+        travelMode:
+          travelModeFor(target) === "walking"
+            ? google.maps.TravelMode.WALKING
+            : google.maps.TravelMode.DRIVING,
       });
 
       if (!pending?.then) {

@@ -17,6 +17,11 @@ export type Poi = LatLng & {
   distanceKm: number;
   /** Typical driving time in minutes. */
   driveMinutes: number;
+  /** Typical walking time in minutes, for the POIs a guest could plausibly
+   *  reach on foot. Omitted where the walk runs into hours and the car is the
+   *  only realistic way there — `travelModeFor` reads an absent value as
+   *  "not walkable". */
+  walkMinutes?: number;
 };
 
 /** The apartment itself — the map's PIN and the origin of every drive below.
@@ -32,14 +37,17 @@ export const DEFAULT_ZOOM = 14;
  *  Coordinates come from OpenStreetMap; the km/minutes are real car routes
  *  from APARTMENT, measured with OSRM rather than estimated from the
  *  straight-line distance, which the lake and the mountains make useless
- *  here. Re-measure them if APARTMENT moves. */
+ *  here. `walkMinutes` comes from the same tool's foot profile, which follows
+ *  footpaths the car route cannot use (and vice versa), so it is a separate
+ *  measurement rather than the drive scaled down. Re-measure them if
+ *  APARTMENT moves. */
 export const POIS: Poi[] = [
-  { id: "beach", icon: "🏖", lat: 47.11518, lng: 9.25473, distanceKm: 0.5, driveMinutes: 2 },
-  { id: "supermarket", icon: "🛒", lat: 47.11272, lng: 9.24995, distanceKm: 0.5, driveMinutes: 1 },
-  { id: "station", icon: "🚉", lat: 47.11382, lng: 9.25500, distanceKm: 0.7, driveMinutes: 2 },
-  { id: "gondola", icon: "🚡", lat: 47.11329, lng: 9.25505, distanceKm: 0.8, driveMinutes: 2 },
-  { id: "murg", icon: "🥾", lat: 47.11313, lng: 9.21505, distanceKm: 3.2, driveMinutes: 4 },
-  { id: "walenstadt", icon: "🏘", lat: 47.12290, lng: 9.31401, distanceKm: 5.7, driveMinutes: 7 },
+  { id: "beach", icon: "🏖", lat: 47.11518, lng: 9.25473, distanceKm: 0.5, driveMinutes: 2, walkMinutes: 5 },
+  { id: "supermarket", icon: "🛒", lat: 47.11272, lng: 9.24995, distanceKm: 0.5, driveMinutes: 1, walkMinutes: 4 },
+  { id: "station", icon: "🚉", lat: 47.11382, lng: 9.25500, distanceKm: 0.7, driveMinutes: 2, walkMinutes: 4 },
+  { id: "gondola", icon: "🚡", lat: 47.11329, lng: 9.25505, distanceKm: 0.8, driveMinutes: 2, walkMinutes: 4 },
+  { id: "murg", icon: "🥾", lat: 47.11313, lng: 9.21505, distanceKm: 3.2, driveMinutes: 4, walkMinutes: 40 },
+  { id: "walenstadt", icon: "🏘", lat: 47.12290, lng: 9.31401, distanceKm: 5.7, driveMinutes: 7, walkMinutes: 68 },
   { id: "amden", icon: "🏔", lat: 47.14963, lng: 9.14112, distanceKm: 19, driveMinutes: 21 },
   { id: "sargans", icon: "🏰", lat: 47.04995, lng: 9.43767, distanceKm: 20, driveMinutes: 20 },
   { id: "flumserberg", icon: "🎿", lat: 47.09366, lng: 9.28425, distanceKm: 21, driveMinutes: 24 },
@@ -52,10 +60,26 @@ export const POIS: Poi[] = [
 
 const coord = ({ lat, lng }: LatLng) => `${lat},${lng}`;
 
-/** Google Maps driving directions, defaulting to "get me to the apartment".
- *  Pass a POI as `to` for the apartment → POI leg the list rows link to. */
-export function directionsUrl(to?: LatLng): string {
-  const params = new URLSearchParams({ api: "1", travelmode: "driving" });
+/** A guest walks anything within a quarter of an hour and drives the rest —
+ *  the cutoff that picks the travel mode for a POI's directions. */
+export const WALKABLE_MINUTES = 15;
+
+/** The mode to open a POI's route in. Anything without a `walkMinutes` figure
+ *  is hours away on foot, so it drives. */
+export function travelModeFor(poi: Poi): "walking" | "driving" {
+  return poi.walkMinutes !== undefined && poi.walkMinutes <= WALKABLE_MINUTES
+    ? "walking"
+    : "driving";
+}
+
+/** Google Maps directions, defaulting to "get me to the apartment" by car.
+ *  Pass a POI as `to` for the apartment → POI leg the list rows link to; that
+ *  leg starts at the apartment and picks its mode with `travelModeFor`. */
+export function directionsUrl(to?: Poi): string {
+  const params = new URLSearchParams({
+    api: "1",
+    travelmode: to ? travelModeFor(to) : "driving",
+  });
   if (to) {
     params.set("origin", coord(APARTMENT));
     params.set("destination", coord(to));
