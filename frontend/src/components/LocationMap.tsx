@@ -21,19 +21,22 @@ import { APARTMENT, DEFAULT_ZOOM, POIS, directionsUrl } from "@/lib/location";
 function apartmentContent(label: string): HTMLElement {
   const root = document.createElement("div");
   root.innerHTML =
-    `<span class="relative flex h-7 w-7 items-center justify-center">
-       <span class="absolute inline-flex h-7 w-7 animate-ping rounded-full bg-teal-500/40"></span>
-       <span class="relative inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-teal-600 text-xs shadow-lg dark:border-gray-900">🏠</span>
+    `<span class="relative flex h-10 w-10 items-center justify-center">
+       <span class="absolute inline-flex h-10 w-10 animate-ping rounded-full bg-teal-500/40"></span>
+       <span class="relative inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-white bg-teal-600 text-base shadow-lg dark:border-gray-900">🏠</span>
      </span>`;
   root.title = label;
   return root;
 }
 
+/** Every POI badge stays fully legible — the chosen one is picked out by a
+ *  heavier teal edge and a halo ring around it rather than by pushing the
+ *  others back, which at map scale just made them hard to find. */
 function poiBadgeClass(active: boolean): string {
-  return `flex h-7 w-7 items-center justify-center rounded-full border text-[13px] shadow-sm transition-transform ${
+  return `flex h-7 w-7 items-center justify-center rounded-full text-[13px] transition-all ${
     active
-      ? "scale-125 border-teal-500 bg-teal-50 dark:border-teal-400 dark:bg-teal-900"
-      : "border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800"
+      ? "scale-125 border-2 border-teal-500 bg-teal-50 shadow-md ring-4 ring-teal-500/35 dark:border-teal-400 dark:bg-teal-900 dark:ring-teal-400/35"
+      : "border border-gray-300 bg-white shadow-sm dark:border-gray-600 dark:bg-gray-800"
   }`;
 }
 
