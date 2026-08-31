@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import SiteHeader from "./SiteHeader";
 import SiteFooter from "./SiteFooter";
@@ -37,6 +37,28 @@ export default function LocationOverlay({
         ? current
         : { kind: "poi", id, directions: true },
     );
+
+  /** The nearby list runs well past the fold, so a row pressed from down there
+   *  would otherwise change a map the guest cannot see. Every control in the
+   *  list brings the widget back up first; marker clicks reach `showOnMap`
+   *  straight from the map and leave the scroll where it is. */
+  const mapCardRef = useRef<HTMLDivElement | null>(null);
+  const scrollToMap = () => {
+    mapCardRef.current?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      block: "start",
+    });
+  };
+
+  const selectFromList = (id: string | null) => {
+    showOnMap(id);
+    scrollToMap();
+  };
+
+  const directionsFromList = (id: string) => {
+    showDirections(id);
+    scrollToMap();
+  };
 
   /** Closing the panel keeps the leg the guest is looking at on the map. */
   const hideDirections = () =>
@@ -85,7 +107,10 @@ export default function LocationOverlay({
             <p className="text-gray-500 dark:text-gray-400 mb-6">{l.subtitle}</p>
 
             {/* ── MAP ─────────────────────────────────────── */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 sm:p-5 mb-8">
+            <div
+              ref={mapCardRef}
+              className="scroll-mt-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 sm:p-5 mb-8"
+            >
               <p className="flex items-center gap-2 mb-4 text-sm text-gray-600 dark:text-gray-300">
                 <span aria-hidden="true">📍</span>
                 <span className="font-medium text-gray-900 dark:text-gray-100">{l.address}</span>
@@ -149,7 +174,7 @@ export default function LocationOverlay({
                                 tab. */}
                             <button
                               type="button"
-                              onClick={() => showOnMap(active ? null : poi.id)}
+                              onClick={() => selectFromList(active ? null : poi.id)}
                               aria-pressed={active}
                               aria-label={`${text.name} — ${l.showOnMap}`}
                               className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4 text-left cursor-pointer"
@@ -176,7 +201,7 @@ export default function LocationOverlay({
                             </button>
                             <button
                               type="button"
-                              onClick={() => showDirections(poi.id)}
+                              onClick={() => directionsFromList(poi.id)}
                               aria-pressed={active && view.kind === "poi" && view.directions}
                               aria-label={`${l.directions} — ${text.name}`}
                               title={l.directions}

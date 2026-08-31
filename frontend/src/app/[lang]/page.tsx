@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import BookingWidget from "@/components/BookingWidget";
+import LocationButton from "@/components/LocationButton";
 import MobileBookingReveal from "@/components/MobileBookingReveal";
 import PhotoHoverBadge from "@/components/PhotoHoverBadge";
 import ScrollHint from "@/components/ScrollHint";
@@ -100,10 +101,18 @@ export default async function Home({
             {/* Left — apartment info */}
             <div className="text-white">
               <div className="flex flex-wrap items-center gap-2 mb-4">
-                <span className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm text-white text-xs font-medium px-3 py-1.5 rounded-full">
-                  <span>📍</span>
-                  <span>{dict.hero.location}</span>
-                </span>
+                <LocationButton
+                  lang={lang}
+                  dict={dict}
+                  variant="plain"
+                  className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white text-xs font-medium px-3 py-1.5 rounded-full transition-colors cursor-pointer"
+                  label={
+                    <>
+                      <span>📍</span>
+                      <span>{dict.hero.location}</span>
+                    </>
+                  }
+                />
               </div>
 
               <h1 className="text-4xl lg:text-5xl font-bold leading-tight mb-3">

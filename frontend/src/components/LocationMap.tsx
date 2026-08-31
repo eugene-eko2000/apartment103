@@ -515,25 +515,6 @@ export default function LocationMap({
       ? routeResult.value
       : { status: "loading" };
 
-  // A Directions press from far down the nearby list would otherwise answer
-  // off-screen: the panel opens against a map the guest has scrolled past. The
-  // whole widget is brought into view, and `nearest` makes that a no-op when it
-  // already is — a marker click must not yank the page around.
-  //
-  // Keyed on which route was asked for, not merely on the panel being open:
-  // pressing Directions on a second POI while the first one's panel is still up
-  // is the same gesture from the same place in the list, and needs the same
-  // answer brought back into view.
-  const panelKey = panelOpen && view.kind === "poi" ? `poi:${view.id}` : null;
-  const widgetRef = useRef<HTMLDivElement | null>(null);
-  const shownPanelKey = useRef<string | null>(null);
-  useEffect(() => {
-    if (panelKey !== null && panelKey !== shownPanelKey.current) {
-      widgetRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }
-    shownPanelKey.current = panelKey;
-  }, [panelKey]);
-
   /** Google Maps itself, for the cases the in-page route cannot cover. */
   const fallbackUrl =
     view.kind === "poi" ? directionsUrl(POIS.find((p) => p.id === view.id)) : directionsUrl();
@@ -576,7 +557,7 @@ export default function LocationMap({
   );
 
   return (
-    <div className="relative" ref={widgetRef}>
+    <div className="relative">
       <div
         // Keyed on the theme so a rebuild gets a brand-new node: the Maps API
         // has no destroy(), and hand-clearing a reused container pulls the DOM
