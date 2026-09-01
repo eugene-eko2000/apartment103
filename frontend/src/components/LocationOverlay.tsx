@@ -134,6 +134,7 @@ export default function LocationOverlay({
                   hide: l.directionsHide,
                   driving: l.modeDriving,
                   walking: l.modeWalking,
+                  boat: l.modeBoat,
                   minutes: l.minutes,
                 }}
                 poiNames={poiNames}
@@ -158,8 +159,9 @@ export default function LocationOverlay({
                       const active = poi.id === activePoiId;
                       // The row's figure follows the way a guest would actually
                       // go: a walk under the cutoff is a walk, everything else
-                      // is a drive — the same call the map routes with, so the
-                      // label and the line on the map always agree.
+                      // is a drive, and a village no road reaches is the boat
+                      // — the same call the map routes with, so the label and
+                      // the line on the map always agree.
                       const travel = travelTimeFor(poi);
                       return (
                         <li key={poi.id}>
@@ -195,7 +197,10 @@ export default function LocationOverlay({
                                   {formatDistance(poi.distanceKm, lang)} {l.distanceUnit}
                                 </span>
                                 <span className="block text-xs text-gray-500 dark:text-gray-400 tabular-nums">
-                                  {(travel.mode === "walking" ? l.walkTime : l.driveTime).replace("{minutes}", String(travel.minutes))}
+                                  {{ driving: l.driveTime, walking: l.walkTime, boat: l.boatTime }[travel.mode].replace(
+                                    "{minutes}",
+                                    String(travel.minutes),
+                                  )}
                                 </span>
                               </span>
                             </button>

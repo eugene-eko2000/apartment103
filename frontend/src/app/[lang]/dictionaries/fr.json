@@ -468,27 +468,39 @@
     "directionsHide": "Masquer",
     "modeDriving": "En voiture",
     "modeWalking": "À pied",
+    "modeBoat": "En bateau",
     "minutes": "{minutes} min",
     "apartmentMarker": "Berg See Home",
     "nearbyTitle": "Aux alentours",
     "nearbySubtitle": "Distance et temps de trajet depuis l'appartement.",
     "driveTime": "{minutes} min en voiture",
     "walkTime": "{minutes} min à pied",
+    "boatTime": "{minutes} min en bateau",
     "distanceUnit": "km",
     "showOnMap": "afficher sur la carte",
     "backHome": "Retour à l'accueil",
     "disclaimer": "Les distances et les temps de trajet sont approximatifs et dépendent du trafic et de l'état des routes.",
     "categories": {
       "beaches": "Plages",
+      "restaurants": "Restaurants recommandés",
       "skiResorts": "Stations de ski",
       "hiking": "Zones de randonnée",
       "spa": "Thermes & spas",
       "landmarks": "Monuments & musées",
       "nature": "Sites naturels",
       "cities": "Villes & villages",
-      "essentials": "Quotidien & déplacements"
+      "groceries": "Courses & commerces",
+      "transport": "Transports"
     },
     "pois": {
+      "marina": {
+        "name": "Marina Restaurant",
+        "desc": "Terrasse au bord de l'eau, au port d'Unterterzen, à deux minutes"
+      },
+      "ferry": {
+        "name": "Débarcadère d’Unterterzen",
+        "desc": "Bateaux du Walensee vers Quinten, Weesen et Walenstadt"
+      },
       "beach": {
         "name": "Plage d'Unterterzen",
         "desc": "Plage publique avec baignade et location de bateaux"
@@ -505,29 +517,93 @@
         "name": "Télécabine du Flumserberg (Unterterzen)",
         "desc": "Station de départ vers le domaine skiable"
       },
-      "murg": {
-        "name": "Murg — départ des lacs de Murg",
-        "desc": "Point de départ de la randonnée vers les lacs de Murg"
+      "schifffahrt": {
+        "name": "Hotel Restaurant Schiffahrt",
+        "desc": "Cuisine suisse classique au bord du lac, à Murg"
+      },
+      "quinten": {
+        "name": "Restaurant Schifflände Quinten",
+        "desc": "Dans le hameau sans voitures, accessible par le bateau du Walensee"
+      },
+      "amami": {
+        "name": "Amami",
+        "desc": "Cuisine japonaise et sushis près de Walenstadt"
       },
       "walenstadt": {
         "name": "Walenstadt",
         "desc": "Ville la plus proche : commerces, restaurants et salle d'escalade"
       },
+      "migros": {
+        "name": "Migros Walenstadt",
+        "desc": "Supermarché plus grand à Walenstadt, pour les courses de la semaine"
+      },
+      "paxmal": {
+        "name": "Paxmal",
+        "desc": "Le monument de la paix bâti à la main par Karl Bickel, haut au-dessus du Walensee"
+      },
+      "weesen": {
+        "name": "Weesen",
+        "desc": "Village au bord de l’eau à l’extrémité ouest du Walensee, promenade et débarcadère"
+      },
       "amden": {
         "name": "Amden",
         "desc": "Terrasse ensoleillée au-dessus du lac, randonnées panoramiques"
+      },
+      "talalpsee": {
+        "name": "Talalpsee (Filzbach)",
+        "desc": "Petit lac de montagne où se reflètent les Churfirsten, marche facile depuis le télésiège d’Habergschwänd au-dessus de Filzbach"
+      },
+      "murgsee": {
+        "name": "Lacs de Murg",
+        "desc": "Trois lacs dans un haut vallon au-dessus de Murg — randonnée à la journée depuis le parking de Mornen"
+      },
+      "betlis": {
+        "name": "Betlis",
+        "desc": "Hameau de la rive nord tranquille, départ des chutes du Seerenbach et du sentier riverain vers Amden"
+      },
+      "pizolFiveLakes": {
+        "name": "Randonnée des 5 lacs (Pizol)",
+        "desc": "Le grand circuit alpin des cinq lacs, au départ du Pizolbahn à Wangs"
+      },
+      "kloentalersee": {
+        "name": "Klöntalersee",
+        "desc": "Lac turquoise au pied de la paroi du Glärnisch, avec un sentier plat qui en fait le tour"
+      },
+      "braunwald": {
+        "name": "Braunwald",
+        "desc": "Village-terrasse sans voitures, accessible en funiculaire depuis Linthal — sentiers familiaux et vue sur le Glärnisch"
+      },
+      "linthal": {
+        "name": "Linthal / Tierfehd",
+        "desc": "Là où s’achève la route de la vallée de la Linth, au pied du téléphérique d’été vers le barrage du Muttsee"
+      },
+      "seerenbachfaelle": {
+        "name": "Chutes du Seerenbach",
+        "desc": "Cascade à trois paliers au-dessus de Betlis, parmi les plus hautes de Suisse — courte marche depuis le parking"
+      },
+      "schlossSargans": {
+        "name": "Restaurant Schloss Sargans",
+        "desc": "Table installée dans le château médiéval, au-dessus de la vallée"
       },
       "sargans": {
         "name": "Château de Sargans",
         "desc": "Château médiéval et nœud ferroviaire régional"
       },
       "flumserberg": {
-        "name": "Flumserberg Tannenbodenalm",
+        "name": "Flumserberg Tannenbodenalp",
         "desc": "Pistes de ski en hiver, sentiers alpins et piste de luge en été"
       },
       "badragaz": {
         "name": "Bad Ragaz — Tamina Therme",
         "desc": "Bains thermaux alimentés par les sources des gorges de la Tamina"
+      },
+      "pizol": {
+        "name": "Pizol (Bad Ragaz / Wangs)",
+        "desc": "Domaine skiable au-dessus de la vallée du Rhin, randonnée des 5 lacs en été"
+      },
+      "batoeni": {
+        "name": "Arène des cascades de Batöni",
+        "desc": "Parois cernées de cascades au fond de la vallée de Weisstannen, là où s’arrête la route"
       },
       "vaduz": {
         "name": "Vaduz, Liechtenstein",
@@ -537,9 +613,21 @@
         "name": "Rapperswil",
         "desc": "La « ville des roses » au bord du lac de Zurich, vieille ville et château"
       },
+      "chaeserrugg": {
+        "name": "Unterwasser — Chäserrugg",
+        "desc": "Téléphérique vers le sommet des Churfirsten, ski et vue sur le Walensee"
+      },
+      "laax": {
+        "name": "Laax",
+        "desc": "Vaste domaine de Flims-Laax-Falera, parcs freestyle et pistes de glacier"
+      },
       "zurich": {
         "name": "Centre-ville de Zurich",
         "desc": "Vieille ville, promenade du lac, shopping et musées"
+      },
+      "davos": {
+        "name": "Davos Klosters — Parsenn",
+        "desc": "Les pistes du Parsenn au-dessus de Davos, l'un des plus grands domaines des Alpes"
       },
       "airport": {
         "name": "Aéroport de Zurich",

@@ -468,27 +468,39 @@
     "directionsHide": "Hide",
     "modeDriving": "Driving",
     "modeWalking": "Walking",
+    "modeBoat": "By boat",
     "minutes": "{minutes} min",
     "apartmentMarker": "Berg See Home",
     "nearbyTitle": "What's nearby",
     "nearbySubtitle": "Distance and travel time from the apartment.",
     "driveTime": "{minutes} min drive",
     "walkTime": "{minutes} min walk",
+    "boatTime": "{minutes} min by boat",
     "distanceUnit": "km",
     "showOnMap": "show on map",
     "backHome": "Back to home",
     "disclaimer": "Distances and travel times are approximate and depend on traffic and road conditions.",
     "categories": {
       "beaches": "Beaches",
+      "restaurants": "Recommended restaurants",
       "skiResorts": "Ski resorts",
       "hiking": "Hiking areas",
       "spa": "Spas",
       "landmarks": "Landmarks & museums",
       "nature": "Natural landmarks",
       "cities": "Towns & cities",
-      "essentials": "Everyday & getting around"
+      "groceries": "Groceries & shopping",
+      "transport": "Getting around"
     },
     "pois": {
+      "marina": {
+        "name": "Marina Restaurant",
+        "desc": "Lakeside terrace at the Unterterzen harbour, a two-minute stroll away"
+      },
+      "ferry": {
+        "name": "Unterterzen boat landing",
+        "desc": "Walensee ferries to Quinten, Weesen and Walenstadt"
+      },
       "beach": {
         "name": "Unterterzen lido",
         "desc": "Public lake beach with swimming and boat hire"
@@ -505,29 +517,93 @@
         "name": "Flumserberg gondola (Unterterzen)",
         "desc": "Base station of the cable car up to the ski area"
       },
-      "murg": {
-        "name": "Murg — Murgsee trailhead",
-        "desc": "Start of the hike to the Murg lakes"
+      "schifffahrt": {
+        "name": "Hotel Restaurant Schiffahrt",
+        "desc": "Classic Swiss cooking right on the Murg waterfront"
+      },
+      "quinten": {
+        "name": "Restaurant Schifflände Quinten",
+        "desc": "In the car-free lakeside hamlet, reached by the Walensee boat"
+      },
+      "amami": {
+        "name": "Amami",
+        "desc": "Japanese kitchen and sushi near Walenstadt"
       },
       "walenstadt": {
         "name": "Walenstadt",
         "desc": "Nearest town for shops, restaurants and the climbing hall"
       },
+      "migros": {
+        "name": "Migros Walenstadt",
+        "desc": "Larger supermarket in Walenstadt for the weekly shop"
+      },
+      "paxmal": {
+        "name": "Paxmal",
+        "desc": "Karl Bickel’s hand-built peace memorial high above the Walensee"
+      },
+      "weesen": {
+        "name": "Weesen",
+        "desc": "Lakeside village at the western end of the Walensee, with promenade and boat pier"
+      },
       "amden": {
         "name": "Amden",
         "desc": "Sunny terrace above the lake with panoramic hiking"
+      },
+      "talalpsee": {
+        "name": "Talalpsee (Filzbach)",
+        "desc": "Small mountain lake mirroring the Churfirsten, an easy walk from the Habergschwänd chairlift above Filzbach"
+      },
+      "murgsee": {
+        "name": "Murgsee",
+        "desc": "Three lakes in a high basin above Murg — a full day’s hike from the Mornen car park"
+      },
+      "betlis": {
+        "name": "Betlis",
+        "desc": "Hamlet on the quiet north shore, trailhead for the Seerenbach Falls and the lakeside path to Amden"
+      },
+      "pizolFiveLakes": {
+        "name": "Five-Lakes Hike (Pizol)",
+        "desc": "Switzerland’s classic high-alpine lake circuit, starting from the Pizolbahn in Wangs"
+      },
+      "kloentalersee": {
+        "name": "Klöntalersee",
+        "desc": "Turquoise lake under the wall of the Glärnisch, with a level shore path all the way round"
+      },
+      "braunwald": {
+        "name": "Braunwald",
+        "desc": "Car-free terrace village reached by funicular from Linthal, with family trails and Glärnisch views"
+      },
+      "linthal": {
+        "name": "Linthal / Tierfehd",
+        "desc": "Where the road up the Linth valley ends, at the foot of the summer cable car to the Muttsee dam"
+      },
+      "seerenbachfaelle": {
+        "name": "Seerenbach Falls",
+        "desc": "Three-stage waterfall above Betlis, among the highest in Switzerland — a short walk from the car park"
+      },
+      "schlossSargans": {
+        "name": "Restaurant Schloss Sargans",
+        "desc": "Dining inside the medieval castle, with the valley below"
       },
       "sargans": {
         "name": "Sargans Castle",
         "desc": "Medieval castle and regional rail hub"
       },
       "flumserberg": {
-        "name": "Flumserberg Tannenbodenalm",
+        "name": "Flumserberg Tannenbodenalp",
         "desc": "Ski slopes in winter, alpine trails and the toboggan run in summer"
       },
       "badragaz": {
         "name": "Bad Ragaz — Tamina Therme",
         "desc": "Thermal spa fed by the Tamina gorge springs"
+      },
+      "pizol": {
+        "name": "Pizol (Bad Ragaz / Wangs)",
+        "desc": "Ski area above the Rhine valley, and the five-lakes hike in summer"
+      },
+      "batoeni": {
+        "name": "Batöni Waterfall Arena",
+        "desc": "Cliffs ringed with waterfalls at the head of the Weisstannen valley, where the road ends"
       },
       "vaduz": {
         "name": "Vaduz, Liechtenstein",
@@ -537,9 +613,21 @@
         "name": "Rapperswil",
         "desc": "The “city of roses” on Lake Zurich, with its old town and castle"
       },
+      "chaeserrugg": {
+        "name": "Unterwasser — Chäserrugg",
+        "desc": "Cable car to the Churfirsten summit, skiing and views over the Walensee"
+      },
+      "laax": {
+        "name": "Laax",
+        "desc": "Large Flims-Laax-Falera ski area with freestyle parks and glacier runs"
+      },
       "zurich": {
         "name": "Zurich city centre",
         "desc": "Old town, lake promenade, shopping and museums"
+      },
+      "davos": {
+        "name": "Davos Klosters — Parsenn",
+        "desc": "The Parsenn slopes above Davos, one of the biggest ski areas in the Alps"
       },
       "airport": {
         "name": "Zurich Airport",

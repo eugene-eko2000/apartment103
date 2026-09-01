@@ -16,6 +16,7 @@ import {
   formatMeters,
   minutesFromMillis,
   travelModeFor,
+  travelTimeFor,
   type LatLng,
   type TravelMode,
 } from "@/lib/location";
@@ -43,6 +44,9 @@ type RouteRequest = {
   destination: LatLng;
   mode: TravelMode;
   withSteps: boolean;
+  /** The stored figures for the leg, used by the modes Google cannot route. */
+  distanceKm: number;
+  minutes: number;
 };
 
 function routeKey(
@@ -111,6 +115,7 @@ const ROUTE_COLOR = "#0d9488";
  *  panel is open — so the same walk came back dotted from the panel's arrow
  *  and solid from a tap on the POI, one leg drawn two different ways. Deciding
  *  it here makes a walk dotted and a drive solid however the guest got there.
+ *  A boat crossing is dotted for the same reason a walk is: it is not a road.
  *
  *  Called only from inside the drawing effect, so `google.maps` is loaded by
  *  the time the symbol below is read. */
@@ -121,7 +126,7 @@ function routePolylineStyle(mode: TravelMode) {
     // Both branches set everything the other touches: Google's own dotted
     // styling left in `defaults` would otherwise bead a solid drive, and its
     // transparent stroke would leave a walk with no line under the dots.
-    ...(mode === "walking"
+    ...(mode !== "driving"
       ? {
           // A dotted line is a fully transparent stroke with a circle repeated
           // along it — any stroke left visible shows through the gaps.
@@ -216,6 +221,7 @@ export default function LocationMap({
     hide: string;
     driving: string;
     walking: string;
+    boat: string;
     minutes: string;
   };
   poiNames: Record<string, string>;
@@ -372,6 +378,8 @@ export default function LocationMap({
         destination,
         mode,
         withSteps: view.directions,
+        distanceKm: poi.distanceKm,
+        minutes: travelTimeFor(poi).minutes,
       };
     }
     return null;
@@ -419,6 +427,24 @@ export default function LocationMap({
       }
 
       const { key, origin, destination, mode, withSteps } = request;
+
+      // The Walensee boat is not a mode the Routes API has, and there is no
+      // road to a car-free village for it to fall back on — asking would come
+      // back empty and read as a failure. The crossing is open water, so the
+      // straight line between the two piers *is* the route: draw it with the
+      // same dotted styling, and let the panel answer itself from the stored
+      // figures rather than from a response that is never coming.
+      if (mode === "boat") {
+        const crossing = new google.maps.Polyline(
+          routePolylineStyle(mode)({ path: [origin, destination] }),
+        );
+        crossing.setMap(map);
+        routePolylinesRef.current = [crossing];
+        frameBoth(origin, destination);
+        // Nothing to wait for, so nothing to record: the panel reads a boat
+        // leg straight off the request below.
+        return;
+      }
 
       // computeRoutes() returns a promise only on a healthy library; a rejected
       // key can hand back undefined instead, which must not be chained onto.
@@ -511,9 +537,19 @@ export default function LocationMap({
   // screen reads as "still working on it".
   const directions: Directions | null = !panelOpen
     ? null
-    : routeResult && request && routeResult.key === request.key
-      ? routeResult.value
-      : { status: "loading" };
+    : // A boat leg is never sent to Google, so it is never pending: its figures
+      // are the ones stored against the POI, and there are no turns to list.
+      request?.mode === "boat"
+      ? {
+          status: "ready",
+          mode: "boat",
+          distance: formatMeters(request.distanceKm * 1000, locale),
+          duration: labels.minutes.replace("{minutes}", String(request.minutes)),
+          steps: [],
+        }
+      : routeResult && request && routeResult.key === request.key
+        ? routeResult.value
+        : { status: "loading" };
 
   /** Google Maps itself, for the cases the in-page route cannot cover. */
   const fallbackUrl =
@@ -608,7 +644,11 @@ export default function LocationMap({
                     <>
                       <div className="flex flex-wrap items-center gap-2 px-4 pb-3 text-xs text-gray-600 dark:text-gray-300">
                         <span className="rounded-full bg-teal-600/10 dark:bg-teal-400/15 px-2 py-0.5 font-medium text-teal-700 dark:text-teal-300">
-                          {directions.mode === "walking" ? labels.walking : labels.driving}
+                          {directions.mode === "boat"
+                            ? labels.boat
+                            : directions.mode === "walking"
+                              ? labels.walking
+                              : labels.driving}
                         </span>
                         <span className="font-semibold tabular-nums text-gray-900 dark:text-gray-100">
                           {directions.distance}

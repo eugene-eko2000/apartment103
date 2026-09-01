@@ -468,27 +468,39 @@
     "directionsHide": "Ausblenden",
     "modeDriving": "Mit dem Auto",
     "modeWalking": "Zu Fuss",
+    "modeBoat": "Mit dem Schiff",
     "minutes": "{minutes} Min.",
     "apartmentMarker": "Berg See Home",
     "nearbyTitle": "In der Umgebung",
     "nearbySubtitle": "Distanz und Reisezeit ab der Wohnung.",
     "driveTime": "{minutes} Min. Fahrt",
     "walkTime": "{minutes} Min. zu Fuss",
+    "boatTime": "{minutes} Min. mit dem Schiff",
     "distanceUnit": "km",
     "showOnMap": "auf der Karte zeigen",
     "backHome": "Zurück zur Startseite",
     "disclaimer": "Distanzen und Reisezeiten sind Richtwerte und hängen von Verkehr und Strassenverhältnissen ab.",
     "categories": {
       "beaches": "Strände",
+      "restaurants": "Empfohlene Restaurants",
       "skiResorts": "Skigebiete",
       "hiking": "Wandergebiete",
       "spa": "Thermen & Spas",
       "landmarks": "Sehenswürdigkeiten & Museen",
       "nature": "Naturdenkmäler",
       "cities": "Städte & Orte",
-      "essentials": "Alltag & Anreise"
+      "groceries": "Einkaufen",
+      "transport": "Anreise & Verkehr"
     },
     "pois": {
+      "marina": {
+        "name": "Marina Restaurant",
+        "desc": "Seeterrasse am Hafen Unterterzen, zwei Minuten zu Fuss"
+      },
+      "ferry": {
+        "name": "Schiffstation Unterterzen",
+        "desc": "Walenseeschiffe nach Quinten, Weesen und Walenstadt"
+      },
       "beach": {
         "name": "Strandbad Unterterzen",
         "desc": "Öffentliches Seebad mit Badeplatz und Bootsverleih"
@@ -505,29 +517,93 @@
         "name": "Bergbahn Flumserberg (Unterterzen)",
         "desc": "Talstation der Gondelbahn ins Skigebiet"
       },
-      "murg": {
-        "name": "Murg — Ausgangspunkt Murgseen",
-        "desc": "Start der Wanderung zu den Murgseen"
+      "schifffahrt": {
+        "name": "Hotel Restaurant Schiffahrt",
+        "desc": "Klassische Schweizer Küche direkt am Seeufer in Murg"
+      },
+      "quinten": {
+        "name": "Restaurant Schifflände Quinten",
+        "desc": "Im autofreien Weiler am See, erreichbar mit dem Walenseeschiff"
+      },
+      "amami": {
+        "name": "Amami",
+        "desc": "Japanische Küche und Sushi bei Walenstadt"
       },
       "walenstadt": {
         "name": "Walenstadt",
         "desc": "Nächstes Städtchen mit Läden, Restaurants und Kletterhalle"
       },
+      "migros": {
+        "name": "Migros Walenstadt",
+        "desc": "Grösserer Supermarkt in Walenstadt für den Wocheneinkauf"
+      },
+      "paxmal": {
+        "name": "Paxmal",
+        "desc": "Karl Bickels von Hand gebautes Friedensdenkmal hoch über dem Walensee"
+      },
+      "weesen": {
+        "name": "Weesen",
+        "desc": "Seedorf am Westende des Walensees, mit Uferpromenade und Schiffsteg"
+      },
       "amden": {
         "name": "Amden",
         "desc": "Sonnenterrasse über dem See mit Panoramawanderungen"
+      },
+      "talalpsee": {
+        "name": "Talalpsee (Filzbach)",
+        "desc": "Kleiner Bergsee, in dem sich die Churfirsten spiegeln – leichter Weg ab der Sesselbahn Habergschwänd über Filzbach"
+      },
+      "murgsee": {
+        "name": "Murgseen",
+        "desc": "Drei Seen in einem Hochtal über Murg – Tageswanderung ab dem Parkplatz Mornen"
+      },
+      "betlis": {
+        "name": "Betlis",
+        "desc": "Weiler am stillen Nordufer, Ausgangspunkt für die Seerenbachfälle und den Uferweg nach Amden"
+      },
+      "pizolFiveLakes": {
+        "name": "5-Seen-Wanderung (Pizol)",
+        "desc": "Der klassische hochalpine Seenrundweg der Schweiz, Start ab der Pizolbahn in Wangs"
+      },
+      "kloentalersee": {
+        "name": "Klöntalersee",
+        "desc": "Türkisfarbener See unter der Glärnischwand, mit flachem Uferweg rundherum"
+      },
+      "braunwald": {
+        "name": "Braunwald",
+        "desc": "Autofreies Terrassendorf, erreichbar mit der Standseilbahn ab Linthal – Familienwege und Glärnischblick"
+      },
+      "linthal": {
+        "name": "Linthal / Tierfehd",
+        "desc": "Wo die Strasse im Linthtal endet, am Fuss der Sommerbahn zur Muttsee-Staumauer"
+      },
+      "seerenbachfaelle": {
+        "name": "Seerenbachfälle",
+        "desc": "Dreistufiger Wasserfall über Betlis, einer der höchsten der Schweiz – kurzer Fussweg ab dem Parkplatz"
+      },
+      "schlossSargans": {
+        "name": "Restaurant Schloss Sargans",
+        "desc": "Essen in der mittelalterlichen Burg, mit Blick ins Tal"
       },
       "sargans": {
         "name": "Schloss Sargans",
         "desc": "Mittelalterliche Burg und regionaler Bahnknotenpunkt"
       },
       "flumserberg": {
-        "name": "Flumserberg Tannenbodenalm",
+        "name": "Flumserberg Tannenbodenalp",
         "desc": "Skipisten im Winter, Wanderwege und Rodelbahn im Sommer"
       },
       "badragaz": {
         "name": "Bad Ragaz — Tamina Therme",
         "desc": "Thermalbad mit Wasser aus der Taminaschlucht"
+      },
+      "pizol": {
+        "name": "Pizol (Bad Ragaz / Wangs)",
+        "desc": "Skigebiet über dem Rheintal, im Sommer die 5-Seen-Wanderung"
+      },
+      "batoeni": {
+        "name": "Wasserfall-Arena Batöni",
+        "desc": "Von Wasserfällen umringte Felswände am Ende des Weisstannentals, wo die Strasse aufhört"
       },
       "vaduz": {
         "name": "Vaduz, Liechtenstein",
@@ -537,9 +613,21 @@
         "name": "Rapperswil",
         "desc": "Die «Rosenstadt» am Zürichsee mit Altstadt und Schloss"
       },
+      "chaeserrugg": {
+        "name": "Unterwasser — Chäserrugg",
+        "desc": "Seilbahn auf den Churfirsten-Gipfel, Skifahren und Blick über den Walensee"
+      },
+      "laax": {
+        "name": "Laax",
+        "desc": "Grosses Skigebiet Flims-Laax-Falera mit Freestyle-Parks und Gletscherabfahrten"
+      },
       "zurich": {
         "name": "Zürich Stadtzentrum",
         "desc": "Altstadt, Seepromenade, Shopping und Museen"
+      },
+      "davos": {
+        "name": "Davos Klosters — Parsenn",
+        "desc": "Die Parsenn-Pisten über Davos, eines der grössten Skigebiete der Alpen"
       },
       "airport": {
         "name": "Flughafen Zürich",
