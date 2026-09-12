@@ -23,8 +23,6 @@ this module only assembles the data those templates render.
 import asyncio
 from datetime import timedelta
 
-from beanie import Link
-
 from app.core.config import settings
 from app.core.money import to_decimal
 from app.core.notifications import EmailAttachment, send_html_email
@@ -32,10 +30,6 @@ from app.models.booking import Booking, BookingCharge
 from app.models.guest import Guest
 from app.services import email_templates
 from app.services.invoice import build_charge_invoice_pdf, invoice_number_for
-
-
-async def _resolve_guest(booking: Booking) -> Guest:
-    return await booking.guest.fetch() if isinstance(booking.guest, Link) else booking.guest
 
 
 def _nightly_rates(booking: Booking) -> list[dict]:
@@ -106,7 +100,7 @@ async def _invoice_attachment(*, booking: Booking, guest: Guest, charge: Booking
 
 
 async def send_booking_confirmation_email(booking: Booking) -> None:
-    guest = await _resolve_guest(booking)
+    guest = await booking.resolved_guest()
     attachments = [
         await _invoice_attachment(booking=booking, guest=guest, charge=charge) for charge in booking.charges
     ]
@@ -122,7 +116,7 @@ async def send_booking_confirmation_email(booking: Booking) -> None:
 
 
 async def send_scheduled_payment_email(booking: Booking, charge: BookingCharge) -> None:
-    guest = await _resolve_guest(booking)
+    guest = await booking.resolved_guest()
     context = {
         **_booking_context(booking, guest),
         "charge_reason": charge.reason,

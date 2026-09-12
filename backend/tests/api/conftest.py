@@ -68,10 +68,8 @@ def fixed_currency_conversion(monkeypatch):
     so a converted amount can be verified by hand; they mirror the table in
     tests/test_currency_service.py.
 
-    commission_rate is pinned alongside them because it is a deployment
-    setting read from .env, and a converted amount asserted in a test would
-    otherwise depend on whatever the machine running it happens to have
-    configured.
+    commission_rate, the other machine-specific input to a converted
+    amount, is pinned suite-wide in tests/conftest.py.
     """
 
     async def fake_get_exchange_rates():
@@ -83,7 +81,6 @@ def fixed_currency_conversion(monkeypatch):
         }
 
     monkeypatch.setattr(currency_service, "get_exchange_rates", fake_get_exchange_rates)
-    monkeypatch.setattr(settings, "commission_rate", Decimal("0.06"))
 
 
 @pytest.fixture

@@ -133,7 +133,11 @@ class TestDecodeAccessToken:
 
     def test_raises_on_tampered_signature(self):
         token, _ = create_access_token("user-id-1", "guest")
-        tampered = token[:-1] + ("A" if token[-1] != "A" else "B")
+        # Tamper the *first* character of the signature segment. The last character
+        # carries 2 padding bits that base64url decoding discards, so changing it
+        # can leave the decoded signature bytes identical and the token valid.
+        head, _, signature = token.rpartition(".")
+        tampered = f"{head}.{'A' if signature[0] != 'A' else 'B'}{signature[1:]}"
         with pytest.raises(jwt.InvalidTokenError):
             decode_access_token(tampered)
 

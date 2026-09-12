@@ -34,14 +34,27 @@ def _percent(fraction: float) -> str:
     return f"{fraction * 100:.0f}"
 
 
-_env = Environment(
-    loader=FileSystemLoader(DATA_DIR),
-    autoescape=True,
-    trim_blocks=True,
-    lstrip_blocks=True,
-)
-_env.filters["money"] = _money
-_env.filters["percent"] = _percent
+def _build_env(*, autoescape: bool) -> Environment:
+    env = Environment(
+        loader=FileSystemLoader(DATA_DIR),
+        autoescape=autoescape,
+        trim_blocks=True,
+        lstrip_blocks=True,
+    )
+    env.filters["money"] = _money
+    env.filters["percent"] = _percent
+    return env
+
+
+# HTML bodies: autoescaped, since most of what gets rendered into them is
+# guest-supplied (names, addresses).
+_env = _build_env(autoescape=True)
+# Plain-text bodies — SMS, and the `Subject:` line of every template, which is
+# a header rather than markup. Deliberately *not* autoescaped: there is no
+# markup for an injected value to break out of, and escaping would put a
+# literal "&amp;" in front of whoever reads a guest named "Tom & Jerry" off
+# their phone.
+_text_env = _build_env(autoescape=False)
 
 
 def resolve_language(preferred: Language | None) -> Language:
@@ -57,7 +70,10 @@ def _compiled_templates(language: Language, name: str) -> tuple[Template, Templa
     subject_source, separator, body_source = raw.partition("\n\n")
     if not separator or not subject_source.startswith("Subject: "):
         raise ValueError(f"Template {language}/{name} must start with a 'Subject: ...' line, then a blank line")
-    return _env.from_string(subject_source.removeprefix("Subject: ")), _env.from_string(body_source)
+    return (
+        _text_env.from_string(subject_source.removeprefix("Subject: ")),
+        _env.from_string(body_source),
+    )
 
 
 def render_email(*, language: Language | None, name: str, context: dict) -> tuple[str, str]:
@@ -73,7 +89,7 @@ def _compiled_text_template(language: Language, name: str) -> Template:
     """Compiled template for data/<language>/<name>, for files that are a
     single body with no `Subject:` line (e.g. SMS text)."""
     raw = (DATA_DIR / language / name).read_text(encoding="utf-8")
-    return _env.from_string(raw)
+    return _text_env.from_string(raw)
 
 
 def render_text(*, language: Language | None, name: str, context: dict) -> str:

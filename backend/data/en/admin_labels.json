@@ -1,0 +1,35 @@
+{
+  "events": {
+    "booking_confirmed": "New booking confirmed",
+    "payment_received": "Payment received",
+    "payment_failed": "Payment failed",
+    "card_verification_failed": "Card verification failed",
+    "booking_cancelled": "Booking cancelled",
+    "booking_rejected": "Booking rejected (dates taken)",
+    "payment_refunded": "Payment refunded"
+  },
+  "charge_reasons": {
+    "initial_charge": "Opening charge",
+    "scheduled_accrual": "Scheduled installment",
+    "cancellation_settlement": "Cancellation settlement"
+  },
+  "payment_statuses": {
+    "card_verification_pending": "Card not verified yet",
+    "card_verified": "Card verified, nothing charged",
+    "partially_charged": "Partially charged",
+    "fully_charged": "Fully charged",
+    "requires_action": "Needs guest action (3DS)",
+    "failed": "Last charge failed"
+  },
+  "languages": {
+    "en": "English",
+    "de": "German",
+    "fr": "French",
+    "it": "Italian"
+  },
+  "booking_statuses": {
+    "Pending": "Pending (in checkout)",
+    "Active": "Active",
+    "Cancelled": "Cancelled"
+  }
+}

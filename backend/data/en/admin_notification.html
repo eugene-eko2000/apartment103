@@ -1,0 +1,88 @@
+Subject: [{{ event_label }}] {{ guest_name or "unknown guest" }}{% if check_in %}, {{ check_in }} to {{ check_out }}{% endif %}
+
+{% macro amount(value, ccy, value_chf) %}{{ value | money(ccy) }}{% if value_chf is not none %} <span style="color:#666;">({{ value_chf | money("CHF") }})</span>{% endif %}{% endmacro %}
+{% macro row(label, value) %}
+  <tr>
+    <td style="padding:5px 12px 5px 0; color:#555; white-space:nowrap; vertical-align:top;">{{ label }}</td>
+    <td style="padding:5px 0; text-align:right; vertical-align:top;">{{ value if value else "&mdash;" | safe }}</td>
+  </tr>
+{% endmacro %}
+<!doctype html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: Arial, Helvetica, sans-serif; color:#222; max-width:600px; margin:0 auto; padding:16px;">
+  <span style="display:none;">{{ event_label }} &mdash; {{ guest_name or "unknown guest" }}</span>
+  <p style="margin:0; color:#888; font-size:12px; text-transform:uppercase; letter-spacing:1px;">{{ business_name }} &middot; admin alert</p>
+  <h2 style="margin:4px 0 0;">{{ event_label }}</h2>
+
+  {% if detail %}
+  <p style="margin:12px 0; padding:10px 12px; background:#fdf2f2; border-left:3px solid #c53030; color:#7b2020;">
+    {{ detail }}
+  </p>
+  {% endif %}
+  {% if refunded is not none %}
+  <p style="margin:12px 0; padding:10px 12px; background:{{ "#f0fdf4" if refunded else "#fdf2f2" }}; border-left:3px solid {{ "#15803d" if refunded else "#c53030" }};">
+    {% if refunded %}
+    The charge has been refunded to the guest.
+    {% else %}
+    <strong>The refund failed.</strong> This booking is being held back so the charge can be reconciled by hand.
+    {% endif %}
+  </p>
+  {% endif %}
+
+  <h3 style="margin:24px 0 4px;">Stay</h3>
+  <table style="border-collapse:collapse; width:100%;">
+    {% for stay in date_ranges %}
+    {{ row("Dates" if loop.length == 1 else "Dates (%d of %d)" | format(loop.index, loop.length), stay.begin_date ~ " to " ~ stay.end_date) }}
+    {% endfor %}
+    {% if not date_ranges %}
+    {{ row("Dates", None) }}
+    {% endif %}
+    {{ row("Nights", nights) }}
+    {{ row("Booking status", booking_status) }}
+    {{ row("Cancellation policy", cancellation_policy_name) }}
+  </table>
+
+  <h3 style="margin:24px 0 4px;">Money</h3>
+  <table style="border-collapse:collapse; width:100%;">
+    {{ row("Total price", amount(total_price, currency, total_price_chf)) }}
+    {% if total_discount > 0 %}
+    {{ row("Discount applied", total_discount | money(currency)) }}
+    {% endif %}
+    {{ row("Charged so far", amount(amount_charged, currency, amount_charged_chf)) }}
+    {{ row("Still outstanding", amount(outstanding, currency, outstanding_chf)) }}
+    {{ row("Payment status", payment_status) }}
+  </table>
+  {% if total_price_chf is not none %}
+  <p style="margin:6px 0 0; color:#888; font-size:12px;">
+    CHF figures above are converted at today's rate. A payment's own CHF line, where one is shown below, is the amount Stripe actually settled &mdash; so the two can differ for the same sum.
+  </p>
+  {% endif %}
+
+  {% if charge %}
+  <h3 style="margin:24px 0 4px;">This payment</h3>
+  <table style="border-collapse:collapse; width:100%;">
+    {{ row("Amount", amount(charge.amount, charge.currency, charge.amount_chf)) }}
+    {{ row("Reason", charge.reason) }}
+    {{ row("Date", charge.date) }}
+    {{ row("Stripe reference", charge.reference) }}
+  </table>
+  {% endif %}
+
+  <h3 style="margin:24px 0 4px;">Guest</h3>
+  {% if guest_redacted %}
+  <p style="margin:0 0 8px; color:#888; font-size:13px;">
+    This guest's personal data has been erased under the retention policy, so the fields below are placeholders.
+  </p>
+  {% endif %}
+  <table style="border-collapse:collapse; width:100%;">
+    {{ row("Name", guest_name) }}
+    {{ row("Country", guest_country) }}
+    {{ row("Language", languages.get(guest_language) if guest_language else None) }}
+    {{ row("Phone", guest_phone) }}
+    {{ row("Email", guest_email) }}
+  </table>
+
+  <p style="color:#888; font-size:12px; margin-top:32px;">Booking reference: {{ booking_id }}</p>
+</body>
+</html>

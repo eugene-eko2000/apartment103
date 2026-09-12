@@ -39,3 +39,10 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["app*"]
+
+[tool.pytest.ini_options]
+# `tests` is not an installed package (the editable install only exposes `app*`),
+# so `from tests.booking_factories import ...` needs the backend root on sys.path.
+# Bare `pytest` doesn't add the CWD the way `python -m pytest` does; resolved
+# relative to rootdir, so it works from any invocation directory.
+pythonpath = ["."]

@@ -103,7 +103,7 @@ async def upload_image(
 ) -> Image:
     if not await Category.find_one(Category.slug == category):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Unknown category",
         )
     if sort_order is None:
@@ -113,13 +113,13 @@ async def upload_image(
     ext = ALLOWED_CONTENT_TYPES.get(resolved_content_type or "")
     if ext is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"content type must be one of {sorted(ALLOWED_CONTENT_TYPES)}",
         )
 
     body = await file.read()
     if not body:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="File is empty")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="File is empty")
     if len(body) > _MAX_UPLOAD_BYTES:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,

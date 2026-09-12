@@ -246,6 +246,20 @@ class Booking(Document):
     def total_discount(self) -> Decimal:
         return total_discount_of(self.date_ranges)
 
+    async def resolved_guest(self) -> Guest | None:
+        """The booking's guest as a full document, whether `guest` is still an
+        unfetched Link (a booking loaded without `fetch_links=True` — which is
+        how the Stripe webhook path loads one) or already a Guest.
+
+        None when the link dangles, i.e. the guest document has been deleted
+        out from under the booking. Callers that only *report* on a booking
+        (see app.services.admin_notifications) degrade to blank guest fields
+        rather than dropping the notification.
+        """
+        if isinstance(self.guest, Link):
+            return await self.guest.fetch()
+        return self.guest
+
     class Settings:
         name = "bookings"
         # Mirrors migrations/20260712000329_create_initial_collections.py:

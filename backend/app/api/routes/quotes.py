@@ -48,7 +48,7 @@ async def get_stay_quote(begin_date: date, end_date: date, currency: Currency = 
     """Every plan's price for one stay, in one request."""
     if end_date <= begin_date:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="end_date must be after begin_date",
         )
 

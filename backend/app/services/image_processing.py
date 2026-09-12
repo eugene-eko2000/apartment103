@@ -37,7 +37,7 @@ def compress_image(body: bytes, ext: str) -> tuple[bytes, int, int]:
         image.load()
     except Exception as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="File is not a valid image"
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="File is not a valid image"
         ) from exc
 
     # Bakes EXIF rotation into the pixels and drops the (now redundant) EXIF

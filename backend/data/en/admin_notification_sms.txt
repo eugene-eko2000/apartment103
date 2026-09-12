@@ -1,0 +1,25 @@
+{#
+  Admin alert SMS. Kept to what fits one message: what happened, who, when,
+  and how much.
+
+  Deliberately GSM-7 only -- no arrows, en/em dashes or other typography. A
+  single non-GSM character switches the whole message to UCS-2, which cuts the
+  per-segment limit from 160 characters to 70 and turns one billed SMS into
+  two or three.
+
+  The block tags each sit on their own line so trim_blocks swallows the
+  newline after them; anything conditional that has to stay *inside* a line
+  goes through the macro, which is an expression and so unaffected by it.
+#}
+{% macro amount(value, ccy, value_chf) %}{{ value | money(ccy) }}{% if value_chf is not none %} ({{ value_chf | money("CHF") }}){% endif %}{% endmacro %}
+{{ business_name }}: {{ event_label }}
+{{ guest_name or "Guest unknown" }}
+{% if check_in %}
+{{ check_in }} to {{ check_out }}
+{% else %}
+Dates not set
+{% endif %}
+{% if charge %}
+Charged {{ amount(charge.amount, charge.currency, charge.amount_chf) }}
+{% endif %}
+Total {{ amount(total_price, currency, total_price_chf) }}

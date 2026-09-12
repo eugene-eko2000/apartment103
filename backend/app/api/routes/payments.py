@@ -1,7 +1,7 @@
 import logging
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Any
+from typing import Any, get_args
 
 import stripe
 from beanie import PydanticObjectId
@@ -12,10 +12,16 @@ from pymongo.errors import DuplicateKeyError
 from app.api.common import get_or_404
 from app.api.deps import Principal, ensure_can_access_booking, get_current_principal
 from app.core.money import CHARGE_TOLERANCE
-from app.models.booking import Booking, BookingCharge, BookingWebhookEvent, nights_of_ranges
+from app.models.booking import (
+    Booking,
+    BookingCharge,
+    BookingChargeReason,
+    BookingWebhookEvent,
+    nights_of_ranges,
+)
 from app.models.payment_event import PaymentEvent
 from app.schemas.payment import PaymentIntentResponse, PaymentOutcomeResponse, UpcomingCharge
-from app.services import booking_emails, stripe_service
+from app.services import admin_notifications, booking_emails, stripe_service
 from app.services.availability import (
     DATES_TAKEN_MESSAGE,
     dates_taken_detail,
@@ -88,8 +94,33 @@ async def _refund_safely(payment_intent_id: str, context: str) -> bool:
         return False
 
 
+def _transient_charge(payment_intent: dict) -> BookingCharge:
+    """A BookingCharge that is deliberately *not* stored on the booking.
+
+    Both paths that hand a payment straight back — _reject_dates_taken and
+    the already-cancelled branch of _apply_successful_charge — record nothing
+    on the booking: the money's only durable trace is the PaymentEvent and the
+    refund in Stripe. This exists purely so the admin notification about that
+    round trip can still name the amount and the PaymentIntent, instead of
+    reporting that something happened without saying how much.
+
+    The reason is validated rather than trusted: every PaymentIntent this app
+    creates carries one of BookingChargeReason in its metadata, but the field
+    is a Literal, so an unexpected value would raise — and this runs on the
+    "must not fail the webhook" path.
+    """
+    reason = payment_intent.get("metadata", {}).get("reason")
+    return BookingCharge(
+        stripe_payment_intent_id=payment_intent["id"],
+        amount=stripe_service.from_minor_units(payment_intent["amount"]),
+        currency=payment_intent["currency"].upper(),
+        reason=reason if reason in get_args(BookingChargeReason) else "initial_charge",
+        status="succeeded",
+    )
+
+
 async def _reject_dates_taken(
-    booking: Booking, event: BookingWebhookEvent | None, *, payment_intent_id: str | None = None
+    booking: Booking, event: BookingWebhookEvent | None, *, payment_intent: dict | None = None
 ) -> None:
     """This booking lost the nights it was just paid for.
 
@@ -127,9 +158,19 @@ async def _reject_dates_taken(
         booked_nights=booking.booked_nights,
         pending_expires_at=booking.pending_expires_at,
     )
-    if payment_intent_id is not None and not await _refund_safely(
-        payment_intent_id, "the booking lost the availability race"
-    ):
+    refunded: bool | None = None
+    if payment_intent is not None:
+        refunded = await _refund_safely(payment_intent["id"], "the booking lost the availability race")
+    # Before the delete below, so the notification can still resolve the guest
+    # this rejection has to be reported against.
+    await admin_notifications.notify_admins(
+        "booking_rejected",
+        booking,
+        charge=_transient_charge(payment_intent) if payment_intent is not None else None,
+        detail=DATES_TAKEN_MESSAGE,
+        refunded=refunded,
+    )
+    if refunded is False:
         return
     await booking.delete()
 
@@ -383,6 +424,7 @@ async def _apply_setup_succeeded(
     # booking for the same nights so they can't pay for them afterwards.
     await discard_overlapping_pending_bookings(booking)
     await _send_email_safely(booking_emails.send_booking_confirmation_email(booking))
+    await admin_notifications.notify_admins("booking_confirmed", booking)
 
 
 async def _apply_setup_failed(
@@ -391,6 +433,9 @@ async def _apply_setup_failed(
     last_error = setup_intent.get("last_setup_error") or {}
     booking.last_payment_error = last_error.get("message", "Card verification failed")
     await _commit(booking, event, last_payment_error=booking.last_payment_error)
+    await admin_notifications.notify_admins(
+        "card_verification_failed", booking, detail=booking.last_payment_error
+    )
 
 
 async def _attach_fee_breakdown(booking: Booking, charge: BookingCharge) -> None:
@@ -453,10 +498,16 @@ async def _apply_successful_charge(
         # outlive its late payment being handed back.
         logger.warning("Opening payment for cancelled booking %s rejected", booking.id)
         if booking.last_payment_error == DATES_TAKEN_MESSAGE:
-            await _reject_dates_taken(booking, event, payment_intent_id=payment_intent["id"])
+            await _reject_dates_taken(booking, event, payment_intent=payment_intent)
         else:
             await _commit(booking, event)
-            await _refund_safely(payment_intent["id"], "the booking was already cancelled")
+            refunded = await _refund_safely(payment_intent["id"], "the booking was already cancelled")
+            await admin_notifications.notify_admins(
+                "payment_refunded",
+                booking,
+                charge=_transient_charge(payment_intent),
+                refunded=refunded,
+            )
         return
     payment_method_id = payment_intent.get("payment_method")
     if payment_method_id:
@@ -532,7 +583,7 @@ async def _apply_successful_charge(
         # booking already owns one of these nights. The whole update failed
         # atomically, so no charge was recorded — refund the guest and reject.
         logger.warning("Booking %s lost the availability race (payment intent)", booking.id)
-        await _reject_dates_taken(booking, event, payment_intent_id=payment_intent["id"])
+        await _reject_dates_taken(booking, event, payment_intent=payment_intent)
         return
     if result.matched_count == 0:
         # Either this exact charge is already on the booking (a redelivery
@@ -554,10 +605,15 @@ async def _apply_successful_charge(
 
     await _attach_fee_breakdown(booking, charge)
 
+    # Both notifications go out after _attach_fee_breakdown above, so the CHF
+    # figure they report is Stripe's own settled amount rather than a converted
+    # estimate (see app.services.admin_notifications._charge_context).
     if reason == "initial_charge":
         await _send_email_safely(booking_emails.send_booking_confirmation_email(booking))
+        await admin_notifications.notify_admins("booking_confirmed", booking, charge=charge)
     else:
         await _send_email_safely(booking_emails.send_scheduled_payment_email(booking, charge))
+        await admin_notifications.notify_admins("payment_received", booking, charge=charge)
 
 
 async def _apply_failed_charge(
@@ -573,6 +629,9 @@ async def _apply_failed_charge(
         event,
         last_payment_error=booking.last_payment_error,
         payment_status=booking.payment_status,
+    )
+    await admin_notifications.notify_admins(
+        "payment_failed", booking, detail=booking.last_payment_error
     )
 
 

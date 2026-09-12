@@ -90,12 +90,12 @@ async def register_guest_self(
     data = payload.model_dump(exclude={"email", "phone_number"})
     if kind == "email":
         if not payload.phone_number:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="phone_number is required")
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="phone_number is required")
         data["email"] = identifier
         data["phone_number"] = normalize_phone_or_400(payload.phone_number)
     else:
         if not payload.email:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="email is required")
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="email is required")
         data["phone_number"] = identifier
         data["email"] = _normalize_email(payload.email)
 
@@ -135,6 +135,10 @@ async def update_guest(
     guest.email = email
     guest.preferred_language = payload.preferred_language
     guest.preferred_currency = payload.preferred_currency
+    if not payload.phone_number:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="phone_number is required")
+    if not payload.email:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="email is required")
     await guest.save()
     return guest
 

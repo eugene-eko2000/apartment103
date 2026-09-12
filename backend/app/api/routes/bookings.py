@@ -31,6 +31,7 @@ from app.schemas.booking import (
     BookingRangeDisplay,
     BookingScheduleDisplay,
 )
+from app.services import admin_notifications
 from app.services.availability import (
     BLOCKING_STATUSES,
     DATES_TAKEN_MESSAGE,
@@ -134,7 +135,7 @@ async def _resolve_terms(
         )
     if payload.cancellation_policy_id is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Either plan_name or cancellation_policy_id is required",
         )
     policy = await get_or_404(CancellationPolicy, payload.cancellation_policy_id, "Cancellation policy")
@@ -332,6 +333,10 @@ async def cancel_booking(
     booking.booked_nights = []
     booking.pending_expires_at = None
     await booking.save()
+    # After the save, so what the admins are told matches what is stored. Any
+    # settlement charge settle_cancellation just made is reported separately,
+    # by the payment_intent.succeeded webhook it triggers.
+    await admin_notifications.notify_admins("booking_cancelled", booking)
     return booking
 
 
