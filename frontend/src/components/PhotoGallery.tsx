@@ -17,25 +17,48 @@ interface Props {
   dict: GalleryDict;
 }
 
+// Gutter between neighbouring slides, so photos never touch while dragging.
+const SLIDE_GAP = 16;
+// Gesture tuning (all in CSS px / px per ms).
+const AXIS_LOCK = 8; // movement before the gesture commits to an axis
+const COMMIT_DISTANCE = 60; // drag past this and the photo changes
+const COMMIT_FRACTION = 0.25; // …or past this share of the viewport, whichever is smaller
+const COMMIT_VELOCITY = 0.45; // a fast flick commits on much less distance
+const FLICK_MIN_DISTANCE = 12;
+const EDGE_RESISTANCE = 0.28; // rubber band when there is no neighbour to reveal
+const SLIDE_DURATION = 500; // full-width slide; shorter distances scale down
+const SLIDE_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
+
 export default function PhotoGallery({ onClose, dict }: Props) {
   const [photos, setPhotos] = useState<ImageAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(0);
-  // The photo animating out during a transition — kept mounted alongside
-  // the new "selected" photo just long enough for both to slide together.
-  const [outgoing, setOutgoing] = useState<ImageAsset | null>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   const imageAreaRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
-  const mainImgRef = useRef<HTMLImageElement>(null);
-  const outgoingImgRef = useRef<HTMLImageElement>(null);
+  // Holds the previous/current/next slides; everything animates by moving it.
+  const trackRef = useRef<HTMLDivElement>(null);
+  const trackAnim = useRef<Animation | null>(null);
   const thumbRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const touch = useRef({ startX: 0, startY: 0 });
   const lastSelected = useRef(selected);
-  // Bumped on every transition so a late `onfinish` from a superseded
-  // animation (rapid clicking) can't clear a newer transition's outgoing photo.
-  const transitionSeq = useRef(0);
-  const pendingTransition = useRef<{ direction: number; distance: number; seq: number } | null>(null);
+  // Where the track should start its slide-in from when a swipe (rather than
+  // a click) caused the selection change — lets the photo carry on from
+  // exactly where the finger left it instead of jumping a full width.
+  const pendingStartX = useRef<number | null>(null);
+  // Read during pointer handling, which is bound once and must not go stale.
+  const stateRef = useRef({ selected: 0, count: 0 });
+  const swipe = useRef({
+    id: -1,
+    active: false,
+    axis: null as null | 'x' | 'y',
+    startX: 0,
+    startY: 0,
+    baseX: 0,
+    dx: 0,
+    lastX: 0,
+    lastT: 0,
+    velocity: 0,
+  });
   // pending = mousedown happened; active = grab mode engaged; wasGrabbed = carry into click handler
   const drag = useRef({
     pending: false,
@@ -58,6 +81,54 @@ export default function PhotoGallery({ onClose, dict }: Props) {
 
   const prev = useCallback(() => setSelected(i => Math.max(0, i - 1)), []);
   const next = useCallback(() => setSelected(i => Math.min(photos.length - 1, i + 1)), [photos.length]);
+
+  // One slide step: the viewport plus the gutter between slides.
+  const slideWidth = useCallback(() => (viewportRef.current?.clientWidth || 120) + SLIDE_GAP, []);
+
+  // Keep the pointer handlers' view of the selection current without
+  // rebinding them (and losing an in-flight gesture) on every change.
+  useLayoutEffect(() => {
+    stateRef.current = { selected, count: photos.length };
+  });
+
+  const setTrackX = useCallback((x: number) => {
+    if (trackRef.current) trackRef.current.style.transform = `translateX(${x}px)`;
+  }, []);
+
+  // The track's live position, so a gesture can pick a slide up mid-flight.
+  const trackX = useCallback(() => {
+    const track = trackRef.current;
+    if (!track) return 0;
+    const value = getComputedStyle(track).transform;
+    if (!value || value === 'none') return 0;
+    try {
+      return new DOMMatrixReadOnly(value).m41;
+    } catch {
+      return 0;
+    }
+  }, []);
+
+  // Move the track to `to`, animating in from `from` unless motion is reduced.
+  // Duration scales with the distance actually left to travel, so finishing a
+  // half-completed swipe feels like a nudge rather than a fresh slide.
+  const settle = useCallback((from: number, to: number) => {
+    const track = trackRef.current;
+    if (!track) return;
+    trackAnim.current?.cancel();
+    trackAnim.current = null;
+    setTrackX(to);
+    if (from === to) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const ratio = Math.min(1, Math.abs(from - to) / slideWidth());
+    const anim = track.animate(
+      [{ transform: `translateX(${from}px)` }, { transform: `translateX(${to}px)` }],
+      { duration: Math.max(180, ratio * SLIDE_DURATION), easing: SLIDE_EASING },
+    );
+    trackAnim.current = anim;
+    anim.onfinish = () => {
+      if (trackAnim.current === anim) trackAnim.current = null;
+    };
+  }, [setTrackX, slideWidth]);
 
   // Drag-to-scroll on thumbnail strip
   useEffect(() => {
@@ -117,78 +188,112 @@ export default function PhotoGallery({ onClose, dict }: Props) {
     };
   }, []);
 
-  // Swipe left/right on the main image to move between photos (mobile)
+  // Swipe/drag the main image: the track follows the pointer from the first
+  // few pixels of the gesture, and only the *finish* is animated — either
+  // carrying the photo the rest of the way or springing it back.
   useEffect(() => {
     const el = imageAreaRef.current;
     if (!el) return;
 
-    const SWIPE_THRESHOLD = 40;
-
-    const start = (e: TouchEvent) => {
-      const t = e.touches[0];
-      touch.current = { startX: t.pageX, startY: t.pageY };
+    const down = (e: PointerEvent) => {
+      // Arrows live inside this area; let them behave as plain buttons.
+      if ((e.target as HTMLElement | null)?.closest('button')) return;
+      if (!e.isPrimary || swipe.current.active) return;
+      // Take over from a slide already in flight at its current position.
+      const baseX = trackX();
+      trackAnim.current?.cancel();
+      trackAnim.current = null;
+      setTrackX(baseX);
+      swipe.current = {
+        id: e.pointerId,
+        active: true,
+        axis: null,
+        startX: e.clientX,
+        startY: e.clientY,
+        baseX,
+        dx: 0,
+        lastX: e.clientX,
+        lastT: e.timeStamp,
+        velocity: 0,
+      };
+      el.setPointerCapture(e.pointerId);
     };
 
-    const end = (e: TouchEvent) => {
-      const t = e.changedTouches[0];
-      const dx = t.pageX - touch.current.startX;
-      const dy = t.pageY - touch.current.startY;
-      if (Math.abs(dx) < SWIPE_THRESHOLD || Math.abs(dx) < Math.abs(dy)) return;
-      if (dx > 0) prev();
-      else next();
+    const move = (e: PointerEvent) => {
+      const s = swipe.current;
+      if (!s.active || e.pointerId !== s.id) return;
+      const dx = e.clientX - s.startX;
+      const dy = e.clientY - s.startY;
+
+      if (s.axis === null) {
+        if (Math.abs(dx) < AXIS_LOCK && Math.abs(dy) < AXIS_LOCK) return;
+        s.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+      }
+      if (s.axis !== 'x') return;
+
+      const dt = e.timeStamp - s.lastT;
+      if (dt > 0) s.velocity = (e.clientX - s.lastX) / dt;
+      s.lastX = e.clientX;
+      s.lastT = e.timeStamp;
+
+      // Rubber-band at the ends, where there is no neighbour to pull in.
+      const { selected: at, count } = stateRef.current;
+      const noNeighbour = (dx > 0 && at === 0) || (dx < 0 && at >= count - 1);
+      s.dx = noNeighbour ? dx * EDGE_RESISTANCE : dx;
+      setTrackX(s.baseX + s.dx);
     };
 
-    el.addEventListener('touchstart', start, { passive: true });
-    el.addEventListener('touchend', end, { passive: true });
+    const finish = (e: PointerEvent, cancelled: boolean) => {
+      const s = swipe.current;
+      if (!s.active || e.pointerId !== s.id) return;
+      s.active = false;
+      if (el.hasPointerCapture(s.id)) el.releasePointerCapture(s.id);
+      if (s.axis !== 'x') return;
+
+      const from = s.baseX + s.dx;
+      const width = slideWidth();
+      const flick = !cancelled && Math.abs(s.velocity) > COMMIT_VELOCITY && Math.abs(s.dx) > FLICK_MIN_DISTANCE;
+      const dragged = !cancelled && Math.abs(s.dx) > Math.min(COMMIT_DISTANCE, width * COMMIT_FRACTION);
+      const direction = flick ? (s.velocity < 0 ? 1 : -1) : s.dx < 0 ? 1 : -1;
+      const target = stateRef.current.selected + direction;
+
+      if ((flick || dragged) && target >= 0 && target < stateRef.current.count) {
+        // The target slide is currently `direction * width` away inside the
+        // track; once it becomes the selected one the track resets to 0, so
+        // start the animation from the offset that keeps it where it is now.
+        pendingStartX.current = from + direction * width;
+        setSelected(target);
+      } else {
+        settle(from, 0);
+      }
+    };
+
+    const up = (e: PointerEvent) => finish(e, false);
+    const cancel = (e: PointerEvent) => finish(e, true);
+
+    el.addEventListener('pointerdown', down);
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', cancel);
     return () => {
-      el.removeEventListener('touchstart', start);
-      el.removeEventListener('touchend', end);
+      el.removeEventListener('pointerdown', down);
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', up);
+      el.removeEventListener('pointercancel', cancel);
     };
-  }, [prev, next]);
+  }, [setTrackX, settle, slideWidth, trackX]);
 
-  // Kick off a transition whenever the selection changes — covers arrow
-  // clicks, keyboard, thumbnail clicks, and swipe alike, since they all
-  // just move `selected`. Stashes the outgoing photo so both it and the
-  // new one can slide together; the actual `.animate()` calls happen in
-  // the layout effect below, once the outgoing <img> has actually mounted.
-  useEffect(() => {
+  // Slide the track whenever the selection changes — arrow clicks, keyboard,
+  // thumbnails and swipes all just move `selected`. Runs pre-paint so the
+  // freshly laid out track never shows at its resting position first.
+  useLayoutEffect(() => {
     const from = lastSelected.current;
     lastSelected.current = selected;
+    const startX = pendingStartX.current;
+    pendingStartX.current = null;
     if (selected === from) return;
-    const prevPhoto = photos[from];
-    if (!prevPhoto) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-    const direction = selected > from ? 1 : -1;
-    const distance = viewportRef.current?.clientWidth || 120;
-    pendingTransition.current = { direction, distance, seq: ++transitionSeq.current };
-    setOutgoing(prevPhoto);
-  }, [selected, photos]);
-
-  // Runs synchronously right after `outgoing` mounts (pre-paint), so both
-  // images start animating together with no dropped frame in between.
-  useLayoutEffect(() => {
-    const pending = pendingTransition.current;
-    if (!outgoing || !pending) return;
-    pendingTransition.current = null;
-    const { direction, distance, seq } = pending;
-    const timing: KeyframeAnimationOptions = { duration: 500, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' };
-
-    outgoingImgRef.current?.animate(
-      [{ transform: 'translateX(0)' }, { transform: `translateX(${-direction * distance}px)` }],
-      timing,
-    );
-    const anim = mainImgRef.current?.animate(
-      [{ transform: `translateX(${direction * distance}px)` }, { transform: 'translateX(0)' }],
-      timing,
-    );
-    if (anim) {
-      anim.onfinish = () => {
-        // Only clear if no newer transition has started since.
-        if (transitionSeq.current === seq) setOutgoing(null);
-      };
-    }
-  }, [outgoing]);
+    settle(startX ?? (selected > from ? 1 : -1) * slideWidth(), 0);
+  }, [selected, settle, slideWidth]);
 
   // Scroll active thumbnail into view whenever selection changes
   useEffect(() => {
@@ -239,6 +344,9 @@ export default function PhotoGallery({ onClose, dict }: Props) {
         ref={imageAreaRef}
         className="relative flex-1 flex items-center justify-center min-h-0 sm:px-20 pt-12 pb-2 sm:pt-16 sm:pb-4"
         onClick={e => e.stopPropagation()}
+        // Keep horizontal gestures for the gallery; leave vertical ones to the
+        // browser (which then fires pointercancel and we spring back).
+        style={{ touchAction: 'pan-y' }}
       >
         <button
           onClick={prev}
@@ -253,39 +361,37 @@ export default function PhotoGallery({ onClose, dict }: Props) {
           {!loading && photos.length === 0 && (
             <p className="text-white/70 text-sm">No photos yet.</p>
           )}
-          {outgoing && (
-            // The inset lives on this wrapper, not the <img> itself — a
-            // replaced element's max-width resolves against the full
-            // containing block regardless of its own inset, so the inset
-            // has to shrink a plain box for max-w-full to clamp against.
-            <div className="absolute inset-y-0 inset-x-2.5 sm:inset-x-0 flex items-center justify-center">
-              {/* eslint-disable-next-line @next/next/no-img-element -- backend-served, not a Next-optimizable local/static asset */}
-              <img
-                ref={outgoingImgRef}
-                key={`outgoing-${outgoing.key}`}
-                src={imageUrl(outgoing.key)}
-                alt=""
-                aria-hidden="true"
-                width={outgoing.width ?? undefined}
-                height={outgoing.height ?? undefined}
-                className="max-h-full max-w-full w-auto h-auto rounded-2xl"
-              />
-            </div>
-          )}
-          {photos[selected] && (
-            <div className="absolute inset-y-0 inset-x-2.5 sm:inset-x-0 flex items-center justify-center">
-              {/* eslint-disable-next-line @next/next/no-img-element -- backend-served, not a Next-optimizable local/static asset */}
-              <img
-                ref={mainImgRef}
-                key={photos[selected].key}
-                src={imageUrl(photos[selected].key)}
-                alt={`${dict.apartmentPhoto} ${selected + 1}`}
-                width={photos[selected].width ?? undefined}
-                height={photos[selected].height ?? undefined}
-                className="max-h-full max-w-full w-auto h-auto rounded-2xl"
-              />
-            </div>
-          )}
+          <div ref={trackRef} className="absolute inset-0" style={{ willChange: 'transform' }}>
+            {[-1, 0, 1].map(offset => {
+              const photo = photos[selected + offset];
+              if (!photo) return null;
+              const current = offset === 0;
+              return (
+                // Keyed by photo, so the slide that scrolls into the centre
+                // keeps its already-decoded <img> instead of remounting.
+                // The horizontal inset is padding on this box rather than an
+                // inset on the <img>: a replaced element's max-width resolves
+                // against the full containing block regardless of its own
+                // inset, so max-w-full needs a shrunken box to clamp against.
+                <div
+                  key={photo._id}
+                  className="absolute inset-0 flex items-center justify-center px-2.5 sm:px-0"
+                  style={{ transform: `translateX(calc(${offset * 100}% + ${offset * SLIDE_GAP}px))` }}
+                  aria-hidden={!current}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element -- backend-served, not a Next-optimizable local/static asset */}
+                  <img
+                    src={imageUrl(photo.key)}
+                    alt={current ? `${dict.apartmentPhoto} ${selected + 1}` : ''}
+                    width={photo.width ?? undefined}
+                    height={photo.height ?? undefined}
+                    draggable={false}
+                    className="max-h-full max-w-full w-auto h-auto rounded-2xl select-none"
+                  />
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         <button
