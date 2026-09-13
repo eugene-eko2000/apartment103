@@ -175,6 +175,10 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const [range, setRange] = useState<DateRange | undefined>();
   const [hoverDate, setHoverDate] = useState<Date | undefined>(undefined);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  // Set when the calendar was reopened from the check-out field of an
+  // already-complete stay: the next click then moves only the checkout end
+  // instead of restarting the range from the clicked day.
+  const [editingCheckout, setEditingCheckout] = useState(false);
   // Stays mounted slightly longer than calendarOpen on close (cleared by
   // the breakout FLIP effect's settle(), once the collapse animation
   // actually finishes) — so the calendar is still there to be visibly
@@ -377,13 +381,14 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   // Shared by every check-in/check-out DateField below: opening the calendar
   // always refreshes availability first, so it can never show data staler
   // than the last time it was opened.
-  const toggleCalendar = () => {
+  const toggleCalendar = (field: "checkIn" | "checkOut" = "checkIn") => {
     captureCompactRect();
-    setCalendarOpen((v) => {
-      const next = !v;
-      if (next) fetchAvailability();
-      return next;
-    });
+    const next = !calendarOpen;
+    if (next) fetchAvailability();
+    // Only the check-out field of a stay that already has a check-in enters
+    // checkout-editing mode; every other way in starts a normal selection.
+    setEditingCheckout(next && field === "checkOut" && !!range?.from);
+    setCalendarOpen(next);
   };
 
   // Close calendar on outside click. Guarded on calendarOpen (and thus
@@ -1376,6 +1381,12 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     return false;
   };
 
+  // True whenever the next click lands on the checkout end of the stay: a
+  // check-in waiting for its checkout, or a complete stay whose checkout the
+  // guest reopened the calendar to move. Every "picking a checkout" affordance
+  // below keys off this rather than off a missing `to`.
+  const isPickingCheckout = !!range?.from && (!range?.to || editingCheckout);
+
   // A valid checkout: after check-in, clears its minimum stay, and doesn't
   // cross an occupied date along the way.
   const isValidCheckout = (date: Date) =>
@@ -1388,11 +1399,21 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   // candidates (too short a stay, or crossing an occupied date) get the
   // "unavailable" tint instead of "available".
   const isInvalidCheckoutCandidate = (date: Date) =>
-    !!range?.from && !range?.to && isAfter(date, range.from) && !isValidCheckout(date);
+    !!range?.from && isPickingCheckout && isAfter(date, range.from) && !isValidCheckout(date);
 
   // A hovered checkout candidate only previews as a valid range when it's
   // itself a valid checkout.
   const hoverIsValidCheckout = !!hoverDate && isValidCheckout(hoverDate);
+
+  // While only the checkout is being moved the *rendered* selection follows
+  // the pointer. The incomplete-range flow previews through the `hoverRange*`
+  // modifiers instead, but here react-day-picker is already painting a
+  // complete range, and a modifier can only add to that bar — never cut the
+  // tail beyond the day about to be clicked.
+  const previewRange =
+    editingCheckout && range?.from && hoverDate && hoverIsValidCheckout
+      ? { from: range.from, to: hoverDate }
+      : range;
 
   // While picking a checkout date, a date that's itself occupied (e.g. the
   // first night of another guest's stay) is still a legitimate checkout —
@@ -1401,7 +1422,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   // dates must stay clickable (not hard-disabled) and get their own
   // "occupied but selectable" tint rather than red.
   const isOccupiedValidCheckout = (date: Date) =>
-    !!range?.from && !range?.to && isBookedDate(date) && isValidCheckout(date);
+    isPickingCheckout && isBookedDate(date) && isValidCheckout(date);
 
   // A free day that an active promotion covers. Takes the violet tint
   // instead of the plain green one, so an offer is visible in the calendar
@@ -1416,7 +1437,8 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   // half-transparent, so the category fill shows around the accent circle and
   // the selection sits in the same block of colour as the days beside it.
   const isRangeMiddleDate = (date: Date) =>
-    (!!range?.from && !!range?.to && isAfter(date, range.from) && isBefore(date, range.to)) ||
+    (!!previewRange?.from && !!previewRange?.to &&
+      isAfter(date, previewRange.from) && isBefore(date, previewRange.to)) ||
     (!!range?.from && !range?.to && !!hoverDate && hoverIsValidCheckout &&
       isAfter(date, range.from) && isBefore(date, hoverDate));
 
@@ -1428,8 +1450,8 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   // end of the bar, which reads as a mismatch rather than as feedback.
   const isSelectionDate = (date: Date) =>
     isRangeMiddleDate(date) ||
-    (!!range?.from && isSameDay(date, range.from)) ||
-    (!!range?.to && isSameDay(date, range.to)) ||
+    (!!previewRange?.from && isSameDay(date, previewRange.from)) ||
+    (!!previewRange?.to && isSameDay(date, previewRange.to)) ||
     (!!range?.from && !range?.to && !!hoverDate && hoverIsValidCheckout &&
       isSameDay(date, hoverDate));
 
@@ -1481,9 +1503,24 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
             "--rdp-months-gap": "1.5rem",
           } as React.CSSProperties}
           styles={{ months: { flexWrap: "nowrap" } }}
-          selected={range}
+          selected={previewRange}
           defaultMonth={range?.from ?? today}
           onSelect={(newRange, triggerDate) => {
+            // Reopened from the check-out field of a complete stay: the click
+            // moves that end only, leaving the check-in where it is. Handled
+            // here rather than in onDayClick below so react-day-picker's own
+            // computed range never survives as the fallback.
+            if (range?.from && range?.to && editingCheckout) {
+              if (isAfter(triggerDate, range.from)) {
+                if (isValidCheckout(triggerDate)) setRange({ from: range.from, to: triggerDate });
+                return;
+              }
+              // On or before the check-in there is no stay to shorten, so the
+              // day becomes a new check-in and the normal two-click flow resumes.
+              setRange({ from: triggerDate, to: undefined });
+              setEditingCheckout(false);
+              return;
+            }
             // While picking a checkout date, validate the clicked day directly
             // against the original check-in rather than trusting react-day-picker's
             // computed range: its own range logic silently swaps check-in to
@@ -1510,7 +1547,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
           onDayClick={(date, modifiers) => {
             if (modifiers.disabled) return;
             // Both dates were already picked; start a fresh selection instead of adjusting the old range
-            if (range?.from && range?.to) {
+            if (range?.from && range?.to && !editingCheckout) {
               setRange({ from: date, to: undefined });
             }
           }}
@@ -1856,7 +1893,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                   <DateField
                     label={dict.checkIn}
                     value={checkInText}
-                    onClick={toggleCalendar}
+                    onClick={() => toggleCalendar("checkIn")}
                     active={calendarOpen}
                     filled={!!range?.from}
                     openCalendarLabel={dict.openCalendar}
@@ -1865,7 +1902,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                   <DateField
                     label={dict.checkOut}
                     value={checkOutText}
-                    onClick={toggleCalendar}
+                    onClick={() => toggleCalendar("checkOut")}
                     active={calendarOpen}
                     filled={!!range?.to}
                     openCalendarLabel={dict.openCalendar}
