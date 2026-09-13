@@ -62,6 +62,10 @@ const DATE_PLACEHOLDER = "DD/MM/YYYY";
 const LANGUAGES: Language[] = ["en", "de", "fr", "it"];
 const CURRENCIES: Currency[] = ["EUR", "CHF", "USD", "GBP"];
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+// The apartment sleeps five, counting adults and children alike, so the two
+// guest counters share this cap rather than each carrying one of their own:
+// whatever one of them is at, the other can only reach the remainder.
+const MAX_GUESTS = 5;
 
 const DATE_FNS_LOCALES: Record<Locale, DateFnsLocale> = { en: enUS, de, fr, it };
 const TRANSITION_MS = 380;
@@ -1097,7 +1101,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   };
 
   const addChild = () => {
-    if (children.length < 4) setChildren([...children, { age: null }]);
+    if (totalGuests < MAX_GUESTS) setChildren([...children, { age: null }]);
   };
   const removeChild = () => {
     if (children.length > 0) setChildren(children.slice(0, -1));
@@ -1928,7 +1932,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                   <Counter
                     value={adults}
                     min={1}
-                    max={5}
+                    max={MAX_GUESTS - children.length}
                     onDecrement={() => setAdults(adults - 1)}
                     onIncrement={() => setAdults(adults + 1)}
                   />
@@ -1942,7 +1946,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                   <Counter
                     value={children.length}
                     min={0}
-                    max={4}
+                    max={MAX_GUESTS - adults}
                     onDecrement={removeChild}
                     onIncrement={addChild}
                   />
