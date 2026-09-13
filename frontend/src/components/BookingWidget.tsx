@@ -56,6 +56,13 @@ import { CountrySelect } from "@/components/CountrySelect";
 import { isValidCountry } from "@/lib/countries";
 import { clearGuestSession, readGuestSession, saveGuestSession } from "@/lib/guest-auth";
 
+// The widget's teal→cyan house gradient, worn by the header and every
+// primary action. The confirmation screen swaps in the green one: a booking
+// that actually went through is the one outcome worth colouring differently,
+// and header plus button change together so the screen reads as one state.
+const BRAND_GRADIENT = "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)";
+const SUCCESS_GRADIENT = "linear-gradient(135deg, #15803d 0%, #22c55e 100%)";
+
 const CHILD_AGES = Array.from({ length: 18 }, (_, i) => i);
 const DISPLAY_FORMAT = "dd/MM/yyyy";
 const DATE_PLACEHOLDER = "DD/MM/YYYY";
@@ -735,6 +742,8 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     ? dict.paymentDetailsTitle
     : guestStep === "confirming"
     ? dict.modal.confirmingTitle
+    : guestStep === "success"
+    ? dict.modal.successTitle
     : guestStep === "conflict"
     ? dict.modal.conflictTitle
     : guestStep === "pending"
@@ -1666,7 +1675,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
             ? "active:scale-[0.98] cursor-pointer"
             : "opacity-50 cursor-not-allowed"
         }`}
-        style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
+        style={{ background: BRAND_GRADIENT }}
         onClick={handleBookClick}
         disabled={!isFormValid || checkingSession}
       >
@@ -1691,7 +1700,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
         disabled={!selectedPlan}
         onClick={() => setGuestStep("form")}
         className="flex-1 text-white font-semibold py-4 rounded-xl text-base transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-        style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
+        style={{ background: BRAND_GRADIENT }}
       >
         {dict.modal.next}
       </button>
@@ -1711,7 +1720,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
           onClick={handleGuestFormSubmit}
           disabled={pending || !isFormValid || !isGuestDetailsValid}
           className="flex-1 text-white font-semibold py-4 rounded-xl text-base transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-          style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
+          style={{ background: BRAND_GRADIENT }}
         >
           {dict.modal.next}
         </button>
@@ -1729,7 +1738,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
       type="button"
       onClick={handleDone}
       className="w-full text-white font-semibold py-3 rounded-xl text-sm transition-all shadow-lg cursor-pointer"
-      style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
+      style={{ background: guestStep === "success" ? SUCCESS_GRADIENT : BRAND_GRADIENT }}
     >
       {dict.modal.done}
     </button>
@@ -1741,7 +1750,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
       type="button"
       onClick={handleDone}
       className="w-full text-white font-semibold py-3 rounded-xl text-sm transition-all shadow-lg cursor-pointer"
-      style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
+      style={{ background: BRAND_GRADIENT }}
     >
       {dict.modal.chooseNewDates}
     </button>
@@ -1751,7 +1760,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
         type="button"
         onClick={() => setGuestStep("form")}
         className="w-full text-white font-semibold py-3 rounded-xl text-sm transition-all shadow-lg cursor-pointer"
-        style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
+        style={{ background: BRAND_GRADIENT }}
       >
         {dict.modal.tryAgain}
       </button>
@@ -1796,7 +1805,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
         {/* ── Header ────────────────────────────────────────── */}
         <div
           className="relative px-6 py-5 rounded-t-2xl shrink-0"
-          style={{ background: "linear-gradient(135deg, #0f766e 0%, #0891b2 100%)" }}
+          style={{ background: guestStep === "success" ? SUCCESS_GRADIENT : BRAND_GRADIENT }}
         >
           {/* Wrapping, not nowrap: the title and the price group only share a
               line when they actually fit on one. The compact widget is a
@@ -2182,12 +2191,35 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                 </div>
               )}
 
+              {/* Tick beside the text rather than above it: the two lines are
+                  one block the guest reads left-to-right, and the mark is
+                  decoration for a message that already says "confirmed", so
+                  it stays out of the accessibility tree. shrink-0 keeps it
+                  round when the message wraps to three lines on mobile. */}
               {guestStep === "success" && (
-                <div className="text-center py-4 space-y-2">
-                  <p className="text-sm text-gray-700 dark:text-gray-300">
-                    {dict.modal.successMessage.replace("{name}", guestForm?.first_name ?? "")}
-                  </p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">{dict.modal.emailNotice}</p>
+                <div className="flex items-center gap-4 py-4">
+                  <div
+                    className="shrink-0 h-14 w-14 rounded-full bg-green-100 dark:bg-green-900/40 flex items-center justify-center"
+                    aria-hidden="true"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={3}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-8 w-8 text-green-600 dark:text-green-400"
+                    >
+                      <path d="M4 12.5 9.5 18 20 6.5" />
+                    </svg>
+                  </div>
+                  <div className="space-y-2 min-w-0">
+                    <p className="text-sm text-gray-700 dark:text-gray-300">
+                      {dict.modal.successMessage.replace("{name}", guestForm?.first_name ?? "")}
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{dict.modal.emailNotice}</p>
+                  </div>
                 </div>
               )}
 
