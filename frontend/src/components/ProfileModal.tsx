@@ -7,6 +7,7 @@ import { readGuestSession } from "@/lib/guest-auth";
 import { useApplyGuestPreferences } from "@/lib/guest-preferences";
 import { PhoneInput } from "@/components/PhoneInput";
 import { CountrySelect } from "@/components/CountrySelect";
+import { SelectField } from "@/components/SelectField";
 import { isValidCountry } from "@/lib/countries";
 import type { Locale } from "@/lib/i18n-config";
 
@@ -293,42 +294,3 @@ function TextField({
   );
 }
 
-/* ── SelectField ───────────────────────────────────────── */
-function SelectField({
-  label,
-  value,
-  options,
-  noneLabel,
-  onChange,
-  required = false,
-}: {
-  label: string;
-  value: string;
-  options: string[];
-  noneLabel: string;
-  onChange: (v: string) => void;
-  required?: boolean;
-}) {
-  const id = useId();
-  return (
-    <div>
-      <label htmlFor={id} className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-        {label}
-      </label>
-      <select
-        id={id}
-        required={required}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-teal-300 focus:border-teal-400 cursor-pointer"
-      >
-        <option value="">{noneLabel}</option>
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}

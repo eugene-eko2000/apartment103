@@ -89,3 +89,25 @@ body {
     flex-direction: column !important;
   }
 }
+
+/* A form field whose value passed validation. The green is carried by the
+   border plus a wash that starts at that border and fades out toward the
+   middle of the control, so the "this one is done" signal is visible at a
+   glance while the text the guest is still reading keeps a plain background.
+   Set as background-image so it layers over each field's own background
+   colour (white / gray-800) instead of replacing it. */
+.field-valid {
+  background-image: radial-gradient(
+    ellipse at center,
+    rgba(16, 185, 129, 0) 35%,
+    rgba(16, 185, 129, 0.16) 100%
+  );
+}
+
+[data-theme="dark"] .field-valid {
+  background-image: radial-gradient(
+    ellipse at center,
+    rgba(52, 211, 153, 0) 35%,
+    rgba(52, 211, 153, 0.22) 100%
+  );
+}

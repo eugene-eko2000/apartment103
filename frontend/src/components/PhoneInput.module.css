@@ -21,6 +21,10 @@
   color: #9ca3af;
 }
 
+/* The tone rules below are compound, not descendant: react-phone-number-input
+   merges this className onto the element it also marks `.PhoneInput`, so the
+   border, padding and radius that make the field match its text-input
+   siblings have to be selected on that one element. */
 .field {
   width: 100%;
 }
@@ -41,55 +45,74 @@
   color: inherit;
 }
 
-.admin :global(.PhoneInput) {
+.admin:global(.PhoneInput) {
   padding: 0.5rem 0.75rem;
   border-radius: 0.5rem;
   border: 1px solid #cbd5e1;
 }
 
-.admin :global(.PhoneInput--focus) {
+.admin:global(.PhoneInput--focus) {
   border-color: #6366f1;
   box-shadow: 0 0 0 1px #818cf8;
 }
 
-.admin :global(.PhoneInput--disabled) {
+.admin:global(.PhoneInput--disabled) {
   background: #f8fafc;
   color: #94a3b8;
 }
 
-:global([data-theme="dark"]) .admin :global(.PhoneInput) {
+:global([data-theme="dark"]) .admin:global(.PhoneInput) {
   border-color: #4b5563;
+  /* slate-700, the dark background its sibling admin inputs carry. */
+  background: #334155;
   color: #f3f4f6;
 }
 
-:global([data-theme="dark"]) .admin :global(.PhoneInput--disabled) {
+:global([data-theme="dark"]) .admin:global(.PhoneInput--disabled) {
   background: #374151;
   color: #6b7280;
 }
 
-.booking :global(.PhoneInput) {
+.booking:global(.PhoneInput) {
   padding: 0.5rem 0.75rem;
   border-radius: 0.75rem;
   border: 1px solid #e5e7eb;
 }
 
-.booking :global(.PhoneInput--focus) {
+.booking:global(.PhoneInput--focus) {
   border-color: #2dd4bf;
   box-shadow: 0 0 0 1px #5eead4;
 }
 
-.booking :global(.PhoneInput--disabled) {
+.booking:global(.PhoneInput--disabled) {
   background: #f9fafb;
   color: #9ca3af;
 }
 
-:global([data-theme="dark"]) .booking :global(.PhoneInput) {
+:global([data-theme="dark"]) .booking:global(.PhoneInput) {
   border-color: #4b5563;
-  background: #374151;
+  /* gray-800, matching `dark:bg-gray-800` on the booking form's text inputs:
+     the gray-700 this used to name sat a shade lighter than every field
+     beside it, which only became visible once the rule started matching. */
+  background: #1f2937;
   color: #f3f4f6;
 }
 
-:global([data-theme="dark"]) .booking :global(.PhoneInput--disabled) {
+:global([data-theme="dark"]) .booking:global(.PhoneInput--disabled) {
   background: #4b5563;
   color: #9ca3af;
+}
+
+/* A number the form accepts. react-phone-number-input puts its own
+   `PhoneInput` class on the same element it puts ours on, so the element that
+   carries the border is matched compound (no descendant combinator); the
+   class is doubled up to outrank the tone rules above. */
+.valid.valid:global(.PhoneInput) {
+  border-color: #34d399;
+  background-image: radial-gradient(ellipse at center, rgba(16, 185, 129, 0) 35%, rgba(16, 185, 129, 0.16) 100%);
+}
+
+:global([data-theme="dark"]) .valid.valid:global(.PhoneInput) {
+  border-color: #10b981;
+  background-image: radial-gradient(ellipse at center, rgba(52, 211, 153, 0) 35%, rgba(52, 211, 153, 0.22) 100%);
 }

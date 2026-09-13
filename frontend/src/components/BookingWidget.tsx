@@ -53,8 +53,20 @@ import PaymentStep from "@/components/PaymentStep";
 import { PhoneInput } from "@/components/PhoneInput";
 import { isValidPhoneNumber } from "react-phone-number-input";
 import { CountrySelect } from "@/components/CountrySelect";
+import { SelectField } from "@/components/SelectField";
 import { isValidCountry } from "@/lib/countries";
 import { clearGuestSession, readGuestSession, saveGuestSession } from "@/lib/guest-auth";
+import {
+  isValidName,
+  isValidOptionalPlace,
+  isValidPlace,
+  isValidStreet,
+  isValidZip,
+  sanitizeName,
+  sanitizePlace,
+  sanitizeStreet,
+  sanitizeZip,
+} from "@/lib/guest-fields";
 
 // The widget's teal→cyan house gradient, worn by the header and every
 // primary action. The confirmation screen swaps in the green one: a booking
@@ -69,6 +81,11 @@ const DATE_PLACEHOLDER = "DD/MM/YYYY";
 const LANGUAGES: Language[] = ["en", "de", "fr", "it"];
 const CURRENCIES: Currency[] = ["EUR", "CHF", "USD", "GBP"];
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+// Worn by a "Your data" field that holds a value the form accepts. The green
+// replaces the neutral border rather than sitting next to it, so the two can
+// never be emitted together and leave the winner up to stylesheet order;
+// `field-valid` (globals.css) adds the wash that fades border→centre.
+const VALID_FIELD_CLASS = "border-emerald-400 dark:border-emerald-500 field-valid";
 // The apartment sleeps five, counting adults and children alike, so the two
 // guest counters share this cap rather than each carrying one of their own:
 // whatever one of them is at, the other can only reach the remainder.
@@ -766,13 +783,14 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   // catching a typo, after the guest already thought they were done.
   const isGuestDetailsValid =
     !!guestForm &&
-    guestForm.first_name.trim() !== "" &&
-    guestForm.family_name.trim() !== "" &&
+    isValidName(guestForm.first_name) &&
+    isValidName(guestForm.family_name) &&
     EMAIL_RE.test(guestForm.email.trim()) &&
     isValidPhoneNumber(guestForm.phone_number || "") &&
-    guestForm.residence_address.street_address.trim() !== "" &&
-    guestForm.residence_address.zip.trim() !== "" &&
-    guestForm.residence_address.city.trim() !== "" &&
+    isValidStreet(guestForm.residence_address.street_address) &&
+    isValidZip(guestForm.residence_address.zip) &&
+    isValidPlace(guestForm.residence_address.city) &&
+    isValidOptionalPlace(guestForm.residence_address.state ?? "") &&
     isValidCountry(guestForm.residence_address.country);
 
   // animate is false only for the locale-switch resume effect below: that
@@ -2093,43 +2111,59 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                     <TextField
                       label={dict.modal.firstName}
                       value={guestForm.first_name}
+                      sanitize={sanitizeName}
+                      valid={isValidName(guestForm.first_name)}
                       onChange={(v) => setGuestForm((p) => (p ? { ...p, first_name: v } : p))}
                     />
                     <TextField
                       label={dict.modal.familyName}
                       value={guestForm.family_name}
+                      sanitize={sanitizeName}
+                      valid={isValidName(guestForm.family_name)}
                       onChange={(v) => setGuestForm((p) => (p ? { ...p, family_name: v } : p))}
                     />
                     <TextField
                       label={dict.modal.email}
                       type="email"
                       value={guestForm.email}
+                      valid={EMAIL_RE.test(guestForm.email.trim())}
                       onChange={(v) => setGuestForm((p) => (p ? { ...p, email: v } : p))}
                     />
                     <PhoneInput
                       tone="booking"
                       label={dict.modal.phoneNumber}
                       value={guestForm.phone_number}
+                      valid={isValidPhoneNumber(guestForm.phone_number || "")}
                       onChange={(v) => setGuestForm((p) => (p ? { ...p, phone_number: v } : p))}
                     />
                     <TextField
                       label={dict.modal.streetAddress}
                       value={guestForm.residence_address.street_address}
+                      sanitize={sanitizeStreet}
+                      valid={isValidStreet(guestForm.residence_address.street_address)}
                       onChange={(v) => updateAddress("street_address", v)}
                     />
                     <TextField
                       label={dict.modal.zip}
                       value={guestForm.residence_address.zip}
+                      sanitize={sanitizeZip}
+                      valid={isValidZip(guestForm.residence_address.zip)}
                       onChange={(v) => updateAddress("zip", v)}
                     />
                     <TextField
                       label={dict.modal.city}
                       value={guestForm.residence_address.city}
+                      sanitize={sanitizePlace}
+                      valid={isValidPlace(guestForm.residence_address.city)}
                       onChange={(v) => updateAddress("city", v)}
                     />
                     <TextField
                       label={dict.modal.stateOptional}
                       value={guestForm.residence_address.state ?? ""}
+                      sanitize={sanitizePlace}
+                      // Optional, so an empty state line is accepted by the form
+                      // but stays neutral: green marks a value, not a blank.
+                      valid={isValidPlace(guestForm.residence_address.state ?? "")}
                       onChange={(v) => updateAddress("state", v)}
                       required={false}
                     />
@@ -2139,6 +2173,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                       noneLabel={dict.modal.selectCountry}
                       noMatchesLabel={dict.modal.noMatchesCountry}
                       locale={lang}
+                      valid={isValidCountry(guestForm.residence_address.country)}
                       onChange={(v) => updateAddress("country", v)}
                     />
                     <SelectField
@@ -2146,6 +2181,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                       value={guestForm.preferred_language ?? ""}
                       noneLabel={dict.modal.noPreference}
                       options={LANGUAGES}
+                      valid={!!guestForm.preferred_language}
                       onChange={(v) => setGuestForm((p) => (p ? { ...p, preferred_language: (v || null) as Language | null } : p))}
                     />
                     <SelectField
@@ -2153,6 +2189,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
                       value={guestForm.preferred_currency ?? ""}
                       noneLabel={dict.modal.noPreference}
                       options={CURRENCIES}
+                      valid={!!guestForm.preferred_currency}
                       onChange={(v) => setGuestForm((p) => (p ? { ...p, preferred_currency: (v || null) as Currency | null } : p))}
                     />
                   </div>
@@ -2591,6 +2628,8 @@ function TextField({
   type = "text",
   disabled = false,
   required = true,
+  sanitize,
+  valid = false,
 }: {
   label: string;
   value: string;
@@ -2598,6 +2637,9 @@ function TextField({
   type?: string;
   disabled?: boolean;
   required?: boolean;
+  /** Drops characters the field cannot hold before they ever reach state. */
+  sanitize?: (v: string) => string;
+  valid?: boolean;
 }) {
   const id = useId();
   return (
@@ -2611,49 +2653,12 @@ function TextField({
         required={required}
         disabled={disabled}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 text-sm focus:outline-none focus:ring-1 focus:ring-teal-300 focus:border-teal-400 disabled:bg-gray-50 dark:disabled:bg-gray-700 disabled:text-gray-400"
+        onChange={(e) => onChange(sanitize ? sanitize(e.target.value) : e.target.value)}
+        className={`w-full px-3 py-2 rounded-xl border bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 text-sm focus:outline-none focus:ring-1 focus:ring-teal-300 focus:border-teal-400 disabled:bg-gray-50 dark:disabled:bg-gray-700 disabled:text-gray-400 ${
+          valid ? VALID_FIELD_CLASS : "border-gray-200 dark:border-gray-600"
+        }`}
       />
     </div>
   );
 }
 
-/* ── SelectField ───────────────────────────────────────── */
-function SelectField({
-  label,
-  value,
-  options,
-  noneLabel,
-  onChange,
-  required = false,
-}: {
-  label: string;
-  value: string;
-  options: string[];
-  noneLabel: string;
-  onChange: (v: string) => void;
-  required?: boolean;
-}) {
-  const id = useId();
-  return (
-    <div>
-      <label htmlFor={id} className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-        {label}
-      </label>
-      <select
-        id={id}
-        required={required}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-teal-300 focus:border-teal-400 cursor-pointer"
-      >
-        <option value="">{noneLabel}</option>
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}

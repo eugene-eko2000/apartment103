@@ -15,6 +15,7 @@ export function PhoneInput({
   required = true,
   disabled = false,
   tone = "admin",
+  valid = false,
 }: {
   label: string;
   value: string;
@@ -22,6 +23,7 @@ export function PhoneInput({
   required?: boolean;
   disabled?: boolean;
   tone?: "admin" | "booking";
+  valid?: boolean;
 }) {
   const id = useId();
   return (
@@ -31,7 +33,9 @@ export function PhoneInput({
       </label>
       <RHFPhoneInput
         id={id}
-        className={`${styles.field} ${tone === "admin" ? styles.admin : styles.booking}`}
+        className={`${styles.field} ${tone === "admin" ? styles.admin : styles.booking} ${
+          valid ? styles.valid : ""
+        }`}
         flags={flags}
         international
         countryCallingCodeEditable={false}
