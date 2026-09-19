@@ -76,7 +76,8 @@ export default function SiteHeader({
           ) : (
             <LocationButton label={dict.nav.location} lang={lang} dict={dict} className="py-3" />
           )}
-          <div className="flex items-center gap-5 pt-4 mt-1 border-t border-gray-100 dark:border-gray-700">
+          <UserMenu dict={dict.userMenu} lang={lang} inline />
+          <div className="flex items-center gap-5 pt-3 pb-1">
             <LanguageSwitcher currentLang={lang} expandOnClick />
             <CurrencySwitcher expandOnClick />
             <ThemeSwitcher
@@ -84,7 +85,6 @@ export default function SiteHeader({
               ariaLabel={dict.themeSwitcher.label}
               expandOnClick
             />
-            <UserMenu dict={dict.userMenu} lang={lang} />
           </div>
         </MobileMenu>
       </div>

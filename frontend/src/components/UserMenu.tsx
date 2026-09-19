@@ -18,7 +18,18 @@ export interface UserMenuDict {
   profileModal: ProfileModalDict;
 }
 
-export default function UserMenu({ dict, lang }: { dict: UserMenuDict; lang: Locale }) {
+export default function UserMenu({
+  dict,
+  lang,
+  inline = false,
+}: {
+  dict: UserMenuDict;
+  lang: Locale;
+  /** Renders the account actions as flat rows of the surrounding menu
+   *  instead of an avatar button with its own dropdown — used by the
+   *  mobile menu, which has no room for a second layer. */
+  inline?: boolean;
+}) {
   const [ready, setReady] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -48,6 +59,57 @@ export default function UserMenu({ dict, lang }: { dict: UserMenuDict; lang: Loc
     return () => document.removeEventListener("mousedown", handler);
   }, [menuOpen]);
 
+  const modals = (
+    <>
+      {loginOpen && (
+        <LoginModal
+          dict={dict.loginModal}
+          lang={lang}
+          onClose={() => setLoginOpen(false)}
+          onLoggedIn={() => setLoginOpen(false)}
+        />
+      )}
+      {myBookingsOpen && (
+        <MyBookingsModal dict={dict.myBookingsModal} lang={lang} onClose={() => setMyBookingsOpen(false)} />
+      )}
+      {profileOpen && <ProfileModal dict={dict.profileModal} lang={lang} onClose={() => setProfileOpen(false)} />}
+    </>
+  );
+
+  if (inline) {
+    // The session state settles in a microtask on mount, long before the
+    // mobile menu can be opened, so nothing is reserved here.
+    if (!ready) return null;
+
+    const rowClass =
+      "text-left py-3 hover:text-teal-700 dark:hover:text-teal-400 transition-colors cursor-pointer";
+
+    return (
+      <>
+        <div className="flex flex-col my-1 py-1 border-t border-b border-gray-100 dark:border-gray-700">
+          {loggedIn ? (
+            <>
+              <button type="button" className={rowClass} onClick={() => setProfileOpen(true)}>
+                {dict.profile}
+              </button>
+              <button type="button" className={rowClass} onClick={() => setMyBookingsOpen(true)}>
+                {dict.myBookings}
+              </button>
+              <button type="button" className={rowClass} onClick={() => clearGuestSession()}>
+                {dict.logout}
+              </button>
+            </>
+          ) : (
+            <button type="button" className={rowClass} onClick={() => setLoginOpen(true)}>
+              {dict.login}
+            </button>
+          )}
+        </div>
+        {modals}
+      </>
+    );
+  }
+
   // Reserve the icon's footprint before the first client render decides
   // whether a session exists, so the header doesn't visibly shift.
   if (!ready) return <div className="w-8 h-8" />;
@@ -62,14 +124,7 @@ export default function UserMenu({ dict, lang }: { dict: UserMenuDict; lang: Loc
         >
           {dict.login}
         </button>
-        {loginOpen && (
-          <LoginModal
-            dict={dict.loginModal}
-            lang={lang}
-            onClose={() => setLoginOpen(false)}
-            onLoggedIn={() => setLoginOpen(false)}
-          />
-        )}
+        {modals}
       </>
     );
   }
@@ -124,10 +179,7 @@ export default function UserMenu({ dict, lang }: { dict: UserMenuDict; lang: Loc
         </div>
       )}
 
-      {myBookingsOpen && (
-        <MyBookingsModal dict={dict.myBookingsModal} lang={lang} onClose={() => setMyBookingsOpen(false)} />
-      )}
-      {profileOpen && <ProfileModal dict={dict.profileModal} lang={lang} onClose={() => setProfileOpen(false)} />}
+      {modals}
     </div>
   );
 }
