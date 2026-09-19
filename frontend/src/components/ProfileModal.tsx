@@ -30,7 +30,6 @@ export interface ProfileModalDict {
   stateOptional: string;
   country: string;
   selectCountry: string;
-  noMatchesCountry: string;
   preferredLanguage: string;
   preferredCurrency: string;
   noPreference: string;
@@ -221,7 +220,6 @@ export default function ProfileModal({
                   label={dict.country}
                   value={form.residence_address.country}
                   noneLabel={dict.selectCountry}
-                  noMatchesLabel={dict.noMatchesCountry}
                   locale={lang}
                   onChange={(v) => updateAddress("country", v)}
                 />
