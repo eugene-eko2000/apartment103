@@ -25,7 +25,7 @@ export default function SiteHeader({
   /** Same, for the location layer. */
   onCloseLocation?: () => void;
 }) {
-  const overlayLinkClass = "hover:text-teal-700 dark:hover:text-teal-400 transition-colors cursor-pointer";
+  const overlayLinkClass = "text-left hover:text-teal-700 dark:hover:text-teal-400 transition-colors cursor-pointer";
   const overlayActiveClass = "text-teal-700 dark:text-teal-400 font-medium";
 
   return (
