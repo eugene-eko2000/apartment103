@@ -3,6 +3,8 @@
 import { useRouter, usePathname } from "next/navigation";
 import { setCookie } from "@/lib/cookies";
 import { useCookieConsent } from "@/lib/cookie-consent-context";
+import { readGuestSession } from "@/lib/guest-auth";
+import { setSessionLanguage } from "@/lib/session-preferences";
 import type { Locale } from "@/lib/i18n-config";
 
 // Shared by LanguageSwitcher (explicit user choice) and any code that needs
@@ -13,11 +15,19 @@ export function useLocaleSwitch() {
   const pathname = usePathname();
   const { status } = useCookieConsent();
 
-  return (locale: Locale) => {
+  // `remember: false` is for moving the site to a locale the guest already
+  // chose elsewhere (their profile) — there is nothing new to record.
+  return (locale: Locale, { remember = true }: { remember?: boolean } = {}) => {
     const segments = pathname.split("/");
     segments[1] = locale;
-    if (status === "allowed") {
-      setCookie("NEXT_LOCALE", locale, 365);
+    if (remember) {
+      if (readGuestSession()) {
+        // Signed in: keep the pick for this page load only, so it neither
+        // overwrites the profile nor outlives a reload (session-preferences).
+        setSessionLanguage(locale);
+      } else if (status === "allowed") {
+        setCookie("NEXT_LOCALE", locale, 365);
+      }
     }
     router.push(segments.join("/") || `/${locale}`);
     router.refresh();

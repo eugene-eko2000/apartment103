@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { getGuest } from "@/lib/api";
 import { onGuestSessionChange, readGuestSession } from "@/lib/guest-auth";
+import { clearSessionPreferences } from "@/lib/session-preferences";
 import { useApplyGuestPreferences } from "@/lib/guest-preferences";
 
 // Mounted once near the root (see [lang]/layout.tsx). Makes a logged-in
@@ -16,7 +17,14 @@ export default function GuestPreferenceSync() {
   useEffect(() => {
     const sync = () => {
       const session = readGuestSession();
-      if (!session || !session.guestId) return;
+      if (!session) {
+        // Signed out: the PREFERRED_CURRENCY / NEXT_LOCALE cookies are
+        // authoritative again, so a pick left over from the session that
+        // just ended must not keep shadowing them.
+        clearSessionPreferences();
+        return;
+      }
+      if (!session.guestId) return;
       getGuest(session.guestId, session.token).then(applyGuestPreferences).catch(() => {});
     };
     // Deferred to a microtask so the localStorage read (and any resulting

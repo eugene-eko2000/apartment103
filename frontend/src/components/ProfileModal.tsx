@@ -130,8 +130,9 @@ export default function ProfileModal({
         setForm(guestToForm(guest));
         setSaved(true);
         // The guest just told us their preferred language/currency — make it
-        // the site's active one immediately, not just on their next visit.
-        applyGuestPreferences(guest);
+        // the site's active one immediately, not just on their next visit,
+        // and retire anything they had picked from the header switchers.
+        applyGuestPreferences(guest, { authoritative: true });
         onClose();
       })
       .catch((err) => {
