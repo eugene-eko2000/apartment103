@@ -1,10 +1,9 @@
 "use client";
 
 import { useRouter, usePathname } from "next/navigation";
-import { setCookie } from "@/lib/cookies";
+import { LOCALE_COOKIE, PREFERENCE_COOKIE_DAYS, setCookie } from "@/lib/cookies";
 import { useCookieConsent } from "@/lib/cookie-consent-context";
-import { readGuestSession } from "@/lib/guest-auth";
-import { setSessionLanguage } from "@/lib/session-preferences";
+import { preferenceTargets, setSessionLanguage } from "@/lib/session-preferences";
 import type { Locale } from "@/lib/i18n-config";
 
 // Shared by LanguageSwitcher (explicit user choice) and any code that needs
@@ -21,13 +20,13 @@ export function useLocaleSwitch() {
     const segments = pathname.split("/");
     segments[1] = locale;
     if (remember) {
-      if (readGuestSession()) {
-        // Signed in: keep the pick for this page load only, so it neither
-        // overwrites the profile nor outlives a reload (session-preferences).
-        setSessionLanguage(locale);
-      } else if (status === "allowed") {
-        setCookie("NEXT_LOCALE", locale, 365);
-      }
+      // Signed in behind a saved preferred_language: the pick is for this
+      // page load only, so it neither overwrites the profile nor outlives a
+      // reload. Otherwise the cookie is what answers the question on the
+      // next visit, so that is where the pick goes (see session-preferences).
+      const targets = preferenceTargets("language");
+      if (targets.session) setSessionLanguage(locale);
+      if (targets.cookie && status === "allowed") setCookie(LOCALE_COOKIE, locale, PREFERENCE_COOKIE_DAYS);
     }
     router.push(segments.join("/") || `/${locale}`);
     router.refresh();

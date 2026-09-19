@@ -2,12 +2,9 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { currencies, defaultCurrency, type Currency } from "@/lib/currency-config";
-import { getCookie, setCookie } from "./cookies";
+import { CURRENCY_COOKIE, PREFERENCE_COOKIE_DAYS, getCookie, setCookie } from "./cookies";
 import { useCookieConsent } from "./cookie-consent-context";
-import { readGuestSession } from "./guest-auth";
-import { getSessionCurrency, setSessionCurrency } from "./session-preferences";
-
-const COOKIE_NAME = "PREFERRED_CURRENCY";
+import { getSessionCurrency, preferenceTargets, setSessionCurrency } from "./session-preferences";
 
 const CurrencyContext = createContext<{
   currency: Currency;
@@ -30,7 +27,7 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
       setCurrencyState(override);
       return;
     }
-    const stored = getCookie(COOKIE_NAME);
+    const stored = getCookie(CURRENCY_COOKIE);
     if (stored && (currencies as readonly string[]).includes(stored)) {
       setCurrencyState(stored as Currency);
     }
@@ -41,13 +38,13 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
   const setCurrency = (next: Currency, { remember = true }: { remember?: boolean } = {}) => {
     setCurrencyState(next);
     if (!remember) return;
-    if (readGuestSession()) {
-      // Signed in: keep the pick for this page load only, so it neither
-      // overwrites the profile nor outlives a reload (session-preferences).
-      setSessionCurrency(next);
-    } else if (status === "allowed") {
-      setCookie(COOKIE_NAME, next, 365);
-    }
+    // Signed in behind a saved preferred_currency: the pick is for this page
+    // load only, so it neither overwrites the profile nor outlives a reload.
+    // Otherwise the cookie is what answers the question on the next visit,
+    // so that is where the pick goes (see session-preferences).
+    const targets = preferenceTargets("currency");
+    if (targets.session) setSessionCurrency(next);
+    if (targets.cookie && status === "allowed") setCookie(CURRENCY_COOKIE, next, PREFERENCE_COOKIE_DAYS);
   };
 
   return (

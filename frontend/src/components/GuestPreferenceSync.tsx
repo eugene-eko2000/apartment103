@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { getGuest } from "@/lib/api";
 import { onGuestSessionChange, readGuestSession } from "@/lib/guest-auth";
-import { clearSessionPreferences } from "@/lib/session-preferences";
+import { clearSessionPreferences, setProfilePreferences } from "@/lib/session-preferences";
 import { useApplyGuestPreferences } from "@/lib/guest-preferences";
 
 // Mounted once near the root (see [lang]/layout.tsx). Makes a logged-in
@@ -24,7 +24,14 @@ export default function GuestPreferenceSync() {
         clearSessionPreferences();
         return;
       }
-      if (!session.guestId) return;
+      if (!session.guestId) {
+        // A session without a guest record yet (mid-booking self-
+        // registration): there is no profile to read a preference off, so
+        // the cookies stay in charge and the header switchers keep writing
+        // them.
+        setProfilePreferences({});
+        return;
+      }
       getGuest(session.guestId, session.token).then(applyGuestPreferences).catch(() => {});
     };
     // Deferred to a microtask so the localStorage read (and any resulting

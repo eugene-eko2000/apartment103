@@ -56,6 +56,7 @@ import { CountrySelect } from "@/components/CountrySelect";
 import { SelectField } from "@/components/SelectField";
 import { isValidCountry } from "@/lib/countries";
 import { clearGuestSession, readGuestSession, saveGuestSession } from "@/lib/guest-auth";
+import { setProfilePreferences } from "@/lib/session-preferences";
 import {
   isValidName,
   isValidOptionalPlace,
@@ -1303,6 +1304,26 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
     }
   };
 
+  // The guest has just saved this form to their profile, so those settings
+  // are now the profile's answer: record them for the header switchers (they
+  // must not write the anonymous cookies over a saved setting) and reflect a
+  // currency change immediately, e.g. in the price on the payment step that
+  // follows. `remember: false` because the currency is coming from the
+  // profile, not from a header pick — there is nothing new to record.
+  // Language isn't switched here: that navigates away from the page
+  // mid-checkout, right as booking/payment creation is starting, so it's
+  // applied on the guest's next visit or login instead (see handleVerified).
+  const adoptSavedPreferences = () => {
+    if (!guestForm) return;
+    setProfilePreferences({
+      language: guestForm.preferred_language ?? null,
+      currency: guestForm.preferred_currency ?? null,
+    });
+    if (guestForm.preferred_currency && guestForm.preferred_currency !== currency) {
+      setCurrency(guestForm.preferred_currency, { remember: false });
+    }
+  };
+
   const handleGuestFormSubmit = async () => {
     if (!verified || !guestForm) return;
     setPending(true);
@@ -1317,9 +1338,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
           isAdminBooking: true,
           expiresAt: Date.now() + expires_in * 1000,
         });
-        if (guestForm.preferred_currency && guestForm.preferred_currency !== currency) {
-          setCurrency(guestForm.preferred_currency);
-        }
+        adoptSavedPreferences();
         await submitBooking(guest._id, verified.authToken, guestForm.preferred_currency ?? currency);
       } else if (verified.guestMode === "create") {
         const result = await registerGuestSelf(verified.authToken, guestForm);
@@ -1330,20 +1349,11 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
           isAdminBooking: false,
           expiresAt: Date.now() + result.expires_in * 1000,
         });
-        // Reflects a currency change from this step immediately (e.g. in the
-        // price shown on the payment step that follows). Language isn't
-        // switched here — that navigates away from the page mid-checkout,
-        // right as booking/payment creation is starting — it's applied on
-        // the guest's next visit or login instead (see handleVerified).
-        if (guestForm.preferred_currency && guestForm.preferred_currency !== currency) {
-          setCurrency(guestForm.preferred_currency);
-        }
+        adoptSavedPreferences();
         await submitBooking(result.guest._id, result.access_token, guestForm.preferred_currency ?? currency);
       } else if (verified.guestMode === "update" && verified.guestId) {
         await updateGuest(verified.guestId, verified.authToken, guestForm);
-        if (guestForm.preferred_currency && guestForm.preferred_currency !== currency) {
-          setCurrency(guestForm.preferred_currency);
-        }
+        adoptSavedPreferences();
         await submitBooking(verified.guestId, verified.authToken, guestForm.preferred_currency ?? currency);
       }
     } catch (err) {

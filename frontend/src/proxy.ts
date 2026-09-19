@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { locales, defaultLocale, type Locale } from "@/lib/i18n-config";
+import { LOCALE_COOKIE } from "@/lib/cookies";
 
 function getLocale(request: NextRequest): Locale {
-  const cookieLocale = request.cookies.get("NEXT_LOCALE")?.value;
+  const cookieLocale = request.cookies.get(LOCALE_COOKIE)?.value;
   if (cookieLocale && (locales as readonly string[]).includes(cookieLocale)) {
     return cookieLocale as Locale;
   }
