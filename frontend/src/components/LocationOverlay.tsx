@@ -74,23 +74,13 @@ export default function LocationOverlay({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  useEffect(() => {
-    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-    document.body.style.overflow = "hidden";
-    document.body.style.paddingRight = `${scrollbarWidth}px`;
-    return () => {
-      document.body.style.overflow = "";
-      document.body.style.paddingRight = "";
-    };
-  }, []);
-
   const poiNames = Object.fromEntries(POIS.map((p) => [p.id, l.pois[p.id as keyof typeof l.pois].name]));
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex flex-col bg-gray-50/75 dark:bg-gray-950/80 backdrop-blur-md">
-      {/* Same layering trick as the amenities view: the header's "Location"
-          nav slot closes this layer rather than stacking another one. */}
-      <SiteHeader lang={lang} dict={dict} onCloseLocation={onClose} />
+      {/* Same as the amenities view: the header's "Location" slot closes this
+          layer, and its other slots replace it rather than stack on it. */}
+      <SiteHeader lang={lang} dict={dict} />
 
       <div className="relative flex-1 min-h-0">
         <button

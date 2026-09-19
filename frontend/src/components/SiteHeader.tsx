@@ -10,24 +10,17 @@ import MobileMenu from "@/components/MobileMenu";
 import type { Dictionary } from "@/app/[lang]/dictionaries";
 import type { Locale } from "@/lib/i18n-config";
 
+/* Rendered by the homepage and again inside each full-screen view, so the
+ * nav is the same row wherever the guest is. Which view is open lives in the
+ * overlay context, not here: the nav items read it themselves, which is what
+ * lets the item for the open view close it instead of stacking a second one. */
 export default function SiteHeader({
   lang,
   dict,
-  onCloseAmenities,
-  onCloseLocation,
 }: {
   lang: Locale;
   dict: Dictionary;
-  /** Rendered inside the amenities layer itself — swaps the nav item that
-   *  would normally open the layer for one that closes it, instead of
-   *  stacking a second layer on top of the first. */
-  onCloseAmenities?: () => void;
-  /** Same, for the location layer. */
-  onCloseLocation?: () => void;
 }) {
-  const overlayLinkClass = "text-left hover:text-teal-700 dark:hover:text-teal-400 transition-colors cursor-pointer";
-  const overlayActiveClass = "text-teal-700 dark:text-teal-400 font-medium";
-
   return (
     <header className="shrink-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 shadow-sm">
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
@@ -43,17 +36,9 @@ export default function SiteHeader({
           <span className="font-semibold text-gray-800 dark:text-gray-100">Berg See Home</span>
         </Link>
         <nav className="hidden sm:flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400">
-          <GalleryButton label={dict.nav.gallery} dict={dict.gallery} />
-          {onCloseAmenities ? (
-            <button onClick={onCloseAmenities} className={`${overlayLinkClass} ${overlayActiveClass}`}>{dict.nav.amenities}</button>
-          ) : (
-            <AmenitiesButton label={dict.nav.amenities} lang={lang} dict={dict} />
-          )}
-          {onCloseLocation ? (
-            <button onClick={onCloseLocation} className={`${overlayLinkClass} ${overlayActiveClass}`}>{dict.nav.location}</button>
-          ) : (
-            <LocationButton label={dict.nav.location} lang={lang} dict={dict} />
-          )}
+          <GalleryButton label={dict.nav.gallery} />
+          <AmenitiesButton label={dict.nav.amenities} />
+          <LocationButton label={dict.nav.location} />
           <div className="flex items-center gap-4">
             <LanguageSwitcher currentLang={lang} />
             <CurrencySwitcher />
@@ -65,17 +50,9 @@ export default function SiteHeader({
           </div>
         </nav>
         <MobileMenu ariaLabel={dict.nav.menu}>
-          <GalleryButton label={dict.nav.gallery} dict={dict.gallery} className="py-3" />
-          {onCloseAmenities ? (
-            <button onClick={onCloseAmenities} className={`py-3 ${overlayLinkClass} ${overlayActiveClass}`}>{dict.nav.amenities}</button>
-          ) : (
-            <AmenitiesButton label={dict.nav.amenities} lang={lang} dict={dict} className="py-3" />
-          )}
-          {onCloseLocation ? (
-            <button onClick={onCloseLocation} className={`py-3 ${overlayLinkClass} ${overlayActiveClass}`}>{dict.nav.location}</button>
-          ) : (
-            <LocationButton label={dict.nav.location} lang={lang} dict={dict} className="py-3" />
-          )}
+          <GalleryButton label={dict.nav.gallery} className="py-3" />
+          <AmenitiesButton label={dict.nav.amenities} className="py-3" />
+          <LocationButton label={dict.nav.location} className="py-3" />
           <UserMenu dict={dict.userMenu} lang={lang} inline />
           <div className="flex items-center gap-5 pt-3 pb-1">
             <LanguageSwitcher currentLang={lang} expandOnClick />

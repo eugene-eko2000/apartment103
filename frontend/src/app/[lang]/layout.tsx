@@ -6,6 +6,7 @@ import { locales } from "@/lib/i18n-config";
 import { CurrencyProvider } from "@/lib/currency-context";
 import { CookieConsentProvider } from "@/lib/cookie-consent-context";
 import { ThemeProvider, THEME_INIT_SCRIPT } from "@/lib/theme-context";
+import { OverlayProvider } from "@/lib/overlay-context";
 import CookieConsentBanner from "@/components/CookieConsentBanner";
 import GuestPreferenceSync from "@/components/GuestPreferenceSync";
 import { getDictionary, hasLocale } from "./dictionaries";
@@ -66,7 +67,10 @@ export default async function RootLayout({
           <CookieConsentProvider>
             <CurrencyProvider>
               <GuestPreferenceSync />
-              {children}
+              {/* Owns the gallery/amenities/location views and renders the one
+                  that is open — above the page, but inside the same providers,
+                  since each view carries the site header and footer. */}
+              <OverlayProvider lang={lang} dict={dict}>{children}</OverlayProvider>
             </CurrencyProvider>
             <CookieConsentBanner dict={dict.cookieConsent} />
           </CookieConsentProvider>

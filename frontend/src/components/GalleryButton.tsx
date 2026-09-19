@@ -1,28 +1,20 @@
 'use client';
 
-import { useState } from 'react';
-import PhotoGallery, { type GalleryDict } from './PhotoGallery';
+import { useOverlay } from '@/lib/overlay-context';
+import { NAV_LINK_CLASS } from './nav-chrome';
 
 export default function GalleryButton({
   label,
-  dict,
   className = "",
 }: {
   label: string;
-  dict: GalleryDict;
   className?: string;
 }) {
-  const [open, setOpen] = useState(false);
+  const { toggle } = useOverlay();
 
   return (
-    <>
-      <button
-        onClick={() => setOpen(true)}
-        className={`text-left hover:text-teal-700 dark:hover:text-teal-400 transition-colors cursor-pointer ${className}`}
-      >
-        {label}
-      </button>
-      {open && <PhotoGallery onClose={() => setOpen(false)} dict={dict} />}
-    </>
+    <button onClick={() => toggle('gallery')} className={`${NAV_LINK_CLASS} ${className}`}>
+      {label}
+    </button>
   );
 }

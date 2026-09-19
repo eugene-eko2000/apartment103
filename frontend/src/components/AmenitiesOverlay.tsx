@@ -53,22 +53,12 @@ export default function AmenitiesOverlay({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  useEffect(() => {
-    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-    document.body.style.overflow = 'hidden';
-    document.body.style.paddingRight = `${scrollbarWidth}px`;
-    return () => {
-      document.body.style.overflow = '';
-      document.body.style.paddingRight = '';
-    };
-  }, []);
-
   return createPortal(
     <div className="fixed inset-0 z-50 flex flex-col bg-gray-50/75 dark:bg-gray-950/80 backdrop-blur-md">
-      {/* Reuses the homepage's own header — the "amenities" nav slot swaps
-          to a close control here (onCloseAmenities) instead of relinquishing
-          the layer to a nested overlay. */}
-      <SiteHeader lang={lang} dict={dict} onCloseAmenities={onClose} />
+      {/* Reuses the homepage's own header — its "amenities" slot renders as
+          the active one here and closes this view, and the other slots swap
+          this view for theirs rather than stacking a second one on top. */}
+      <SiteHeader lang={lang} dict={dict} />
 
       {/* `relative` makes this the containing block for the close button
           below, so it sits on the content view (not overlapping the header)
