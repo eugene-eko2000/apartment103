@@ -108,7 +108,19 @@ export default async function Home({
                   className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white text-xs font-medium px-3 py-1.5 rounded-full transition-colors cursor-pointer"
                   label={
                     <>
-                      <span>📍</span>
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        className="shrink-0"
+                      >
+                        <path
+                          fill="#EA4335"
+                          d="M12 2c-3.87 0-7 3.13-7 7 0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"
+                        />
+                        <circle cx="12" cy="9" r="2.5" fill="#fff" />
+                      </svg>
                       <span>{dict.hero.location}</span>
                     </>
                   }

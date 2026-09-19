@@ -112,7 +112,19 @@ export default function LocationOverlay({
               className="scroll-mt-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 sm:p-5 mb-8"
             >
               <p className="flex items-center gap-2 mb-4 text-sm text-gray-600 dark:text-gray-300">
-                <span aria-hidden="true">📍</span>
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  className="shrink-0"
+                >
+                  <path
+                    fill="#EA4335"
+                    d="M12 2c-3.87 0-7 3.13-7 7 0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"
+                  />
+                  <circle cx="12" cy="9" r="2.5" fill="#fff" />
+                </svg>
                 <span className="font-medium text-gray-900 dark:text-gray-100">{l.address}</span>
               </p>
 
