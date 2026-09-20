@@ -15,12 +15,13 @@
 # management (Vault/Swarm secrets/etc.) is a further follow-up, not part of
 # this script.
 #
-# The TLS certificate + private key are the one exception to "never written
-# to disk": nginx needs them as files, not env vars. Their filenames come
-# from SSL_CERT_FILE/SSL_KEY_FILE in deploy/env/<environment>.env; the files
-# themselves are read from .secrets/certs/<environment>/ on THIS machine and
-# scp'd (mode 600) to .secrets/certs/ under the remote deploy path, which
-# docker-compose.yml mounts into the nginx container.
+# This stack no longer terminates TLS and no longer binds :80/:443 — preprod
+# and prod now share one host. The shared edge proxy owns those ports and the
+# certificates; deploy it with deploy/deploy-edge.sh. This script creates the
+# apartment103-<environment>-edge network that joins the two, so the three
+# Compose projects can be deployed in any order, and needs no edge reload
+# afterwards: the edge re-resolves this stack's nginx per request (see
+# docs/single-host-deployment-proposal.md).
 #
 # `docker`/`docker compose` on the remote host require sudo, and that sudo
 # requires a password (no NOPASSWD entry) — so it can't just be prefixed onto
@@ -100,8 +101,8 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 ENV_FILE="$SCRIPT_DIR/env/$ENVIRONMENT.env"
 SECRETS_DIR="$REPO_ROOT/.secrets"
 SECRETS_FILE="$SECRETS_DIR/$ENVIRONMENT.env"
-CERTS_DIR="$SECRETS_DIR/certs/$ENVIRONMENT"
 PROJECT_NAME="apartment103-$ENVIRONMENT"
+EDGE_NETWORK="apartment103-$ENVIRONMENT-edge"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "Missing $ENV_FILE." >&2
@@ -112,19 +113,6 @@ fi
 if [[ ! -f "$SECRETS_FILE" ]]; then
   echo "Missing $SECRETS_FILE." >&2
   echo "Copy .secrets/$ENVIRONMENT.env.example to .secrets/$ENVIRONMENT.env (chmod 600) and fill in real values first." >&2
-  exit 1
-fi
-
-SSL_CERT_FILE="$(grep -E '^SSL_CERT_FILE=' "$ENV_FILE" | head -1 | cut -d= -f2-)"
-SSL_KEY_FILE="$(grep -E '^SSL_KEY_FILE=' "$ENV_FILE" | head -1 | cut -d= -f2-)"
-if [[ -z "$SSL_CERT_FILE" || -z "$SSL_KEY_FILE" ]]; then
-  echo "SSL_CERT_FILE and SSL_KEY_FILE must be set in $ENV_FILE." >&2
-  exit 1
-fi
-
-if [[ ! -f "$CERTS_DIR/$SSL_CERT_FILE" || ! -f "$CERTS_DIR/$SSL_KEY_FILE" ]]; then
-  echo "Missing $CERTS_DIR/$SSL_CERT_FILE or $CERTS_DIR/$SSL_KEY_FILE." >&2
-  echo "Place the TLS certificate chain and private key for $ENVIRONMENT there first (a single cert covering both FRONTEND_DOMAIN and API_DOMAIN as SAN entries)." >&2
   exit 1
 fi
 
@@ -167,6 +155,7 @@ rsync -az --delete \
   --exclude '.ruff_cache' \
   --exclude '*.egg-info' \
   --exclude 'deploy/env/*.env' \
+  --exclude 'deploy/edge/env/*.env' \
   "$REPO_ROOT/" "$SSH_TARGET:$REMOTE_PATH/"
 log "==> Repo synced"
 
@@ -174,18 +163,19 @@ log "==> Copying $ENVIRONMENT env file (non-secret config only)"
 ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "mkdir -p '$REMOTE_PATH/deploy/env'"
 scp "${SCP_OPTS[@]}" "$ENV_FILE" "$SSH_TARGET:$REMOTE_PATH/deploy/env/$ENVIRONMENT.env"
 
-log "==> Copying $ENVIRONMENT TLS certificate + key"
-REMOTE_CERTS_DIR="$REMOTE_PATH/.secrets/certs"
-ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "mkdir -p '$REMOTE_CERTS_DIR' && chmod 700 '$REMOTE_PATH/.secrets' '$REMOTE_CERTS_DIR'"
-scp "${SCP_OPTS[@]}" "$CERTS_DIR/$SSL_CERT_FILE" "$CERTS_DIR/$SSL_KEY_FILE" "$SSH_TARGET:$REMOTE_CERTS_DIR/"
-ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "chmod 600 '$REMOTE_CERTS_DIR/$SSL_CERT_FILE' '$REMOTE_CERTS_DIR/$SSL_KEY_FILE'"
-
 log "==> Building images and starting containers on remote host (secrets exported into the remote shell only, never written to disk)"
 log "    this builds images, runs pending DB migrations, then starts the stack — a cold build (image pulls, npm/uv installs) can take several minutes; output streams below as it happens"
 {
   printf '%s\n' "$SUDO_PASSWORD"
   echo "set -euo pipefail"
   echo "cd '$REMOTE_PATH/deploy'"
+  # The network that carries traffic from the shared edge proxy to this
+  # stack's nginx. It is declared `external:` in docker-compose.yml and
+  # created here rather than by any of the three Compose projects, so that
+  # `docker compose down` on this environment can never delete a network the
+  # edge is still attached to, and so the edge, preprod and prod can be
+  # deployed in any order. Idempotent: a no-op once it exists.
+  echo "docker network inspect '$EDGE_NETWORK' >/dev/null 2>&1 || docker network create '$EDGE_NETWORK'"
   while IFS='=' read -r key value; do
     [[ -z "$key" || "$key" == \#* ]] && continue
     printf 'export %s=%q\n' "$key" "$value"
@@ -235,6 +225,11 @@ log "    this builds images, runs pending DB migrations, then starts the stack �
   echo "sleep 2"
   echo "echo '--> nginx config as rendered inside the freshly (re)started container:'"
   echo "$COMPOSE exec -T nginx nginx -T < /dev/null 2>&1 | grep -B1 -A2 'location ~'"
+  # Two environments' image histories now accumulate on one disk; the builds
+  # above leave the previous frontend/backend images dangling. Untagged only,
+  # so the other environment's tagged images are never touched.
+  echo "echo '--> pruning dangling images'"
+  echo "docker image prune -f"
 } | ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "sudo -S -p '' bash -s"
 log "==> Remote build/migrate/start finished"
 

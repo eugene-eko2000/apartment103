@@ -1,0 +1,47 @@
+# The shared edge proxy: the only thing on this host that binds :80 and :443.
+# It terminates TLS for all four hostnames and decides one thing — which
+# ENVIRONMENT a request belongs to — then hands the request, Host header
+# intact, to that environment's own nginx, which does the frontend/API split.
+#
+# Deployed as its own Compose project (apartment103-edge) so that either
+# environment can be redeployed without restarting the other's ingress.
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    restart: always
+    environment:
+      PROD_FRONTEND_DOMAIN: ${PROD_FRONTEND_DOMAIN:?must be set in env/edge.env}
+      PROD_API_DOMAIN: ${PROD_API_DOMAIN:?must be set in env/edge.env}
+      PREPROD_FRONTEND_DOMAIN: ${PREPROD_FRONTEND_DOMAIN:?must be set in env/edge.env}
+      PREPROD_API_DOMAIN: ${PREPROD_API_DOMAIN:?must be set in env/edge.env}
+      PROD_SSL_CERT_FILE: ${PROD_SSL_CERT_FILE:?must be set in env/edge.env}
+      PROD_SSL_KEY_FILE: ${PROD_SSL_KEY_FILE:?must be set in env/edge.env}
+      PREPROD_SSL_CERT_FILE: ${PREPROD_SSL_CERT_FILE:?must be set in env/edge.env}
+      PREPROD_SSL_KEY_FILE: ${PREPROD_SSL_KEY_FILE:?must be set in env/edge.env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./templates:/etc/nginx/templates:ro
+      - ./snippets:/etc/nginx/snippets:ro
+      - ../../.secrets/certs:/etc/nginx/certs:ro
+    networks:
+      preprod: {}
+      prod: {}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Created out-of-band by deploy.sh (docker network create), NOT by either
+# project, so the edge and the environments can be brought up in any order and
+# `docker compose down` on one environment cannot delete a network the edge is
+# still attached to.
+networks:
+  preprod:
+    external: true
+    name: apartment103-preprod-edge
+  prod:
+    external: true
+    name: apartment103-prod-edge

@@ -1,0 +1,90 @@
+# Rendered by nginx's docker-entrypoint (envsubst) at container start from the
+# environment set in deploy/edge/docker-compose.yml.
+#
+# This file knows about environments, not about the application. It never
+# mentions frontend, backend or /images — the per-environment nginx owns all
+# of that (deploy/nginx/templates/default.conf.template).
+
+# Docker's embedded DNS. The proxy_pass targets below go through a variable on
+# purpose so that names are re-resolved per request instead of being cached for
+# the process lifetime — see "Two traps" in
+# docs/single-host-deployment-proposal.md. Without it, redeploying one
+# environment silently 502s until the edge is reloaded, and an environment that
+# is down at edge-start time prevents nginx from starting at all, taking the
+# other environment with it.
+resolver 127.0.0.11 valid=10s ipv6=off;
+resolver_timeout 5s;
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+# Both hostnames share one IP, so anything that does not match a known
+# server_name below — raw-IP port scans, stale DNS, Host-header probing —
+# would otherwise fall through to whichever server block happens to be first
+# and get served a real environment. Close the connection instead.
+server {
+    listen 80 default_server;
+    server_name _;
+    return 444;
+}
+
+server {
+    listen 443 ssl default_server;
+    server_name _;
+    # Refuse the TLS handshake outright rather than presenting a certificate
+    # for a name the client did not ask for (nginx >= 1.19.4).
+    ssl_reject_handshake on;
+}
+
+server {
+    listen 80;
+    server_name ${PROD_FRONTEND_DOMAIN} ${PROD_API_DOMAIN}
+                ${PREPROD_FRONTEND_DOMAIN} ${PREPROD_API_DOMAIN};
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${PROD_FRONTEND_DOMAIN} ${PROD_API_DOMAIN};
+
+    ssl_certificate     /etc/nginx/certs/${PROD_SSL_CERT_FILE};
+    ssl_certificate_key /etc/nginx/certs/${PROD_SSL_KEY_FILE};
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    # Matches _MAX_UPLOAD_BYTES in app/api/routes/images.py. Both this proxy
+    # and the per-environment nginx buffer the body, so both need the cap
+    # raised or the upload is rejected here with a 413 before it ever reaches
+    # the environment.
+    client_max_body_size 20m;
+
+    location / {
+        include /etc/nginx/snippets/proxy.conf;
+        set $upstream prod-edge;
+        proxy_pass http://$upstream$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${PREPROD_FRONTEND_DOMAIN} ${PREPROD_API_DOMAIN};
+
+    ssl_certificate     /etc/nginx/certs/${PREPROD_SSL_CERT_FILE};
+    ssl_certificate_key /etc/nginx/certs/${PREPROD_SSL_KEY_FILE};
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    client_max_body_size 20m;
+
+    # preprod is a public hostname on the same IP as prod; keep it out of
+    # search results so it cannot compete with or leak ahead of the real site.
+    add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
+
+    location / {
+        include /etc/nginx/snippets/proxy.conf;
+        set $upstream preprod-edge;
+        proxy_pass http://$upstream$request_uri;
+    }
+}

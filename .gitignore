@@ -37,8 +37,10 @@ yarn-error.log*
 !.env.example
 !.env.local.example
 
-# Deploy config (non-secret; see deploy/env/*.env.example for the templates)
+# Deploy config (non-secret; see deploy/env/*.env.example and
+# deploy/edge/env/edge.env.example for the templates)
 deploy/env/*.env
+deploy/edge/env/*.env
 
 # Real deploy secrets — see .secrets/*.env.example for the templates. Never
 # rsynced/scp'd to a deployment host; streamed over SSH at deploy time.

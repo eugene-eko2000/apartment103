@@ -1,16 +1,29 @@
-# Pre-prod overlay: looser restart policy, unbounded logs (small volume,
-# easier debugging). Usage:
+# Pre-prod overlay: looser restart policy. Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.preprod.yml \
 #     --env-file env/preprod.env -p apartment103-preprod up -d --build
+#
+# Logs are capped here exactly as in prod. Unbounded json-file logs were fine
+# when preprod had its own machine; it now shares a host and a disk with prod,
+# where a chatty preprod would fill the disk out from under the live site.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   mongo:
     restart: unless-stopped
+    logging: *default-logging
 
   backend:
     restart: unless-stopped
+    logging: *default-logging
 
   frontend:
     restart: unless-stopped
+    logging: *default-logging
 
   nginx:
     restart: unless-stopped
+    logging: *default-logging

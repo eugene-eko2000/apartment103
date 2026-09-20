@@ -1,23 +1,30 @@
-# Base stack: nginx (TLS termination) + frontend + backend + MongoDB on a
-# single host. Environment specifics (restart/logging policy) live in
-# docker-compose.preprod.yml / docker-compose.prod.yml. Non-secret config
-# comes from deploy/env/<env>.env; real secrets come from .secrets/<env>.env,
-# exported into the remote shell's environment at `up` time rather than
-# written to disk on the deployment host — see deploy/deploy.sh. Because of
-# that, secret-only vars below must NOT use a
+# Base stack: nginx (frontend/API split) + frontend + backend + MongoDB, one
+# Compose project per environment. Environment specifics (restart/logging
+# policy) live in docker-compose.preprod.yml / docker-compose.prod.yml.
+# Non-secret config comes from deploy/env/<env>.env; real secrets come from
+# .secrets/<env>.env, exported into the remote shell's environment at `up`
+# time rather than written to disk on the deployment host — see
+# deploy/deploy.sh. Because of that, secret-only vars below must NOT use a
 # hard-required (${VAR:?...}) default: that would make every `docker compose`
 # subcommand (ps, logs, exec, ...) demand the secrets file too, not just `up`.
 #
-# The TLS certificate + private key are files, not env vars, so they can't go
-# through that same env-var channel — nginx needs them on disk. deploy.sh
-# copies them from .secrets/certs/<environment>/ on the deploying machine to
-# .secrets/certs/ under the remote deploy path (mode 600), which is what the
-# nginx service below mounts.
+# This stack no longer terminates TLS and no longer binds :80/:443 — preprod
+# and prod share one host, and only one process can own those ports. The
+# shared edge proxy (deploy/edge/, Compose project apartment103-edge) owns
+# them, terminates TLS for all four hostnames and forwards to this stack's
+# nginx over the apartment103-<env>-edge network. See
+# docs/single-host-deployment-proposal.md.
 #
 # Values here mirror backend/.env.example and frontend/.env.local.example.
 services:
   mongo:
     image: mongo:7
+    # Two mongods share this host. mongod defaults its WiredTiger cache to
+    # max(0.5 x (RAM - 1GB), 256MB) with no idea another instance is doing
+    # the same, so both would try to claim the whole machine — cap each one
+    # explicitly instead.
+    command: ["mongod", "--wiredTigerCacheSizeGB", "${MONGO_CACHE_GB:-0.5}"]
+    mem_limit: ${MONGO_MEM_LIMIT:-1g}
     volumes:
       - mongo_data:/data/db
     environment:
@@ -62,8 +69,6 @@ services:
       GUEST_DATA_RETENTION_SWEEP_HOUR: ${GUEST_DATA_RETENTION_SWEEP_HOUR:-4}
       GUEST_DATA_RETENTION_SWEEP_MINUTE: ${GUEST_DATA_RETENTION_SWEEP_MINUTE:-30}
       IMAGE_STORAGE_PATH: /data/images
-    ports:
-      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
     volumes:
       - image_data:/data/images
 
@@ -78,8 +83,6 @@ services:
         NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: ${NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID:-}
     depends_on:
       - backend
-    ports:
-      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
 
   nginx:
     image: nginx:1.27-alpine
@@ -89,15 +92,31 @@ services:
     environment:
       FRONTEND_DOMAIN: ${FRONTEND_DOMAIN:?FRONTEND_DOMAIN must be set in the deploy env file}
       API_DOMAIN: ${API_DOMAIN:?API_DOMAIN must be set in the deploy env file}
-      SSL_CERT_FILE: ${SSL_CERT_FILE:?SSL_CERT_FILE must be set in the deploy env file}
-      SSL_KEY_FILE: ${SSL_KEY_FILE:?SSL_KEY_FILE must be set in the deploy env file}
+    # Loopback only, and a different port per environment. This is the
+    # debugging handle: curl it and you have exercised the whole stack without
+    # involving the edge proxy or DNS.
     ports:
-      - "${HTTP_PORT:-80}:80"
-      - "${HTTPS_PORT:-443}:443"
+      - "127.0.0.1:${DEBUG_PORT:?DEBUG_PORT must be set in the deploy env file}:80"
     volumes:
       - ./nginx/templates:/etc/nginx/templates:ro
-      - ../.secrets/certs:/etc/nginx/certs:ro
       - image_data:/data/images:ro
+    networks:
+      default: {}
+      edge:
+        aliases:
+          # Unique per environment: the edge proxy is attached to BOTH
+          # environments' networks, so the bare service name "nginx" resolves
+          # ambiguously from there.
+          - ${ENV_SLUG:?ENV_SLUG must be set in the deploy env file}-edge
+
+networks:
+  default: {}
+  # Created out-of-band by deploy.sh (docker network create), not by this
+  # project, so `docker compose down` here cannot delete a network the edge
+  # proxy is still attached to, and the three projects can start in any order.
+  edge:
+    external: true
+    name: apartment103-${ENV_SLUG}-edge
 
 volumes:
   mongo_data:
