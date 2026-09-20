@@ -931,6 +931,14 @@ export function imageUrl(key: string): string {
   return `${API_URL}/images/${key}`;
 }
 
+// Same bytes as imageUrl(), but served with a Content-Disposition attachment
+// so the browser saves the file instead of rendering it. That header — not an
+// `<a download>` attribute — is what makes this work: the API lives on its own
+// domain in production, and `download` is ignored cross-origin.
+export function imageDownloadUrl(key: string): string {
+  return `${API_URL}/images/${key}/download`;
+}
+
 export function listImages(category?: ImageCategory): Promise<ImageAsset[]> {
   return request(`/images${category ? `?category=${category}` : ""}`);
 }

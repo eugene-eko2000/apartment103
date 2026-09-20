@@ -3,6 +3,8 @@ import io
 import pytest
 from PIL import Image as PILImage
 
+from app.core.config import settings
+
 pytestmark = pytest.mark.anyio
 
 
@@ -47,6 +49,45 @@ class TestUploadImage:
         )
         assert response.status_code == 201
         assert response.json()["sort_order"] == image.sort_order + 1
+
+
+class TestDownloadImage:
+    async def test_serves_the_file_as_an_attachment(self, client, category, admin_headers, tmp_path, monkeypatch):
+        monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
+        upload = await client.post(
+            "/images",
+            data={"category": category.slug, "alt": ""},
+            files=_upload_files(),
+            headers=admin_headers,
+        )
+        key = upload.json()["key"]
+
+        response = await client.get(f"/images/{key}/download")
+
+        assert response.status_code == 200
+        assert response.headers["content-disposition"] == f'attachment; filename="{key}"'
+        assert response.content == (tmp_path / key).read_bytes()
+
+    async def test_unknown_key_is_404(self, client):
+        response = await client.get("/images/nope.png/download")
+        assert response.status_code == 404
+
+    # The inline route must keep rendering rather than downloading — the
+    # gallery renders <img src> against it.
+    async def test_inline_route_is_not_an_attachment(self, client, category, admin_headers, tmp_path, monkeypatch):
+        monkeypatch.setattr(settings, "image_storage_path", str(tmp_path))
+        upload = await client.post(
+            "/images",
+            data={"category": category.slug, "alt": ""},
+            files=_upload_files(),
+            headers=admin_headers,
+        )
+        key = upload.json()["key"]
+
+        response = await client.get(f"/images/{key}")
+
+        assert response.status_code == 200
+        assert "attachment" not in response.headers.get("content-disposition", "")
 
 
 class TestReorderImages:

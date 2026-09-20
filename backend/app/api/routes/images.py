@@ -76,22 +76,52 @@ async def list_images_by_label(label: str) -> list[Image]:
     return await Image.find(Image.labels == normalized).sort(+Image.sort_order).to_list()
 
 
+def _stored_file(key: str) -> Path:
+    path = _storage_dir() / key
+    # `key` is flat by construction (see upload_image), so a key carrying any
+    # "/" or ".." can only be a traversal attempt — comparing the resolved
+    # name back to the key rejects it without touching the filesystem layout.
+    if path.name != key or not path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
+    return path
+
+
+# Two segments, so it never collides with GET "/{key}" below. It is public for
+# the same reason that route is: the bytes it returns are already served
+# unauthenticated at "/images/<key>" — the only thing added here is the
+# Content-Disposition that makes a browser save the file instead of showing
+# it. (Kept out of reach of a plain navigation's inability to send the admin
+# bearer token, which is what the admin panel's bulk download relies on.)
+@public_router.get("/{key}/download")
+async def download_image_file(key: str) -> FileResponse:
+    return FileResponse(
+        _stored_file(key),
+        # The stored key is already a unique, extension-carrying filename, so
+        # a bulk download of many photos never collides in the browser's
+        # download folder.
+        filename=key,
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
+
+
 @public_router.get("/{key}")
 async def get_image_file(key: str) -> FileResponse:
     # In production nginx serves /images/<key> directly from the shared
     # volume (see deploy/nginx/templates/default.conf.template) and this
     # route is never reached. It exists so the same URL works in local dev,
     # where the frontend talks to uvicorn directly with no nginx in front.
+    # The "/download" variant above is two segments, so nginx's
+    # single-segment image regex does not match it and it always reaches
+    # FastAPI, in dev and in production alike.
     #
     # This single-segment pattern matches anything, including "/images/labels"
     # — that's exactly why list_images_by_label above requires a label
     # segment (`/images/labels/{label}`, never a bare `/images/labels`): a
     # bare route would be a coin flip depending on router registration order
     # in main.py. Keep it that way if you add more label routes.
-    path = _storage_dir() / key
-    if path.name != key or not path.is_file():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
-    return FileResponse(path, headers={"Cache-Control": "public, max-age=31536000, immutable"})
+    return FileResponse(
+        _stored_file(key), headers={"Cache-Control": "public, max-age=31536000, immutable"}
+    )
 
 
 @router.post("", response_model=Image, status_code=status.HTTP_201_CREATED)

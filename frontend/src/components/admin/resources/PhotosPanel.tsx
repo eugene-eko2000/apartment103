@@ -16,6 +16,7 @@ import {
   ApiError,
   addImageLabel,
   deleteImage,
+  imageDownloadUrl,
   imageUrl,
   listCategories,
   listImages,
@@ -73,6 +74,7 @@ export default function PhotosPanel() {
   const [showBulkLabels, setShowBulkLabels] = useState(false);
   const [bulkLabelInput, setBulkLabelInput] = useState("");
   const [bulkLabelError, setBulkLabelError] = useState<string | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<{ done: number; total: number } | null>(null);
 
   const knownLabels = useMemo(() => Array.from(new Set(images.flatMap((i) => i.labels))).sort(), [images]);
 
@@ -251,6 +253,34 @@ export default function PhotosPanel() {
       window.alert(err instanceof ApiError ? err.message : String(err));
     } finally {
       setBulkPending(false);
+    }
+  };
+
+  // One file per photo, rather than a zip: the browser saves each response
+  // itself, so nothing has to be buffered in memory here or archived on the
+  // backend. The clicks are spaced out because a burst of same-tick
+  // navigations gets collapsed to a single download by Chrome and Safari.
+  const handleBulkDownload = async () => {
+    if (selectedImages.length === 0 || downloadProgress) return;
+    setDownloadProgress({ done: 0, total: selectedImages.length });
+    try {
+      for (const [index, image] of selectedImages.entries()) {
+        const anchor = document.createElement("a");
+        anchor.href = imageDownloadUrl(image.key);
+        // Ignored cross-origin (see imageDownloadUrl) — the endpoint's
+        // Content-Disposition names the file. Kept for the same-origin case.
+        anchor.download = image.key;
+        anchor.rel = "noopener";
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        setDownloadProgress({ done: index + 1, total: selectedImages.length });
+        if (index < selectedImages.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 300));
+        }
+      }
+    } finally {
+      setDownloadProgress(null);
     }
   };
 
@@ -440,15 +470,25 @@ export default function PhotosPanel() {
           <button
             type="button"
             onClick={() => setShowBulkLabels(true)}
-            disabled={bulkPending}
+            disabled={bulkPending || downloadProgress !== null}
             className="text-sm font-semibold text-indigo-700 dark:text-indigo-300 hover:underline cursor-pointer disabled:opacity-50"
           >
             Manage labels
           </button>
           <button
             type="button"
+            onClick={handleBulkDownload}
+            disabled={bulkPending || downloadProgress !== null}
+            className="text-sm font-semibold text-indigo-700 dark:text-indigo-300 hover:underline cursor-pointer disabled:opacity-50"
+          >
+            {downloadProgress
+              ? `Downloading ${downloadProgress.done}/${downloadProgress.total}…`
+              : "Download selected"}
+          </button>
+          <button
+            type="button"
             onClick={handleBulkDelete}
-            disabled={bulkPending}
+            disabled={bulkPending || downloadProgress !== null}
             className="text-sm font-semibold text-red-600 dark:text-red-400 hover:underline cursor-pointer disabled:opacity-50"
           >
             Delete selected
