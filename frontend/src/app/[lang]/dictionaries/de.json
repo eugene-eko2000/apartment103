@@ -7,7 +7,8 @@
     "menu": "Menü",
     "gallery": "Galerie",
     "amenities": "Ausstattung",
-    "location": "Lage"
+    "location": "Lage",
+    "contact": "Kontakt"
   },
   "hero": {
     "location": "Unterterzen, Schweiz",
@@ -632,5 +633,13 @@
         "desc": "Nächster internationaler Flughafen"
       }
     }
+  },
+  "contact": {
+    "pageTitle": "Kontakt",
+    "subtitle": "Wir freuen uns auf Ihre Nachricht",
+    "addressLabel": "Adresse",
+    "emailLabel": "E-Mail",
+    "country": "Schweiz",
+    "backHome": "Zurück zur Startseite"
   }
 }

@@ -7,7 +7,8 @@
     "menu": "Menu",
     "gallery": "Gallery",
     "amenities": "Amenities",
-    "location": "Location"
+    "location": "Location",
+    "contact": "Contact"
   },
   "hero": {
     "location": "Unterterzen, Switzerland",
@@ -632,5 +633,13 @@
         "desc": "Nearest international airport"
       }
     }
+  },
+  "contact": {
+    "pageTitle": "Contact",
+    "subtitle": "We look forward to hearing from you",
+    "addressLabel": "Address",
+    "emailLabel": "Email",
+    "country": "Switzerland",
+    "backHome": "Back to home"
   }
 }

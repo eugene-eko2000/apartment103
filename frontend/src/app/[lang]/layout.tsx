@@ -67,7 +67,7 @@ export default async function RootLayout({
           <CookieConsentProvider>
             <CurrencyProvider>
               <GuestPreferenceSync />
-              {/* Owns the gallery/amenities/location views and renders the one
+              {/* Owns the gallery/amenities/location/contact views and renders the one
                   that is open — above the page, but inside the same providers,
                   since each view carries the site header and footer. */}
               <OverlayProvider lang={lang} dict={dict}>{children}</OverlayProvider>

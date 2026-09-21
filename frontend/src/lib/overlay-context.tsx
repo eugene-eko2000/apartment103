@@ -3,15 +3,16 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import AmenitiesOverlay from "@/components/AmenitiesOverlay";
 import LocationOverlay from "@/components/LocationOverlay";
+import ContactOverlay from "@/components/ContactOverlay";
 import PhotoGallery from "@/components/PhotoGallery";
 import type { Dictionary } from "@/app/[lang]/dictionaries";
 import type { Locale } from "@/lib/i18n-config";
 
 /** The full-screen views that sit above the page. Only ever one at a time:
- *  the amenities and location views re-render the site header, so a nav item
+ *  the amenities, location and contact views re-render the site header, so a nav item
  *  owning its own open flag would stack a second view on top of the first
  *  instead of replacing it — and neither would then be reachable to close. */
-export type OverlayView = "gallery" | "amenities" | "location";
+export type OverlayView = "gallery" | "amenities" | "location" | "contact";
 
 const OverlayContext = createContext<{
   active: OverlayView | null;
@@ -70,6 +71,7 @@ export function OverlayProvider({
       {active === "gallery" && <PhotoGallery dict={dict.gallery} onClose={value.close} />}
       {active === "amenities" && <AmenitiesOverlay lang={lang} dict={dict} onClose={value.close} />}
       {active === "location" && <LocationOverlay lang={lang} dict={dict} onClose={value.close} />}
+      {active === "contact" && <ContactOverlay lang={lang} dict={dict} onClose={value.close} />}
     </OverlayContext.Provider>
   );
 }

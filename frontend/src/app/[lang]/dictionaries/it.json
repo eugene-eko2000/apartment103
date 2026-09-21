@@ -7,7 +7,8 @@
     "menu": "Menu",
     "gallery": "Galleria",
     "amenities": "Servizi",
-    "location": "Posizione"
+    "location": "Posizione",
+    "contact": "Contatti"
   },
   "hero": {
     "location": "Unterterzen, Svizzera",
@@ -632,5 +633,13 @@
         "desc": "L'aeroporto internazionale più vicino"
       }
     }
+  },
+  "contact": {
+    "pageTitle": "Contatti",
+    "subtitle": "Saremo lieti di sentirti",
+    "addressLabel": "Indirizzo",
+    "emailLabel": "E-mail",
+    "country": "Svizzera",
+    "backHome": "Torna alla home"
   }
 }

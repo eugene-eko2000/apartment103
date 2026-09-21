@@ -1,6 +1,6 @@
-/* The header nav links' look, shared so that the three view-opening items
- * (gallery, amenities, location) cannot drift apart — they are rendered by
- * three separate components but read as one row. */
+/* The header nav links' look, shared so that the view-opening items
+ * (gallery, amenities, location, contact) cannot drift apart — they are
+ * rendered by separate components but read as one row. */
 export const NAV_LINK_CLASS =
   "text-left hover:text-teal-700 dark:hover:text-teal-400 transition-colors cursor-pointer";
 

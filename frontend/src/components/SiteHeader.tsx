@@ -2,6 +2,7 @@ import Link from "next/link";
 import GalleryButton from "@/components/GalleryButton";
 import AmenitiesButton from "@/components/AmenitiesButton";
 import LocationButton from "@/components/LocationButton";
+import ContactButton from "@/components/ContactButton";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import CurrencySwitcher from "@/components/CurrencySwitcher";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
@@ -39,6 +40,7 @@ export default function SiteHeader({
           <GalleryButton label={dict.nav.gallery} />
           <AmenitiesButton label={dict.nav.amenities} />
           <LocationButton label={dict.nav.location} />
+          <ContactButton label={dict.nav.contact} />
           <div className="flex items-center gap-4">
             <LanguageSwitcher currentLang={lang} />
             <CurrencySwitcher />
@@ -53,6 +55,7 @@ export default function SiteHeader({
           <GalleryButton label={dict.nav.gallery} className="py-3" />
           <AmenitiesButton label={dict.nav.amenities} className="py-3" />
           <LocationButton label={dict.nav.location} className="py-3" />
+          <ContactButton label={dict.nav.contact} className="py-3" />
           <UserMenu dict={dict.userMenu} lang={lang} inline />
           <div className="flex items-center gap-5 pt-3 pb-1">
             <LanguageSwitcher currentLang={lang} expandOnClick />
