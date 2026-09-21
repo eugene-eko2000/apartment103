@@ -121,11 +121,13 @@ export function FileField({
   accept,
   onChange,
   required = true,
+  multiple = false,
 }: {
   label: string;
   accept?: string;
-  onChange: (file: File | null) => void;
+  onChange: (files: File[]) => void;
   required?: boolean;
+  multiple?: boolean;
 }) {
   const id = useId();
   return (
@@ -138,7 +140,8 @@ export function FileField({
         type="file"
         accept={accept}
         required={required}
-        onChange={(e) => onChange(e.target.files?.[0] ?? null)}
+        multiple={multiple}
+        onChange={(e) => onChange(Array.from(e.target.files ?? []))}
         className="w-full text-sm text-slate-600 dark:text-slate-300 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 dark:file:bg-indigo-900/40 file:text-indigo-700 dark:file:text-indigo-300 hover:file:bg-indigo-100 dark:hover:file:bg-indigo-900/60 cursor-pointer"
       />
     </div>

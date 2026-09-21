@@ -55,7 +55,8 @@ export default function PhotosPanel() {
   const [activeLabels, setActiveLabels] = useState<Set<string>>(new Set());
 
   const [showUpload, setShowUpload] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
   const [uploadCategory, setUploadCategory] = useState<string>("");
   const [alt, setAlt] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
@@ -150,7 +151,8 @@ export default function PhotosPanel() {
   };
 
   const openUpload = () => {
-    setFile(null);
+    setFiles([]);
+    setUploadProgress(null);
     setUploadCategory(categories[0]?.slug ?? "");
     setAlt("");
     setFormError(null);
@@ -159,19 +161,36 @@ export default function PhotosPanel() {
 
   const handleUpload = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!file || !uploadCategory) return;
+    if (files.length === 0 || !uploadCategory) return;
     setPending(true);
     setFormError(null);
+    // Sequential rather than Promise.all: the backend appends each photo at
+    // the end of its category, so this keeps the order they were picked in.
+    const failed: { file: File; message: string }[] = [];
     try {
-      await uploadImage(token, file, { category: uploadCategory, alt });
-      setShowUpload(false);
-      load();
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 401) return logout();
-      setFormError(err instanceof ApiError ? err.message : String(err));
+      for (const [i, f] of files.entries()) {
+        setUploadProgress({ done: i, total: files.length });
+        try {
+          await uploadImage(token, f, { category: uploadCategory, alt });
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 401) return logout();
+          failed.push({ file: f, message: err instanceof ApiError ? err.message : String(err) });
+        }
+      }
     } finally {
       setPending(false);
+      setUploadProgress(null);
     }
+    load();
+    if (failed.length === 0) {
+      setShowUpload(false);
+      return;
+    }
+    // Keep only the failures so submitting again retries just those.
+    setFiles(failed.map((f) => f.file));
+    setFormError(
+      `${failed.length} of ${files.length} failed:\n` + failed.map((f) => `${f.file.name}: ${f.message}`).join("\n")
+    );
   };
 
   const handleDelete = async (image: ImageAsset) => {
@@ -407,7 +426,7 @@ export default function PhotosPanel() {
             disabled={categories.length === 0}
             className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg cursor-pointer transition-colors disabled:opacity-50"
           >
-            + Add photo
+            + Add photos
           </button>
         </div>
       </div>
@@ -542,24 +561,55 @@ export default function PhotosPanel() {
 
       {showUpload && (
         <Modal
-          title="Add photo"
+          title="Add photos"
           onClose={() => setShowUpload(false)}
-          footer={<SubmitButton form="upload-photo-form" pending={pending} label="Upload" />}
+          footer={
+            <SubmitButton
+              form="upload-photo-form"
+              pending={pending}
+              label={files.length > 1 ? `Upload ${files.length} photos` : "Upload"}
+            />
+          }
         >
           <form id="upload-photo-form" onSubmit={handleUpload} className="space-y-4">
             <FileField
-              label="File"
+              label="Files"
               accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
-              onChange={setFile}
+              multiple
+              required={files.length === 0}
+              onChange={(picked) => {
+                setFiles(picked);
+                setFormError(null);
+              }}
             />
+            {files.length > 0 && (
+              <ul className="max-h-32 overflow-y-auto text-xs text-slate-500 dark:text-slate-400 space-y-0.5">
+                {files.map((f, i) => (
+                  <li key={`${i}-${f.name}`} className="truncate">
+                    {f.name}
+                  </li>
+                ))}
+              </ul>
+            )}
             <SelectField
               label="Category"
               value={uploadCategory}
               options={categories.map((c) => ({ value: c.slug, label: c.name }))}
               onChange={setUploadCategory}
             />
-            <TextField label="Alt text" value={alt} required={false} onChange={setAlt} placeholder="Describe the photo" />
-            {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
+            <TextField
+              label={files.length > 1 ? "Alt text (applied to every photo)" : "Alt text"}
+              value={alt}
+              required={false}
+              onChange={setAlt}
+              placeholder="Describe the photo"
+            />
+            {uploadProgress && (
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Uploading {uploadProgress.done + 1} of {uploadProgress.total}…
+              </p>
+            )}
+            {formError && <p className="text-sm text-red-600 dark:text-red-400 whitespace-pre-line">{formError}</p>}
           </form>
         </Modal>
       )}
