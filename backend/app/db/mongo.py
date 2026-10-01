@@ -10,6 +10,8 @@ from app.models.closure import Closure
 from app.models.external_calendar import ExternalCalendar
 from app.models.guest import Guest
 from app.models.image import Image
+from app.models.message_delivery import MessageDelivery
+from app.models.message_template import MessageTemplate
 from app.models.otp_challenge import OtpChallenge
 from app.models.payment_event import PaymentEvent
 from app.models.plan import Plan
@@ -38,5 +40,7 @@ async def init_mongo() -> None:
             Category,
             ExternalCalendar,
             Promotion,
+            MessageTemplate,
+            MessageDelivery,
         ],
     )

@@ -1,23 +1,13 @@
-import re
-import secrets
-from pathlib import Path
-
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from pymongo import UpdateOne
 
 from app.api.deps import require_admin
-from app.core.config import settings
 from app.models.category import Category
-from app.models.image import Image
-from app.schemas.image import (
-    ALLOWED_CONTENT_TYPES,
-    OUTPUT_CONTENT_TYPES,
-    LabelInput,
-    ReorderRequest,
-)
-from app.services.image_processing import compress_image
+from app.models.image import MESSAGE_IMAGE_CATEGORY, Image
+from app.schemas.image import LabelInput, ReorderRequest
+from app.services.image_storage import delete_stored, save_upload, stored_path
 
 router = APIRouter(prefix="/images", tags=["images"], dependencies=[Depends(require_admin)])
 
@@ -26,43 +16,16 @@ router = APIRouter(prefix="/images", tags=["images"], dependencies=[Depends(requ
 # "/closures/public/...".
 public_router = APIRouter(prefix="/images", tags=["images"])
 
-# Raw upload cap, ahead of compression — generous enough for an
-# uncompressed phone/DSLR photo. The file actually written to disk is the
-# recompressed, downsized output from compress_image(), which lands far
-# below this.
-_MAX_UPLOAD_BYTES = 20 * 1024 * 1024
-_SLUG_RE = re.compile(r"[^a-z0-9]+")
-
-# Fallback for browser/OS combinations that don't set a Content-Type for
-# HEIC/HEIF (most commonly Windows without the HEIF extension pack
-# installed) — the file is still a real HEIC, just mislabeled as generic
-# octet-stream or left blank.
-_EXTENSION_CONTENT_TYPES = {".heic": "image/heic", ".heif": "image/heif"}
-
-
-def _resolve_content_type(file: UploadFile) -> str | None:
-    if file.content_type in ALLOWED_CONTENT_TYPES:
-        return file.content_type
-    return _EXTENSION_CONTENT_TYPES.get(Path(file.filename or "").suffix.lower())
-
-
-def _slugify(filename: str) -> str:
-    stem = Path(filename).stem.lower()
-    slug = _SLUG_RE.sub("-", stem).strip("-")[:40]
-    return slug or "image"
-
-
-def _storage_dir() -> Path:
-    """The image directory. Created once at startup (see
-    app.main.lifespan) rather than here — this is called on every upload,
-    delete and, in local dev, every image read, and mkdir is a blocking
-    syscall."""
-    return Path(settings.image_storage_path)
-
 
 @public_router.get("", response_model=list[Image])
 async def list_images(category: str | None = None) -> list[Image]:
-    query = Image.find(Image.category == category) if category else Image.find_all()
+    # Images attached to guest messages live in the same collection but are
+    # not part of the photo library, so an unfiltered listing leaves them out.
+    query = (
+        Image.find(Image.category == category)
+        if category
+        else Image.find(Image.category != MESSAGE_IMAGE_CATEGORY)
+    )
     return await query.sort(+Image.sort_order).to_list()
 
 
@@ -76,12 +39,9 @@ async def list_images_by_label(label: str) -> list[Image]:
     return await Image.find(Image.labels == normalized).sort(+Image.sort_order).to_list()
 
 
-def _stored_file(key: str) -> Path:
-    path = _storage_dir() / key
-    # `key` is flat by construction (see upload_image), so a key carrying any
-    # "/" or ".." can only be a traversal attempt — comparing the resolved
-    # name back to the key rejects it without touching the filesystem layout.
-    if path.name != key or not path.is_file():
+def _stored_file(key: str):
+    path = stored_path(key)
+    if path is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
     return path
 
@@ -139,44 +99,7 @@ async def upload_image(
     if sort_order is None:
         last = await Image.find(Image.category == category).sort(-Image.sort_order).first_or_none()
         sort_order = (last.sort_order + 1) if last else 0
-    resolved_content_type = _resolve_content_type(file)
-    ext = ALLOWED_CONTENT_TYPES.get(resolved_content_type or "")
-    if ext is None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"content type must be one of {sorted(ALLOWED_CONTENT_TYPES)}",
-        )
-
-    body = await file.read()
-    if not body:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="File is empty")
-    if len(body) > _MAX_UPLOAD_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File exceeds {_MAX_UPLOAD_BYTES // (1024 * 1024)}MB limit",
-        )
-
-    compressed, width, height = compress_image(body, ext)
-
-    # Flat filename (no "/"), so `key` can never escape the storage dir.
-    key = f"{category}-{_slugify(file.filename or '')}-{secrets.token_hex(8)}.{ext}"
-    (_storage_dir() / key).write_bytes(compressed)
-
-    image = Image(
-        key=key,
-        category=category,
-        # The output format (OUTPUT_CONTENT_TYPES[ext]), not the client's
-        # original claim — for HEIC/HEIF input these differ, since
-        # compress_image() always converts them to JPEG.
-        content_type=OUTPUT_CONTENT_TYPES[ext],
-        size_bytes=len(compressed),
-        width=width,
-        height=height,
-        alt=alt,
-        sort_order=sort_order,
-    )
-    await image.insert()
-    return image
+    return await save_upload(file, category=category, alt=alt, sort_order=sort_order)
 
 
 @router.post("/reorder", response_model=list[Image])
@@ -201,8 +124,7 @@ async def delete_image(image_id: PydanticObjectId) -> None:
     image = await Image.get(image_id)
     if image is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
-    (_storage_dir() / image.key).unlink(missing_ok=True)
-    await image.delete()
+    await delete_stored(image)
 
 
 @router.post("/{image_id}/labels", response_model=Image)

@@ -481,6 +481,7 @@ class TestARedactedGuestCannotBeReused:
             json={
                 "guest_id": str(guest.id),
                 "currency": "CHF",
+                "adults": 2,
                 "plan_id": str(plan.id),
                 "date_ranges": [{"begin_date": "2026-10-01", "end_date": "2026-10-05"}],
             },

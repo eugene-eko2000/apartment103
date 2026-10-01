@@ -25,6 +25,7 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import (
     Attachment,
     Content,
+    ContentId,
     Disposition,
     Email,
     FileContent,
@@ -84,6 +85,9 @@ class EmailAttachment:
     filename: str
     content: bytes
     mime_type: str
+    # Set for an inline image: the HTML body shows it with
+    # <img src="cid:{content_id}"> instead of listing it as a download.
+    content_id: str | None = None
 
 
 async def send_text_email(to_address: str, subject: str, text_content: str) -> None:
@@ -134,7 +138,8 @@ async def send_html_email(
                 FileContent(base64.b64encode(attachment.content).decode()),
                 FileName(attachment.filename),
                 FileType(attachment.mime_type),
-                Disposition("attachment"),
+                Disposition("inline" if attachment.content_id else "attachment"),
+                ContentId(attachment.content_id) if attachment.content_id else None,
             )
         )
 

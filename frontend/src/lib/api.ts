@@ -305,6 +305,9 @@ export interface Booking {
   booking_date: string;
   currency: Currency;
   date_ranges: BookingDateRange[];
+  // Null on a booking made before guest counts were recorded.
+  adults: number | null;
+  children_ages: number[];
   cancellation_policy: { name: string; rules: CancellationRule[] };
   charge_schedule: BookingChargeScheduleEntry[];
   status: BookingStatus;
@@ -497,6 +500,62 @@ export interface BookingInput {
   cancellation_policy_id?: string;
   currency: Currency;
   date_ranges: BookingDateRangeInput[];
+  adults: number;
+  children_ages: number[];
+}
+
+export type MessageAnchor = "booking_date" | "checkin" | "checkout";
+export type MessageDirection = "before" | "after";
+
+export interface MessageTemplateVersion {
+  language: Language;
+  subject: string;
+  body_markdown: string;
+}
+
+// An automated guest message (backend/app/models/message_template.py):
+// sent once per booking, `offset_days` before/after the booking's `anchor`
+// date, in the guest's language or English.
+export interface MessageTemplate {
+  _id: string;
+  name: string;
+  anchor: MessageAnchor;
+  direction: MessageDirection;
+  offset_days: number;
+  versions: MessageTemplateVersion[];
+  // Images uploaded for this message, placed in the text with
+  // {{image:<id>}}. Shared by every language version.
+  image_ids: string[];
+  active: boolean;
+  created_at: string;
+}
+
+export type MessageTemplateInput = Omit<MessageTemplate, "_id" | "created_at">;
+
+export type MessageDeliveryStatus = "pending" | "sent" | "failed" | "skipped";
+
+export interface MessageDelivery {
+  _id: string;
+  template_id: string;
+  booking_id: string;
+  scheduled_for: string;
+  language: Language | null;
+  recipient_email: string | null;
+  subject: string | null;
+  email_status: MessageDeliveryStatus;
+  email_error: string | null;
+  sms_status: MessageDeliveryStatus;
+  sms_error: string | null;
+  attempts: number;
+  created_at: string;
+  sent_at: string | null;
+}
+
+export interface MessageTemplateStats {
+  template_id: string;
+  sent: number;
+  failed: number;
+  skipped: number;
 }
 
 export type ImageCategory = string;
@@ -1039,3 +1098,74 @@ export function deleteCategory(categoryId: string, token: string): Promise<void>
 }
 
 export { ApiError };
+
+export function listMessageTemplates(token: string): Promise<MessageTemplate[]> {
+  return request("/message-templates", { headers: authHeaders(token) });
+}
+
+export function createMessageTemplate(token: string, data: MessageTemplateInput): Promise<MessageTemplate> {
+  return request("/message-templates", { method: "POST", headers: authHeaders(token), body: JSON.stringify(data) });
+}
+
+export function updateMessageTemplate(
+  templateId: string,
+  token: string,
+  data: MessageTemplateInput
+): Promise<MessageTemplate> {
+  return request(`/message-templates/${templateId}`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteMessageTemplate(templateId: string, token: string): Promise<void> {
+  return request(`/message-templates/${templateId}`, { method: "DELETE", headers: authHeaders(token) });
+}
+
+export function getMessageTemplateStats(token: string): Promise<MessageTemplateStats[]> {
+  return request("/message-templates/stats", { headers: authHeaders(token) });
+}
+
+export function listMessageDeliveries(templateId: string, token: string): Promise<MessageDelivery[]> {
+  return request(`/message-templates/${templateId}/deliveries`, { headers: authHeaders(token) });
+}
+
+export function listMessageImages(token: string): Promise<ImageAsset[]> {
+  return request("/message-templates/images", { headers: authHeaders(token) });
+}
+
+/**
+ * Stores an image for a message the same way Photos does. Not attached to
+ * any message until a message is saved listing its id — an image left
+ * unattached is deleted by the backend after a day.
+ */
+export async function uploadMessageImage(token: string, file: File): Promise<ImageAsset> {
+  const form = new FormData();
+  form.append("file", file);
+  // Not routed through request(), for the same reason as uploadImage().
+  const response = await fetch(`${API_URL}/message-templates/images`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: form,
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const message = typeof body?.detail === "string" ? body.detail : `Request failed (${response.status})`;
+    throw new ApiError(response.status, message);
+  }
+  return response.json();
+}
+
+/** Emails the saved `language` version, filled with sample values, to the signed-in admin. */
+export function sendTestMessage(
+  templateId: string,
+  token: string,
+  language: Language
+): Promise<{ to: string; subject: string }> {
+  return request(`/message-templates/${templateId}/test-send`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ language }),
+  });
+}

@@ -260,6 +260,8 @@ async def create_booking(
         guest=guest,
         currency=payload.currency,
         date_ranges=date_ranges,
+        adults=payload.adults,
+        children_ages=payload.children_ages,
         cancellation_policy=_snapshot_cancellation_policy(cancellation_policy),
         # The booking blocks its dates from this moment, for a limited
         # time — see app.services.availability.
@@ -366,6 +368,8 @@ async def update_booking(
     booking.guest = guest
     booking.currency = payload.currency
     booking.date_ranges = date_ranges
+    booking.adults = payload.adults
+    booking.children_ages = payload.children_ages
     booking.cancellation_policy = _snapshot_cancellation_policy(cancellation_policy)
     booking.charge_schedule = build_charge_schedule(booking)
     # Moving the stay means giving up the old nights and claiming the new

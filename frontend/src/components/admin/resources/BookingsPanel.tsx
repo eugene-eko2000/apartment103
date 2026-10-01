@@ -85,13 +85,29 @@ function checkOutDate(b: Booking): string | null {
 // chosen by id and hand-entered prices, never a plan_name — so both fields
 // stay required here even though BookingInput leaves them optional to
 // accommodate the guest flow's plan-driven shape.
-type BookingFormState = Omit<BookingInput, "cancellation_policy_id" | "date_ranges"> & {
+type BookingFormState = Omit<BookingInput, "cancellation_policy_id" | "date_ranges" | "children_ages"> & {
   cancellation_policy_id: string;
   date_ranges: BookingDateRange[];
+  // Edited as free text ("4, 9") and parsed on submit.
+  children_ages: string;
 };
 
 function emptyForm(guestId: string, policyId: string): BookingFormState {
-  return { guest_id: guestId, cancellation_policy_id: policyId, currency: "CHF", date_ranges: [] };
+  return {
+    guest_id: guestId,
+    cancellation_policy_id: policyId,
+    currency: "CHF",
+    date_ranges: [],
+    adults: NaN,
+    children_ages: "",
+  };
+}
+
+/** "4, 9" → [4, 9]; null when any entry isn't a whole age 0–17. */
+function parseChildAges(text: string): number[] | null {
+  const parts = text.split(",").map((part) => part.trim()).filter(Boolean);
+  const ages = parts.map(Number);
+  return ages.every((age) => Number.isInteger(age) && age >= 0 && age <= 17) ? ages : null;
 }
 
 function ReadOnlyField({ label, value }: { label: string; value: React.ReactNode }) {
@@ -338,6 +354,8 @@ export default function BookingsPanel() {
       cancellation_policy_id: matchingPolicy?._id ?? "",
       currency: booking.currency,
       date_ranges: booking.date_ranges,
+      adults: booking.adults ?? NaN,
+      children_ages: booking.children_ages.join(", "),
     });
     setFormError(null);
     setShowModal(true);
@@ -381,10 +399,15 @@ export default function BookingsPanel() {
       setFormError("Select a cancellation policy.");
       return;
     }
+    const childrenAges = parseChildAges(form.children_ages);
+    if (childrenAges === null) {
+      setFormError("Children's ages must be whole numbers from 0 to 17, separated by commas.");
+      return;
+    }
     setPending(true);
     setFormError(null);
     try {
-      await updateBooking(editing._id, token, form);
+      await updateBooking(editing._id, token, { ...form, children_ages: childrenAges });
       setShowModal(false);
       load();
     } catch (err) {
@@ -485,6 +508,23 @@ export default function BookingsPanel() {
               options={CURRENCIES.map((c) => ({ value: c, label: c }))}
               onChange={(v) => setForm((p) => ({ ...p, currency: v }))}
             />
+            <div className="grid grid-cols-2 gap-3">
+              <NumberField
+                label="Adults"
+                value={form.adults}
+                min={1}
+                max={5}
+                step={1}
+                onChange={(v) => setForm((p) => ({ ...p, adults: v }))}
+              />
+              <TextField
+                label="Children's ages"
+                value={form.children_ages}
+                required={false}
+                placeholder="e.g. 4, 9"
+                onChange={(v) => setForm((p) => ({ ...p, children_ages: v }))}
+              />
+            </div>
             <RepeatingRows<BookingDateRange>
               label="Stay date ranges"
               items={form.date_ranges}

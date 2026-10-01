@@ -1,0 +1,1 @@
+Hai ricevuto un messaggio da {{ business_name }}: {{ subject_sentence }} Controlla la tua e-mail per leggere il messaggio.

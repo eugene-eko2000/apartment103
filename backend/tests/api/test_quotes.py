@@ -8,6 +8,7 @@ def _plan_payload(guest_id, plan_name, **overrides):
         "guest_id": str(guest_id),
         "plan_name": plan_name,
         "currency": "CHF",
+        "adults": 2,
         "date_ranges": [{"begin_date": "2026-07-01", "end_date": "2026-07-05"}],
     }
     payload.update(overrides)

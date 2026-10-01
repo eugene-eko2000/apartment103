@@ -17,6 +17,7 @@ from app.api.routes import (
     guests,
     health,
     images,
+    message_templates,
     payment_events,
     payments,
     plans,
@@ -35,7 +36,7 @@ logging.basicConfig(level=logging.INFO)
 async def lifespan(app: FastAPI):
     await init_mongo()
     # Once, here, rather than on every upload/delete/read — see
-    # app.api.routes.images._storage_dir.
+    # app.services.image_storage.storage_dir.
     Path(settings.image_storage_path).mkdir(parents=True, exist_ok=True)
     start_scheduler()
     yield
@@ -80,3 +81,5 @@ app.include_router(payments.webhook_router)
 app.include_router(payment_events.router)
 app.include_router(images.public_router)
 app.include_router(images.router)
+app.include_router(message_templates.stats_router)
+app.include_router(message_templates.router)

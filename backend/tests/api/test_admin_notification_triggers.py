@@ -68,6 +68,7 @@ async def _pending_booking(client, guest, policy, admin_headers, *, price=1000.0
             "guest_id": str(guest.id),
             "cancellation_policy_id": str(policy.id),
             "currency": "CHF",
+            "adults": 2,
             "date_ranges": [
                 {"begin_date": _future(begin_offset), "end_date": _future(begin_offset + 4), "price": price}
             ],
