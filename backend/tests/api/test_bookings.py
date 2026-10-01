@@ -19,6 +19,7 @@ def _booking_payload(guest_id, cancellation_policy_id, **overrides):
         "guest_id": str(guest_id),
         "cancellation_policy_id": str(cancellation_policy_id),
         "currency": "CHF",
+        "adults": 2,
         "date_ranges": [
             {"begin_date": "2026-07-01", "end_date": "2026-07-05", "price": 400.0}
         ],
@@ -36,6 +37,7 @@ def _plan_payload(guest_id, plan_name, **overrides):
         "guest_id": str(guest_id),
         "plan_name": plan_name,
         "currency": "CHF",
+        "adults": 2,
         "date_ranges": [{"begin_date": "2026-07-01", "end_date": "2026-07-05"}],
     }
     payload.update(overrides)
@@ -43,6 +45,37 @@ def _plan_payload(guest_id, plan_name, **overrides):
 
 
 class TestCreateBooking:
+    async def test_stores_the_guest_counts(self, client, guest, cancellation_policy, admin_headers):
+        response = await client.post(
+            "/bookings",
+            json=_booking_payload(guest.id, cancellation_policy.id, adults=2, children_ages=[4, 9]),
+            headers=admin_headers,
+        )
+        assert response.status_code == 201
+        stored = await Booking.get(response.json()["_id"])
+        assert (stored.adults, stored.children_ages) == (2, [4, 9])
+
+    @pytest.mark.parametrize(
+        "counts",
+        [
+            {"adults": 0},
+            {"adults": 4, "children_ages": [1, 2]},
+            {"adults": 2, "children_ages": [18]},
+            {"adults": 2, "children_ages": [-1]},
+        ],
+    )
+    async def test_rejects_invalid_guest_counts(self, client, guest, cancellation_policy, admin_headers, counts):
+        response = await client.post(
+            "/bookings", json=_booking_payload(guest.id, cancellation_policy.id, **counts), headers=admin_headers
+        )
+        assert response.status_code == 422
+
+    async def test_guest_counts_are_required(self, client, guest, cancellation_policy, admin_headers):
+        payload = _booking_payload(guest.id, cancellation_policy.id)
+        del payload["adults"]
+        response = await client.post("/bookings", json=payload, headers=admin_headers)
+        assert response.status_code == 422
+
     async def test_admin_can_create_booking_for_any_guest(
         self, client, guest, cancellation_policy, admin_headers
     ):

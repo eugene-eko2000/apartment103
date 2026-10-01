@@ -721,6 +721,9 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
   const nights =
     range?.from && range?.to ? differenceInCalendarDays(range.to, range.from) : 0;
   const totalGuests = adults + children.length;
+  // Who is staying, in the shape the booking is stored with. Every child's
+  // age is set by then — isFormValid holds the flow until it is.
+  const guestCounts = () => ({ adults, children_ages: children.map((child) => child.age ?? 0) });
   const selectedPlan = plans.find((p) => p._id === selectedPlanId) ?? null;
   const visiblePlans = range?.from
     ? cheapestPerCancellationFee(plans, differenceInCalendarDays(range.from, today))
@@ -924,6 +927,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
             end_date: format(checkOut, "yyyy-MM-dd"),
           },
         ],
+        ...guestCounts(),
       });
       setBookingId(booking._id);
       setBookingToken(identity.authToken);
@@ -1204,6 +1208,7 @@ export default function BookingWidget({ dict, lang }: { dict: BookingDict; lang:
             end_date: format(range.to, "yyyy-MM-dd"),
           },
         ],
+        ...guestCounts(),
       };
       // Idempotent: a booking already created earlier in this flow (e.g. the
       // guest used Back from the payment step) is updated in place instead

@@ -17,6 +17,7 @@ from app.api.routes import (
     guests,
     health,
     images,
+    message_templates,
     payment_events,
     payments,
     plans,
@@ -80,3 +81,5 @@ app.include_router(payments.webhook_router)
 app.include_router(payment_events.router)
 app.include_router(images.public_router)
 app.include_router(images.router)
+app.include_router(message_templates.stats_router)
+app.include_router(message_templates.router)

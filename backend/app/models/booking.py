@@ -14,6 +14,12 @@ from app.models.promotion import DiscountType
 
 BookingStatus = Literal["Pending", "Active", "Cancelled"]
 
+# The apartment sleeps five, adults and children alike — mirrors MAX_GUESTS
+# in the frontend's BookingWidget.
+MAX_GUESTS = 5
+# Children are 0–17; an 18-year-old is booked as an adult.
+MAX_CHILD_AGE = 17
+
 # card_verification_pending: no PaymentIntent/SetupIntent confirmed yet.
 # card_verified: SetupIntent confirmed, nothing charged (free-cancellation booking).
 # partially_charged / fully_charged: accrual in progress / amount_charged == total_price.
@@ -177,6 +183,14 @@ class Booking(Document):
     booking_date: date = Field(default_factory=date.today)
     currency: Currency = "CHF"
     date_ranges: list[BookingDateRange] = Field(default_factory=list)
+    # Who is staying, as entered in the booking widget. Required on every
+    # new booking (see app.schemas.booking.BookingCreate) but optional here:
+    # bookings made before the counts were recorded are left as they are,
+    # and render the guest-count placeholders of an automated guest message
+    # (app.services.guest_messages) as blank. Children are stored by age,
+    # not as a count, so any age split is derived rather than frozen in.
+    adults: int | None = None
+    children_ages: list[int] = Field(default_factory=list)
     # Every night the stay occupies. Claimed as soon as the booking is
     # created — a Pending booking blocks its nights for the duration of
     # `pending_expires_at` (see below) — and released only when the booking

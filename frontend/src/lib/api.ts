@@ -305,6 +305,9 @@ export interface Booking {
   booking_date: string;
   currency: Currency;
   date_ranges: BookingDateRange[];
+  // Null on a booking made before guest counts were recorded.
+  adults: number | null;
+  children_ages: number[];
   cancellation_policy: { name: string; rules: CancellationRule[] };
   charge_schedule: BookingChargeScheduleEntry[];
   status: BookingStatus;
@@ -497,6 +500,59 @@ export interface BookingInput {
   cancellation_policy_id?: string;
   currency: Currency;
   date_ranges: BookingDateRangeInput[];
+  adults: number;
+  children_ages: number[];
+}
+
+export type MessageAnchor = "booking_date" | "checkin" | "checkout";
+export type MessageDirection = "before" | "after";
+
+export interface MessageTemplateVersion {
+  language: Language;
+  subject: string;
+  body_markdown: string;
+}
+
+// An automated guest message (backend/app/models/message_template.py):
+// sent once per booking, `offset_days` before/after the booking's `anchor`
+// date, in the guest's language or English.
+export interface MessageTemplate {
+  _id: string;
+  name: string;
+  anchor: MessageAnchor;
+  direction: MessageDirection;
+  offset_days: number;
+  versions: MessageTemplateVersion[];
+  active: boolean;
+  created_at: string;
+}
+
+export type MessageTemplateInput = Omit<MessageTemplate, "_id" | "created_at">;
+
+export type MessageDeliveryStatus = "pending" | "sent" | "failed" | "skipped";
+
+export interface MessageDelivery {
+  _id: string;
+  template_id: string;
+  booking_id: string;
+  scheduled_for: string;
+  language: Language | null;
+  recipient_email: string | null;
+  subject: string | null;
+  email_status: MessageDeliveryStatus;
+  email_error: string | null;
+  sms_status: MessageDeliveryStatus;
+  sms_error: string | null;
+  attempts: number;
+  created_at: string;
+  sent_at: string | null;
+}
+
+export interface MessageTemplateStats {
+  template_id: string;
+  sent: number;
+  failed: number;
+  skipped: number;
 }
 
 export type ImageCategory = string;
@@ -1039,3 +1095,48 @@ export function deleteCategory(categoryId: string, token: string): Promise<void>
 }
 
 export { ApiError };
+
+export function listMessageTemplates(token: string): Promise<MessageTemplate[]> {
+  return request("/message-templates", { headers: authHeaders(token) });
+}
+
+export function createMessageTemplate(token: string, data: MessageTemplateInput): Promise<MessageTemplate> {
+  return request("/message-templates", { method: "POST", headers: authHeaders(token), body: JSON.stringify(data) });
+}
+
+export function updateMessageTemplate(
+  templateId: string,
+  token: string,
+  data: MessageTemplateInput
+): Promise<MessageTemplate> {
+  return request(`/message-templates/${templateId}`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteMessageTemplate(templateId: string, token: string): Promise<void> {
+  return request(`/message-templates/${templateId}`, { method: "DELETE", headers: authHeaders(token) });
+}
+
+export function getMessageTemplateStats(token: string): Promise<MessageTemplateStats[]> {
+  return request("/message-templates/stats", { headers: authHeaders(token) });
+}
+
+export function listMessageDeliveries(templateId: string, token: string): Promise<MessageDelivery[]> {
+  return request(`/message-templates/${templateId}/deliveries`, { headers: authHeaders(token) });
+}
+
+/** Emails the saved `language` version, filled with sample values, to the signed-in admin. */
+export function sendTestMessage(
+  templateId: string,
+  token: string,
+  language: Language
+): Promise<{ to: string; subject: string }> {
+  return request(`/message-templates/${templateId}/test-send`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ language }),
+  });
+}

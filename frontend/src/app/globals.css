@@ -111,3 +111,13 @@ body {
     rgba(52, 211, 153, 0.22) 100%
   );
 }
+
+/* Tailwind's preflight strips list markers, and the markdown preview in the
+   admin's guest-message editor (@uiw/react-md-editor) relies on the browser
+   defaults for them. */
+.wmde-markdown ul {
+  list-style: disc;
+}
+.wmde-markdown ol {
+  list-style: decimal;
+}

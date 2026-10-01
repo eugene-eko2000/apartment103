@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.core.money import Money
 from app.models.booking import (
+    MAX_CHILD_AGE,
+    MAX_GUESTS,
     BookingCharge,
     BookingChargeScheduleEntry,
     BookingDateRange,
@@ -67,6 +69,16 @@ class BookingCreate(BaseModel):
     cancellation_policy_id: PydanticObjectId | None = None
     currency: Currency = "CHF"
     date_ranges: list[BookingDateRangeInput] = Field(default_factory=list)
+    adults: int = Field(ge=1)
+    children_ages: list[int] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _check_guest_counts(self) -> "BookingCreate":
+        if any(age < 0 or age > MAX_CHILD_AGE for age in self.children_ages):
+            raise ValueError(f"children_ages must each be between 0 and {MAX_CHILD_AGE}")
+        if self.adults + len(self.children_ages) > MAX_GUESTS:
+            raise ValueError(f"A booking can have at most {MAX_GUESTS} guests")
+        return self
 
 
 class BookedDateRange(BaseModel):

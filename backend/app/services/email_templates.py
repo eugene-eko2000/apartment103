@@ -97,3 +97,12 @@ def render_text(*, language: Language | None, name: str, context: dict) -> str:
     `context`. Falls back to `_DEFAULT_LANGUAGE` the same way render_email
     does."""
     return _compiled_text_template(resolve_language(language), name).render(**context)
+
+
+def render_shared(name: str, context: dict) -> str:
+    """Render data/<name> — a language-independent layout — autoescaped.
+
+    Used for the automated guest messages (app.services.guest_messages),
+    whose wording is written per language by an admin and arrives here as
+    already-rendered HTML; mark that with `| safe` in the template."""
+    return _env.get_template(name).render(**context)

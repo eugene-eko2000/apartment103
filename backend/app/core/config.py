@@ -111,5 +111,18 @@ class Settings(BaseSettings):
     guest_data_retention_sweep_hour: int = 4
     guest_data_retention_sweep_minute: int = 30
 
+    # Automated guest messages (see app.services.guest_messages). The send
+    # job runs once a day at this time, in UTC — not the server's local time
+    # like the jobs above — and "today" for a message's schedule is the UTC
+    # date at that moment.
+    guest_message_send_hour_utc: int = 12
+    guest_message_send_minute_utc: int = 0
+    # How many days back a run still sends a message that fell due but did
+    # not go out (the process was down, or the email failed). Never reaches
+    # back past the day the template was created.
+    guest_message_catch_up_days: int = 2
+    # Email attempts per message before a failed delivery is given up on.
+    guest_message_max_attempts: int = 3
+
 
 settings = Settings()

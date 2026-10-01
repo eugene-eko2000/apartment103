@@ -10,6 +10,7 @@ import CancellationPoliciesPanel from "@/components/admin/resources/Cancellation
 import PlansPanel from "@/components/admin/resources/PlansPanel";
 import PricesPanel from "@/components/admin/resources/PricesPanel";
 import PromotionsPanel from "@/components/admin/resources/PromotionsPanel";
+import GuestMessagesPanel from "@/components/admin/resources/GuestMessagesPanel";
 import BookingsPanel from "@/components/admin/resources/BookingsPanel";
 import CalendarPanel from "@/components/admin/resources/CalendarPanel";
 import ClosuresPanel from "@/components/admin/resources/ClosuresPanel";
@@ -33,6 +34,7 @@ export default function AdminPage() {
       {tab === "plans" && <PlansPanel />}
       {tab === "prices" && <PricesPanel />}
       {tab === "promotions" && <PromotionsPanel />}
+      {tab === "guest-messages" && <GuestMessagesPanel />}
       {tab === "cancellation-policies" && <CancellationPoliciesPanel />}
       {tab === "photos" && <PhotosPanel />}
       {tab === "admins" && <AdminsPanel />}
