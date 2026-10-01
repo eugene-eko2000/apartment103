@@ -11,6 +11,10 @@ import MobileMenu from "@/components/MobileMenu";
 import type { Dictionary } from "@/app/[lang]/dictionaries";
 import type { Locale } from "@/lib/i18n-config";
 
+// Inlined at build time (deploy/docker-compose.yml passes the stack's
+// ENVIRONMENT through), so preprod pages can never pass for the live site.
+const IS_TEST_ENVIRONMENT = process.env.NEXT_PUBLIC_ENVIRONMENT === "preprod";
+
 /* Rendered by the homepage and again inside each full-screen view, so the
  * nav is the same row wherever the guest is. Which view is open lives in the
  * overlay context, not here: the nav items read it themselves, which is what
@@ -34,6 +38,9 @@ export default function SiteHeader({
             height={32}
             className="w-8 h-8 rounded-lg"
           />
+          {IS_TEST_ENVIRONMENT && (
+            <span className="font-semibold text-red-600 dark:text-red-500">[TEST MODE]</span>
+          )}
           <span className="font-semibold text-gray-800 dark:text-gray-100">Berg See Home</span>
         </Link>
         <nav className="hidden sm:flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400">
