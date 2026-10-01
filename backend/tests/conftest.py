@@ -35,5 +35,12 @@ def no_live_vendor_sends(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def pinned_environment(monkeypatch):
+    # Notifications are marked as tests on preprod (app.core.notifications);
+    # pin a non-preprod value so a machine's .env can't change what they say.
+    monkeypatch.setattr(settings, "environment", "local")
+
+
+@pytest.fixture(autouse=True)
 def pinned_commission_rate(monkeypatch):
     monkeypatch.setattr(settings, "commission_rate", Decimal("0.06"))
