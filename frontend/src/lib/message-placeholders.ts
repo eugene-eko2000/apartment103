@@ -38,19 +38,51 @@ export const SAMPLE_VALUES: Record<string, string> = {
 
 export const placeholderToken = (name: string) => `{{${name}}}`;
 
+/** `{{image:<id>}}` — places an image uploaded for the message (its image id). */
+export const imageToken = (imageId: string) => placeholderToken(`image:${imageId}`);
+
 // `{{ name }}`, tolerating spaces inside the braces — same as the backend.
 const PLACEHOLDER_PATTERN = /\{\{\s*([^{}]*?)\s*\}\}/g;
+const IMAGE_PLACEHOLDER = /^image:([0-9a-f]{24})$/;
 
-export function substitutePlaceholders(text: string, values: Record<string, string>): string {
+/**
+ * Fill in `text`. `imageMarkdown` maps an image id to what its
+ * `{{image:<id>}}` becomes (e.g. a markdown image for the preview); an id it
+ * doesn't know renders as nothing. Without it, image tokens are left as is.
+ */
+export function substitutePlaceholders(
+  text: string,
+  values: Record<string, string>,
+  imageMarkdown?: Record<string, string>
+): string {
+  return text.replace(PLACEHOLDER_PATTERN, (match, name: string) => {
+    const image = IMAGE_PLACEHOLDER.exec(name);
+    if (image) return imageMarkdown ? (imageMarkdown[image[1]] ?? "") : match;
+    return PLACEHOLDER_NAMES.has(name) ? (values[name] ?? "") : match;
+  });
+}
+
+/** Ids of the images `text` places, each once, in order of appearance. */
+export function imageReferences(text: string): string[] {
+  const ids: string[] = [];
+  for (const [, name] of text.matchAll(PLACEHOLDER_PATTERN)) {
+    const image = IMAGE_PLACEHOLDER.exec(name);
+    if (image && !ids.includes(image[1])) ids.push(image[1]);
+  }
+  return ids;
+}
+
+/** Removes every `{{image:<id>}}` of one image — for when it is detached. */
+export function removeImageReferences(text: string, imageId: string): string {
   return text.replace(PLACEHOLDER_PATTERN, (match, name: string) =>
-    PLACEHOLDER_NAMES.has(name) ? (values[name] ?? "") : match
+    IMAGE_PLACEHOLDER.exec(name)?.[1] === imageId ? "" : match
   );
 }
 
 export function unknownPlaceholders(text: string): string[] {
   const unknown = new Set<string>();
   for (const [, name] of text.matchAll(PLACEHOLDER_PATTERN)) {
-    if (!PLACEHOLDER_NAMES.has(name)) unknown.add(name);
+    if (!PLACEHOLDER_NAMES.has(name) && !IMAGE_PLACEHOLDER.test(name)) unknown.add(name);
   }
   return [...unknown].sort();
 }

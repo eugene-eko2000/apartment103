@@ -7,9 +7,12 @@ import {
   deleteMessageTemplate,
   getMessageTemplateStats,
   listMessageDeliveries,
+  listMessageImages,
   listMessageTemplates,
   sendTestMessage,
   updateMessageTemplate,
+  uploadMessageImage,
+  type ImageAsset,
   type Language,
   type MessageAnchor,
   type MessageDelivery,
@@ -20,7 +23,12 @@ import {
   type MessageTemplateVersion,
 } from "@/lib/api";
 import { useAdminAuth } from "@/lib/admin-auth";
-import { describeSchedule, unknownPlaceholders } from "@/lib/message-placeholders";
+import {
+  describeSchedule,
+  imageReferences,
+  removeImageReferences,
+  unknownPlaceholders,
+} from "@/lib/message-placeholders";
 import { DataTable, type Column } from "../DataTable";
 import { Modal } from "../Modal";
 import { NumberField, SelectField, SubmitButton, TextField } from "../FormFields";
@@ -50,6 +58,7 @@ const emptyForm = (): MessageTemplateInput => ({
   direction: "before",
   offset_days: 1,
   versions: [emptyVersion("en")],
+  image_ids: [],
   active: true,
 });
 
@@ -65,6 +74,9 @@ function validate(form: MessageTemplateInput): string | null {
       return `Unknown placeholder${unknown.length > 1 ? "s" : ""} in the ${name} version: ${unknown
         .map((n) => `{{${n}}}`)
         .join(", ")}`;
+    if (imageReferences(version.subject).length > 0) return `Images can only go in the message text (${name} version).`;
+    if (imageReferences(version.body_markdown).some((id) => !form.image_ids.includes(id)))
+      return `The ${name} version places an image that is no longer attached — remove it from the text.`;
   }
   return null;
 }
@@ -93,6 +105,11 @@ export default function GuestMessagesPanel() {
   const [pending, setPending] = useState(false);
   const [testStatus, setTestStatus] = useState<string | null>(null);
   const [deliveries, setDeliveries] = useState<MessageDelivery[] | null>(null);
+  // Every message image this session knows about, by id: the stored ones
+  // plus anything uploaded since. The form's image_ids pick from it.
+  const [imagesById, setImagesById] = useState<Record<string, ImageAsset>>({});
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const handleError = (err: unknown, show: (message: string) => void) => {
     if (err instanceof ApiError && err.status === 401) return logout();
@@ -122,6 +139,7 @@ export default function GuestMessagesPanel() {
             direction: template.direction,
             offset_days: template.offset_days,
             versions: template.versions,
+            image_ids: template.image_ids,
             active: template.active,
           }
         : emptyForm()
@@ -130,7 +148,13 @@ export default function GuestMessagesPanel() {
     setFormError(null);
     setTestStatus(null);
     setDeliveries(null);
+    setUploadError(null);
     setShowModal(true);
+    if (template && template.image_ids.length > 0) {
+      listMessageImages(token)
+        .then((images) => setImagesById((p) => ({ ...p, ...Object.fromEntries(images.map((i) => [i._id, i])) })))
+        .catch((err) => handleError(err, setUploadError));
+    }
     if (template) {
       listMessageDeliveries(template._id, token)
         .then(setDeliveries)
@@ -188,6 +212,34 @@ export default function GuestMessagesPanel() {
     } catch (err) {
       handleError(err, setTestStatus);
     }
+  };
+
+  const handleUploadImages = async (files: File[]) => {
+    setUploading(true);
+    setUploadError(null);
+    try {
+      for (const file of files) {
+        const image = await uploadMessageImage(token, file);
+        setImagesById((p) => ({ ...p, [image._id]: image }));
+        setForm((p) => ({ ...p, image_ids: [...p.image_ids, image._id] }));
+      }
+    } catch (err) {
+      handleError(err, setUploadError);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Detaching also takes the image out of every language's text, so no
+  // version is left pointing at a picture the message no longer carries.
+  const handleRemoveImage = (image: ImageAsset) => {
+    const placed = form.versions.some((v) => imageReferences(v.body_markdown).includes(image._id));
+    if (placed && !window.confirm("This image is used in the text. Remove it from the message and the text?")) return;
+    setForm((p) => ({
+      ...p,
+      image_ids: p.image_ids.filter((id) => id !== image._id),
+      versions: p.versions.map((v) => ({ ...v, body_markdown: removeImageReferences(v.body_markdown, image._id) })),
+    }));
   };
 
   const updateVersion = (updated: MessageTemplateVersion) =>
@@ -367,7 +419,16 @@ export default function GuestMessagesPanel() {
                 )}
               </div>
 
-              <MessageVersionEditor key={activeVersion.language} version={activeVersion} onChange={updateVersion} />
+              <MessageVersionEditor
+                key={activeVersion.language}
+                version={activeVersion}
+                onChange={updateVersion}
+                images={form.image_ids.flatMap((id) => (imagesById[id] ? [imagesById[id]] : []))}
+                uploading={uploading}
+                uploadError={uploadError}
+                onUploadImages={handleUploadImages}
+                onRemoveImage={handleRemoveImage}
+              />
 
               <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
                 {form.versions.length > 1 && (

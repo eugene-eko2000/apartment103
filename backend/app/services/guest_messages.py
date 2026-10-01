@@ -6,6 +6,10 @@ are substituted into the markdown *before* it is rendered, each one
 backslash-escaped so a guest named `*Ann*` stays literal text instead of
 turning into emphasis. Raw HTML in the markdown is disabled, so neither an
 admin's markup nor a guest-supplied value can inject tags into the email.
+An `{{image:<id>}}` becomes a markdown image pointing at `cid:`, and the
+image itself travels inside the email as an inline attachment — so it shows
+without the mail client fetching anything, and without the backend needing
+to know its own public URL.
 
 Scheduling. A template names a day relative to one of the booking's dates.
 For a run on day D, a booking is due when its anchor date plus (after) or
@@ -25,7 +29,7 @@ follows only once the email is out.
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
 from beanie.odm.utils.encoder import Encoder
@@ -33,17 +37,21 @@ from markdown_it import MarkdownIt
 from pymongo.errors import DuplicateKeyError
 
 from app.core.config import settings
-from app.core.notifications import send_html_email, send_sms
+from app.core.notifications import EmailAttachment, send_html_email, send_sms
 from app.models.booking import Booking
 from app.models.guest import Guest, Language
+from app.models.image import MESSAGE_IMAGE_CATEGORY, Image
 from app.models.message_delivery import MessageDelivery
 from app.models.message_template import (
+    IMAGE_PLACEHOLDER,
     PLACEHOLDER_PATTERN,
     PLACEHOLDERS,
     MessageTemplate,
     MessageTemplateVersion,
+    image_references,
 )
 from app.services import email_templates
+from app.services.image_storage import delete_stored, stored_path
 
 logger = logging.getLogger(__name__)
 
@@ -112,13 +120,26 @@ def placeholder_values(booking: Booking, guest: Guest) -> dict[str, str]:
     }
 
 
-def substitute(text: str, values: dict[str, str], *, escape_markdown: bool = False) -> str:
+def substitute(
+    text: str,
+    values: dict[str, str],
+    *,
+    escape_markdown: bool = False,
+    image_markdown: dict[str, str] | None = None,
+) -> str:
     """Replace each known `{{name}}` in `text`. Unknown names are left as
     they are — the template validator refuses them, so one can only reach
-    here from a stored document that predates a placeholder's removal."""
+    here from a stored document that predates a placeholder's removal.
+
+    `{{image:<id>}}` becomes `image_markdown[id]` (empty when the image is
+    gone, so a deleted file never leaves braces in a guest's email).
+    """
 
     def replace(match: re.Match) -> str:
         name = match.group(1)
+        image = IMAGE_PLACEHOLDER.match(name)
+        if image and image_markdown is not None:
+            return image_markdown.get(image.group(1), "")
         if name not in PLACEHOLDERS:
             return match.group(0)
         value = values.get(name, "")
@@ -131,16 +152,56 @@ def substitute(text: str, values: dict[str, str], *, escape_markdown: bool = Fal
 class RenderedMessage:
     subject: str
     html: str
+    attachments: list[EmailAttachment] = field(default_factory=list)
 
 
-def render_message(version: MessageTemplateVersion, values: dict[str, str]) -> RenderedMessage:
-    subject = substitute(version.subject, values)
-    body_html = _markdown.render(substitute(version.body_markdown, values, escape_markdown=True))
+def _content_id(image_id: str) -> str:
+    return f"image-{image_id}@guest-message"
+
+
+def render_message(
+    version: MessageTemplateVersion, values: dict[str, str], images: dict[str, Image] | None = None
+) -> RenderedMessage:
+    """`images` maps an Image id to the attached image; only those the body
+    actually places — and whose file still exists — ride along."""
+    images = images or {}
+    attachments: list[EmailAttachment] = []
+    image_markdown: dict[str, str] = {}
+    for image_id in image_references(version.body_markdown):
+        image = images.get(image_id)
+        path = stored_path(image.key) if image else None
+        if image is None or path is None:
+            continue
+        content_id = _content_id(image_id)
+        attachments.append(
+            EmailAttachment(
+                filename=image.key, content=path.read_bytes(), mime_type=image.content_type, content_id=content_id
+            )
+        )
+        image_markdown[image_id] = f"![{image.alt}](cid:{content_id})"
+
+    subject = substitute(version.subject, values, image_markdown={})
+    body_html = _markdown.render(
+        substitute(version.body_markdown, values, escape_markdown=True, image_markdown=image_markdown)
+    )
+    # Every <img> here came from markdown (raw HTML is off), so this only
+    # ever touches the images placed above: keep a large photo inside the
+    # mail client's reading pane.
+    body_html = body_html.replace("<img ", '<img style="max-width:100%;height:auto;" ')
     html = email_templates.render_shared(
         "guest_message.html",
         {"business_name": settings.business_name, "subject": subject, "body_html": body_html},
     )
-    return RenderedMessage(subject=subject, html=html)
+    return RenderedMessage(subject=subject, html=html, attachments=attachments)
+
+
+async def attached_images(template: MessageTemplate) -> dict[str, Image]:
+    if not template.image_ids:
+        return {}
+    images = await Image.find(
+        {"_id": {"$in": list(template.image_ids)}, "category": MESSAGE_IMAGE_CATEGORY}
+    ).to_list()
+    return {str(image.id): image for image in images}
 
 
 def pick_version(template: MessageTemplate, preferred: Language | None) -> MessageTemplateVersion | None:
@@ -269,13 +330,13 @@ async def deliver(template: MessageTemplate, booking: Booking, send_day: date) -
         await delivery.save()
         return False
 
-    message = render_message(version, placeholder_values(booking, guest))
+    message = render_message(version, placeholder_values(booking, guest), await attached_images(template))
     delivery.language = version.language
     delivery.recipient_email = guest.email
     delivery.subject = message.subject
     delivery.attempts += 1
     try:
-        await send_html_email(guest.email, message.subject, message.html)
+        await send_html_email(guest.email, message.subject, message.html, message.attachments)
     except Exception as exc:
         logger.exception("Guest message %s failed for booking %s", template.id, booking.id)
         delivery.email_status = "failed"
@@ -319,6 +380,25 @@ async def send_test_message(template: MessageTemplate, language: Language, to_ad
     version = next((v for v in template.versions if v.language == language), None)
     if version is None:
         raise ValueError(f"This message has no {language} version")
-    message = render_message(version, SAMPLE_VALUES)
-    await send_html_email(to_address, message.subject, message.html)
+    message = render_message(version, SAMPLE_VALUES, await attached_images(template))
+    await send_html_email(to_address, message.subject, message.html, message.attachments)
     return message
+
+
+# How long an uploaded image may sit unattached before it is deleted. Covers
+# the gap between uploading into the editor and saving the message.
+ORPHAN_IMAGE_GRACE = timedelta(days=1)
+
+
+async def purge_orphan_images(now: datetime | None = None) -> int:
+    """Delete message images no message lists any more: detached from their
+    message, left behind by a deleted one, or uploaded into an editor that
+    was closed without saving. Returns how many were deleted."""
+    cutoff = (now or datetime.now(timezone.utc)) - ORPHAN_IMAGE_GRACE
+    in_use = {image_id for template in await MessageTemplate.find_all().to_list() for image_id in template.image_ids}
+    orphans = await Image.find(
+        {"category": MESSAGE_IMAGE_CATEGORY, "uploaded_at": {"$lt": cutoff}, "_id": {"$nin": list(in_use)}}
+    ).to_list()
+    for image in orphans:
+        await delete_stored(image)
+    return len(orphans)

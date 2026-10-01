@@ -523,6 +523,9 @@ export interface MessageTemplate {
   direction: MessageDirection;
   offset_days: number;
   versions: MessageTemplateVersion[];
+  // Images uploaded for this message, placed in the text with
+  // {{image:<id>}}. Shared by every language version.
+  image_ids: string[];
   active: boolean;
   created_at: string;
 }
@@ -1126,6 +1129,32 @@ export function getMessageTemplateStats(token: string): Promise<MessageTemplateS
 
 export function listMessageDeliveries(templateId: string, token: string): Promise<MessageDelivery[]> {
   return request(`/message-templates/${templateId}/deliveries`, { headers: authHeaders(token) });
+}
+
+export function listMessageImages(token: string): Promise<ImageAsset[]> {
+  return request("/message-templates/images", { headers: authHeaders(token) });
+}
+
+/**
+ * Stores an image for a message the same way Photos does. Not attached to
+ * any message until a message is saved listing its id — an image left
+ * unattached is deleted by the backend after a day.
+ */
+export async function uploadMessageImage(token: string, file: File): Promise<ImageAsset> {
+  const form = new FormData();
+  form.append("file", file);
+  // Not routed through request(), for the same reason as uploadImage().
+  const response = await fetch(`${API_URL}/message-templates/images`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: form,
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const message = typeof body?.detail === "string" ? body.detail : `Request failed (${response.status})`;
+    throw new ApiError(response.status, message);
+  }
+  return response.json();
 }
 
 /** Emails the saved `language` version, filled with sample values, to the signed-in admin. */

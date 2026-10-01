@@ -22,6 +22,7 @@ class MessageTemplateCreate(BaseModel):
     direction: MessageDirection
     offset_days: int = Field(ge=0, le=365)
     versions: list[MessageTemplateVersion]
+    image_ids: list[PydanticObjectId] = Field(default_factory=list)
     active: bool = True
 
     @model_validator(mode="after")

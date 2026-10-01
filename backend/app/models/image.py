@@ -4,6 +4,11 @@ from beanie import Document
 from pydantic import Field
 from pymongo import IndexModel
 
+# Category of the images attached to automated guest messages
+# (app.api.routes.message_templates). Reserved: no photo category may use
+# this slug, and the photo-library listings leave these images out.
+MESSAGE_IMAGE_CATEGORY = "guest-messages"
+
 
 class Image(Document):
     """Metadata for an uploaded image; bytes live on disk at IMAGE_STORAGE_PATH/key.

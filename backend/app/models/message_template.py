@@ -16,7 +16,7 @@ import re
 from datetime import datetime, timezone
 from typing import Literal
 
-from beanie import Document
+from beanie import Document, PydanticObjectId
 from pydantic import BaseModel, Field, model_validator
 
 from app.models.guest import Language
@@ -42,10 +42,29 @@ PLACEHOLDERS: dict[str, str] = {
 
 # `{{ name }}`, tolerating the spaces an admin may type inside the braces.
 PLACEHOLDER_PATTERN = re.compile(r"\{\{\s*([^{}]*?)\s*\}\}")
+# `{{image:<id>}}` — an image uploaded for this message, by its Image id.
+# Rendered as an inline picture (see app.services.guest_messages).
+IMAGE_PLACEHOLDER = re.compile(r"^image:([0-9a-f]{24})$")
+
+
+def image_references(text: str) -> list[str]:
+    """Ids of the images `text` places, in order of first appearance."""
+    ids: list[str] = []
+    for name in PLACEHOLDER_PATTERN.findall(text):
+        match = IMAGE_PLACEHOLDER.match(name)
+        if match and match.group(1) not in ids:
+            ids.append(match.group(1))
+    return ids
 
 
 def unknown_placeholders(text: str) -> list[str]:
-    return sorted({name for name in PLACEHOLDER_PATTERN.findall(text) if name not in PLACEHOLDERS})
+    return sorted(
+        {
+            name
+            for name in PLACEHOLDER_PATTERN.findall(text)
+            if name not in PLACEHOLDERS and not IMAGE_PLACEHOLDER.match(name)
+        }
+    )
 
 
 class MessageTemplateVersion(BaseModel):
@@ -66,6 +85,7 @@ def validate_message_template_fields(template) -> None:
         raise ValueError("A message cannot be scheduled before the booking date")
     if not template.versions:
         raise ValueError("A message needs at least one language version")
+    attached = {str(image_id) for image_id in template.image_ids}
     languages = [version.language for version in template.versions]
     if len(set(languages)) != len(languages):
         raise ValueError("Each language may have only one version")
@@ -74,6 +94,13 @@ def validate_message_template_fields(template) -> None:
         if unknown:
             names = ", ".join(sorted({f"{{{{{name}}}}}" for name in unknown}))
             raise ValueError(f"Unknown placeholder(s) in the {version.language} version: {names}")
+        # Only the subject is plain text; an image there could not be shown.
+        if image_references(version.subject):
+            raise ValueError(f"Images can only be placed in the message text ({version.language} version)")
+        detached = [ref for ref in image_references(version.body_markdown) if ref not in attached]
+        if detached:
+            names = ", ".join(f"{{{{image:{ref}}}}}" for ref in detached)
+            raise ValueError(f"The {version.language} version places images not attached to this message: {names}")
 
 
 class MessageTemplate(Document):
@@ -82,6 +109,11 @@ class MessageTemplate(Document):
     direction: MessageDirection
     offset_days: int = Field(ge=0, le=365)
     versions: list[MessageTemplateVersion]
+    # Images uploaded for this message (Image documents in
+    # MESSAGE_IMAGE_CATEGORY), placed in the text with {{image:<id>}}. Shared
+    # by every language version. An image no message lists any more is
+    # deleted by app.services.guest_messages.purge_orphan_images.
+    image_ids: list[PydanticObjectId] = Field(default_factory=list)
     # Lets an admin pause a message without deleting it.
     active: bool = True
     # The send job never looks further back than this: a template created

@@ -1,7 +1,8 @@
 """Daily job: send the automated guest messages that fell due today.
 
 What is due, and how a message is sent exactly once, is decided in
-app.services.guest_messages. This module only schedules it: once a day at
+app.services.guest_messages. The same pass also deletes images uploaded for
+messages that no message uses any more. This module only schedules it: once a day at
 settings.guest_message_send_hour_utc (12:00 UTC by default), so guests in
 Europe get their messages around lunchtime rather than in the night.
 
@@ -16,7 +17,7 @@ from apscheduler.schedulers.base import BaseScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from app.core.config import settings
-from app.services.guest_messages import send_due_messages
+from app.services.guest_messages import purge_orphan_images, send_due_messages
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,14 @@ JOB_ID = "send_guest_messages"
 
 
 async def send_guest_messages() -> int:
+    # Housekeeping first and independently: a failing sweep must not hold
+    # back the messages, nor the other way round.
+    try:
+        purged = await purge_orphan_images()
+        if purged:
+            logger.info("Deleted %d unattached guest message image(s)", purged)
+    except Exception:
+        logger.exception("Failed to purge unattached guest message images")
     try:
         sent = await send_due_messages()
     except Exception:

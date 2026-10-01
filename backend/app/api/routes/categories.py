@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import require_admin
 from app.models.category import Category
-from app.models.image import Image
+from app.models.image import MESSAGE_IMAGE_CATEGORY, Image
 from app.schemas.category import CategoryCreate, CategoryUpdate
 
 # Categories are only ever read/written from the admin Photos panel — the
@@ -19,7 +19,7 @@ async def list_categories() -> list[Category]:
 
 @router.post("", response_model=Category, status_code=status.HTTP_201_CREATED)
 async def create_category(payload: CategoryCreate) -> Category:
-    if await Category.find_one(Category.slug == payload.slug):
+    if payload.slug == MESSAGE_IMAGE_CATEGORY or await Category.find_one(Category.slug == payload.slug):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="A category with this slug already exists"
         )

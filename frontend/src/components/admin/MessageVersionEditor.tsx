@@ -4,12 +4,13 @@ import dynamic from "next/dynamic";
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import getCaretCoordinates from "textarea-caret";
-import type { MessageTemplateVersion } from "@/lib/api";
+import { imageUrl, type ImageAsset, type MessageTemplateVersion } from "@/lib/api";
 import {
   PLACEHOLDERS,
   SAMPLE_VALUES,
   completionRange,
   findPlaceholderTrigger,
+  imageToken,
   matchPlaceholders,
   placeholderToken,
   spliceText,
@@ -65,14 +66,26 @@ interface Autocomplete {
 export default function MessageVersionEditor({
   version,
   onChange,
+  images,
+  uploading,
+  uploadError,
+  onUploadImages,
+  onRemoveImage,
 }: {
   version: MessageTemplateVersion;
   onChange: (version: MessageTemplateVersion) => void;
+  /** The message's attached images — shared by every language version. */
+  images: ImageAsset[];
+  uploading: boolean;
+  uploadError: string | null;
+  onUploadImages: (files: File[]) => void;
+  onRemoveImage: (image: ImageAsset) => void;
 }) {
   const { resolvedTheme } = useTheme();
   const [mode, setMode] = useState<"write" | "preview">("write");
   const [autocomplete, setAutocomplete] = useState<Autocomplete | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // Where a clicked placeholder chip goes: the subject or the body,
   // whichever was focused last. Clicking a chip doesn't steal focus (see
   // its onMouseDown), so the field keeps its caret too.
@@ -113,6 +126,16 @@ export default function MessageVersionEditor({
     if (!field) return;
     setAutocomplete(null);
     insertIntoField(field, field.selectionStart ?? field.value.length, field.selectionEnd ?? field.value.length, placeholderToken(placeholder.name));
+  };
+
+  // Images only make sense in the message text (the subject is plain
+  // text), so they always go into the body, at its caret — which the
+  // textarea keeps while focus is elsewhere.
+  const insertImage = (image: ImageAsset) => {
+    const body = wrapperRef.current?.querySelector("textarea");
+    if (!body) return;
+    setAutocomplete(null);
+    insertIntoField(body, body.selectionStart ?? body.value.length, body.selectionEnd ?? body.value.length, imageToken(image._id));
   };
 
   // Capture phase: runs before the markdown editor's own keydown listener on
@@ -166,6 +189,66 @@ export default function MessageVersionEditor({
       }}
       onBlur={() => setAutocomplete(null)}
     >
+      <section aria-label="Images">
+        <div className="flex items-center gap-3 mb-1.5">
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+            Images <span className="font-normal">— double-click one to insert it into the text</span>
+          </p>
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+            className="ml-auto px-2.5 py-1 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-60 cursor-pointer"
+          >
+            {uploading ? "Uploading…" : "Upload Image"}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
+            multiple
+            hidden
+            aria-label="Upload Image"
+            onChange={(e) => {
+              const files = Array.from(e.target.files ?? []);
+              e.target.value = "";
+              if (files.length > 0) onUploadImages(files);
+            }}
+          />
+        </div>
+        {images.length === 0 ? (
+          <p className="text-xs text-slate-400 dark:text-slate-500">No images yet.</p>
+        ) : (
+          <ul className="flex flex-wrap gap-2">
+            {images.map((image) => (
+              <li key={image._id} className="relative group">
+                <button
+                  type="button"
+                  title={preview ? "Switch to Edit to insert" : "Double-click to insert"}
+                  aria-label={`Insert image ${image.key}`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onDoubleClick={() => !preview && insertImage(image)}
+                  className="block w-20 h-20 rounded-md overflow-hidden border border-slate-200 dark:border-slate-600 hover:ring-2 hover:ring-indigo-400 cursor-copy"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element -- admin thumbnail of an uploaded file */}
+                  <img src={imageUrl(image.key)} alt="" className="w-full h-full object-cover" draggable={false} />
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Remove image ${image.key}`}
+                  title="Remove from this message"
+                  onClick={() => onRemoveImage(image)}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-500 text-slate-500 dark:text-slate-300 text-xs leading-none hover:text-red-600 opacity-0 group-hover:opacity-100 focus:opacity-100 cursor-pointer"
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {uploadError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{uploadError}</p>}
+      </section>
+
       <div>
         <p className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">
           Placeholders <span className="font-normal">— click to insert, or type {"{{"} in the subject or text</span>
@@ -217,7 +300,11 @@ export default function MessageVersionEditor({
           </p>
           <div data-color-mode={resolvedTheme}>
             <MarkdownPreview
-              source={substitutePlaceholders(version.body_markdown, SAMPLE_VALUES)}
+              source={substitutePlaceholders(
+                version.body_markdown,
+                SAMPLE_VALUES,
+                Object.fromEntries(images.map((image) => [image._id, `![](${imageUrl(image.key)})`]))
+              )}
               style={{ background: "transparent", fontSize: 14 }}
             />
           </div>

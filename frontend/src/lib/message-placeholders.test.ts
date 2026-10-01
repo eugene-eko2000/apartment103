@@ -3,7 +3,10 @@ import {
   completionRange,
   describeSchedule,
   findPlaceholderTrigger,
+  imageReferences,
+  imageToken,
   matchPlaceholders,
+  removeImageReferences,
   spliceText,
   substitutePlaceholders,
   unknownPlaceholders,
@@ -75,6 +78,35 @@ describe("unknownPlaceholders", () => {
     expect(unknownPlaceholders("{{guest_firstname}} {{checkin_date}} {{guest_firstname}}")).toEqual([
       "guest_firstname",
     ]);
+  });
+});
+
+const IMG = "6abecb03f4a916f6bcaf1064";
+const OTHER = "6abecb03f4a916f6bcaf1065";
+
+describe("image placeholders", () => {
+  it("have a token per image id", () => {
+    expect(imageToken(IMG)).toBe(`{{image:${IMG}}}`);
+  });
+
+  it("are listed once each, in order", () => {
+    expect(imageReferences(`a {{image:${OTHER}}} b {{image:${IMG}}} {{image:${OTHER}}}`)).toEqual([OTHER, IMG]);
+  });
+
+  it("are known placeholders", () => {
+    expect(unknownPlaceholders(`{{image:${IMG}}} {{image:nope}}`)).toEqual(["image:nope"]);
+  });
+
+  it("render through the given markdown and vanish when unknown", () => {
+    const text = `A {{image:${IMG}}} B {{image:${OTHER}}} {{guest_first_name}}`;
+    expect(substitutePlaceholders(text, { guest_first_name: "Anna" }, { [IMG]: "![](x.png)" })).toBe(
+      "A ![](x.png) B  Anna"
+    );
+    expect(substitutePlaceholders(text, {})).toBe(`A {{image:${IMG}}} B {{image:${OTHER}}} `);
+  });
+
+  it("can be stripped for one image", () => {
+    expect(removeImageReferences(`A{{image:${IMG}}}B{{image:${OTHER}}}`, IMG)).toBe(`AB{{image:${OTHER}}}`);
   });
 });
 
