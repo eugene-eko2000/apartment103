@@ -81,6 +81,15 @@ function validate(form: MessageTemplateInput): string | null {
   return null;
 }
 
+/** "2026-10-21" → "21.10.2026", the format the messages themselves use. */
+const displayDate = (iso: string | null) => (iso ? iso.split("-").reverse().join(".") : "—");
+
+/** Whole days between the due date and the moment the email went out. */
+function daysLate(d: MessageDelivery): number {
+  if (!d.sent_at) return 0;
+  return Math.max(0, Math.round((Date.parse(d.sent_at.slice(0, 10)) - Date.parse(d.scheduled_for)) / 86_400_000));
+}
+
 const STATUS_STYLES: Record<string, string> = {
   sent: "text-emerald-700 dark:text-emerald-400",
   failed: "text-red-600 dark:text-red-400",
@@ -308,7 +317,8 @@ export default function GuestMessagesPanel() {
     <div>
       <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
         Messages are emailed automatically every day at 12:00 UTC to guests with a confirmed booking, together with an
-        SMS pointing them to their inbox. Each guest gets the version in their language, or English.
+        SMS pointing them to their inbox. Each guest gets the version in their language, or English. A message whose
+        day has already passed — for instance when the guest books at short notice — goes out on the next run.
       </p>
       <DataTable
         columns={columns}
@@ -467,7 +477,9 @@ export default function GuestMessagesPanel() {
                     <table className="w-full text-xs">
                       <thead className="bg-slate-50 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400">
                         <tr>
+                          <th className="text-left px-3 py-1.5 font-medium">Booking</th>
                           <th className="text-left px-3 py-1.5 font-medium">Due</th>
+                          <th className="text-left px-3 py-1.5 font-medium">Sent</th>
                           <th className="text-left px-3 py-1.5 font-medium">Recipient</th>
                           <th className="text-left px-3 py-1.5 font-medium">Language</th>
                           <th className="text-left px-3 py-1.5 font-medium">Email</th>
@@ -475,19 +487,39 @@ export default function GuestMessagesPanel() {
                         </tr>
                       </thead>
                       <tbody className="text-slate-700 dark:text-slate-200">
-                        {deliveries.map((d) => (
-                          <tr key={d._id} className="border-t border-slate-100 dark:border-slate-700">
-                            <td className="px-3 py-1.5">{d.scheduled_for}</td>
-                            <td className="px-3 py-1.5">{d.recipient_email ?? "—"}</td>
-                            <td className="px-3 py-1.5 uppercase">{d.language ?? "—"}</td>
-                            <td className={`px-3 py-1.5 ${STATUS_STYLES[d.email_status]}`} title={d.email_error ?? ""}>
-                              {d.email_status}
-                            </td>
-                            <td className={`px-3 py-1.5 ${STATUS_STYLES[d.sms_status]}`} title={d.sms_error ?? ""}>
-                              {d.sms_status}
-                            </td>
-                          </tr>
-                        ))}
+                        {deliveries.map((d) => {
+                          const late = daysLate(d);
+                          return (
+                            <tr key={d._id} className="border-t border-slate-100 dark:border-slate-700 align-top">
+                              <td className="px-3 py-1.5" title={`Booking ${d.booking_id}`}>
+                                <span className="block">{d.guest_name ?? "—"}</span>
+                                <span className="block text-slate-500 dark:text-slate-400">
+                                  {displayDate(d.checkin_date)} – {displayDate(d.checkout_date)}
+                                </span>
+                                <span className="block font-mono text-[10px] text-slate-400 dark:text-slate-500">
+                                  {d.booking_id}
+                                </span>
+                              </td>
+                              <td className="px-3 py-1.5">{displayDate(d.scheduled_for)}</td>
+                              <td className="px-3 py-1.5">
+                                {d.sent_at ? displayDate(d.sent_at.slice(0, 10)) : "—"}
+                                {late > 0 && (
+                                  <span className="block text-amber-600 dark:text-amber-400">
+                                    {late} day{late === 1 ? "" : "s"} late
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-3 py-1.5">{d.recipient_email ?? "—"}</td>
+                              <td className="px-3 py-1.5 uppercase">{d.language ?? "—"}</td>
+                              <td className={`px-3 py-1.5 ${STATUS_STYLES[d.email_status]}`} title={d.email_error ?? ""}>
+                                {d.email_status}
+                              </td>
+                              <td className={`px-3 py-1.5 ${STATUS_STYLES[d.sms_status]}`} title={d.sms_error ?? ""}>
+                                {d.sms_status}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

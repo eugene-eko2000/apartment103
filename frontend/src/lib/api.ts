@@ -539,6 +539,10 @@ export interface MessageDelivery {
   template_id: string;
   booking_id: string;
   scheduled_for: string;
+  // Snapshot of the stay it went out for, taken when it was sent.
+  guest_name: string | null;
+  checkin_date: string | null;
+  checkout_date: string | null;
   language: Language | null;
   recipient_email: string | null;
   subject: string | null;

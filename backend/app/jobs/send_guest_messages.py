@@ -36,8 +36,8 @@ async def send_guest_messages() -> int:
     try:
         sent = await send_due_messages()
     except Exception:
-        # Tomorrow's run catches up on what this one missed (see
-        # settings.guest_message_catch_up_days).
+        # Tomorrow's run sends what this one missed — anything owed and not
+        # yet sent goes out late rather than never.
         logger.exception("Failed to send guest messages")
         return 0
     if sent:
