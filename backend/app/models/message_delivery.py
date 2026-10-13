@@ -21,8 +21,15 @@ DeliveryStatus = Literal["pending", "sent", "failed", "skipped"]
 class MessageDelivery(Document):
     template_id: PydanticObjectId
     booking_id: PydanticObjectId
-    # The day the schedule made this message due, in UTC.
+    # The day the schedule made this message due, in UTC. A delivery sent
+    # later than this was sent late (see app.services.guest_messages).
     scheduled_for: date
+    # Snapshot of the stay this went out for, taken at send time, so the log
+    # still says whose booking it was after the booking is edited or the
+    # guest's data is retired.
+    guest_name: str | None = None
+    checkin_date: date | None = None
+    checkout_date: date | None = None
     # The version actually used; None when no usable version existed.
     language: Language | None = None
     recipient_email: str | None = None

@@ -56,6 +56,13 @@ async def _booking(guest, checkin, checkout, booked_on, status="Active", adults=
     return booking
 
 
+def outbox_email(sent):
+    async def fake_email(to, subject, html, attachments=None):
+        sent["email"].append({"to": to, "subject": subject, "html": html})
+
+    return fake_email
+
+
 @pytest.fixture
 def outbox(monkeypatch):
     sent = {"email": [], "sms": []}
@@ -181,27 +188,68 @@ class TestDueBookings:
         await _booking(guest, date(2026, 12, 6), date(2026, 12, 8), date(2026, 11, 1), status="Cancelled")
         assert await guest_messages.due_bookings(template, TODAY) == []
 
-    async def test_catches_up_on_recent_missed_days(self, client, guest):
+    async def test_a_missed_send_day_is_made_up_however_late(self, client, guest):
+        # Due Oct 2 — a month of runs missed it; it still goes out today.
         template = await _template("booking_date", "after", 1)
-        missed = await _booking(guest, date(2026, 12, 1), date(2026, 12, 5), date(2026, 10, 30))
-        too_old = date(2026, 11, 1) - timedelta(days=settings.guest_message_catch_up_days + 1)
-        await _booking(guest, date(2026, 12, 6), date(2026, 12, 8), too_old)
+        missed = await _booking(guest, date(2026, 12, 1), date(2026, 12, 5), date(2026, 10, 1))
 
         result = await guest_messages.due_bookings(template, TODAY)
-        assert [(b.id, day) for b, day in result] == [(missed.id, date(2026, 10, 31))]
+        assert [(b.id, day) for b, day in result] == [(missed.id, date(2026, 10, 2))]
 
-    async def test_never_reaches_back_before_the_template_existed(self, client, guest):
+    async def test_a_booking_made_after_its_send_day_gets_the_message_late(self, client, guest):
+        # "3 days before check-in" fell on Oct 31 — before this booking
+        # existed. The guest still gets it, on the first run after booking.
+        template = await _template("checkin", "before", 3)
+        late = await _booking(guest, date(2026, 11, 3), date(2026, 11, 5), date(2026, 11, 1))
+
+        result = await guest_messages.due_bookings(template, TODAY)
+        assert [(b.id, day) for b, day in result] == [(late.id, date(2026, 10, 31))]
+
+    async def test_a_same_day_booking_gets_every_pre_arrival_message(self, client, guest):
+        # Booked today for a stay starting today.
+        week_before = await _template("checkin", "before", 7)
+        day_before = await _template("checkin", "before", 1)
+        on_booking = await _template("booking_date", "after", 0)
+        booking = await _booking(guest, TODAY, date(2026, 11, 4), TODAY)
+
+        for template in (week_before, day_before, on_booking):
+            assert [b.id for b, _ in await guest_messages.due_bookings(template, TODAY)] == [booking.id]
+
+    async def test_never_backfills_from_before_the_template_existed(self, client, guest):
         template = await _template("booking_date", "after", 1, created_at=datetime(2026, 11, 2, 9, tzinfo=timezone.utc))
-        await _booking(guest, date(2026, 12, 1), date(2026, 12, 5), date(2026, 10, 31))  # due yesterday
+        await _booking(guest, date(2026, 12, 1), date(2026, 12, 5), date(2026, 10, 20))  # due Oct 21
         due_today = await _booking(guest, date(2026, 12, 6), date(2026, 12, 8), date(2026, 11, 1))
 
         assert [b.id for b, _ in await guest_messages.due_bookings(template, TODAY)] == [due_today.id]
 
-    async def test_not_due_before_the_booking_was_made(self, client, guest):
-        # "3 days before check-in" fell on Oct 31 — before this booking existed.
-        template = await _template("checkin", "before", 3)
-        await _booking(guest, date(2026, 11, 3), date(2026, 11, 5), date(2026, 11, 1))
-        assert await guest_messages.due_bookings(template, TODAY) == []
+    async def test_a_booking_made_after_the_template_is_owed_even_past_messages(self, client, guest):
+        # Template created Nov 1; booked Nov 2 for a stay starting Nov 3, so
+        # "7 days before check-in" (Oct 27) predates the template but not the
+        # booking — the booking is what made it owed.
+        template = await _template("checkin", "before", 7, created_at=datetime(2026, 11, 1, tzinfo=timezone.utc))
+        booking = await _booking(guest, date(2026, 11, 3), date(2026, 11, 5), TODAY)
+        assert [b.id for b, _ in await guest_messages.due_bookings(template, TODAY)] == [booking.id]
+
+    async def test_pre_departure_messages_are_dropped_once_the_guest_has_left(self, client, guest):
+        before_checkin = await _template("checkin", "before", 2)
+        after_checkout = await _template("checkout", "after", 0)
+        # Stay ended Nov 1; the booking was made long before, but the job
+        # never got to it (e.g. the template was paused until now).
+        booking = await _booking(guest, date(2026, 10, 25), date(2026, 11, 1), date(2026, 10, 1))
+
+        assert await guest_messages.due_bookings(before_checkin, TODAY) == []
+        assert [b.id for b, _ in await guest_messages.due_bookings(after_checkout, TODAY)] == [booking.id]
+
+    async def test_on_checkout_day_a_pre_departure_message_still_goes(self, client, guest):
+        template = await _template("checkout", "before", 1)
+        booking = await _booking(guest, date(2026, 10, 30), TODAY, date(2026, 10, 1))
+        assert [b.id for b, _ in await guest_messages.due_bookings(template, TODAY)] == [booking.id]
+
+    async def test_already_sent_bookings_are_not_candidates(self, client, guest, outbox):
+        template = await _template("booking_date", "after", 1)
+        await _booking(guest, date(2026, 12, 1), date(2026, 12, 5), date(2026, 10, 1))
+        assert await guest_messages.send_due_messages(TODAY) == 1
+        assert await guest_messages.due_bookings(template, TODAY + timedelta(days=5)) == []
 
 
 class TestSending:
@@ -267,6 +315,44 @@ class TestSending:
         assert len(outbox["sms"]) == 1
         delivery = await MessageDelivery.find_one()
         assert (delivery.email_status, delivery.attempts) == ("sent", 2)
+
+    async def test_failed_emails_are_retried_on_later_runs_until_attempts_run_out(
+        self, client, guest, outbox, monkeypatch
+    ):
+        await _template("booking_date", "after", 1)
+        await _booking(guest, date(2026, 12, 1), date(2026, 12, 5), date(2026, 11, 1))
+
+        async def failing_email(*args, **kwargs):
+            raise RuntimeError("SendGrid down")
+
+        monkeypatch.setattr(guest_messages, "send_html_email", failing_email)
+        for day in range(settings.guest_message_max_attempts):
+            assert await guest_messages.send_due_messages(TODAY + timedelta(days=5 * day)) == 0
+        delivery = await MessageDelivery.find_one()
+        assert (delivery.email_status, delivery.attempts) == ("failed", settings.guest_message_max_attempts)
+
+        monkeypatch.setattr(guest_messages, "send_html_email", outbox_email(outbox))
+        assert await guest_messages.send_due_messages(TODAY + timedelta(days=30)) == 0
+
+    async def test_each_sent_message_is_logged_against_its_booking(self, client, guest, outbox, caplog):
+        template = await _template("checkin", "before", 3)
+        booking = await _booking(guest, date(2026, 11, 3), date(2026, 11, 5), date(2026, 11, 1))
+
+        with caplog.at_level("INFO", logger="app.services.guest_messages"):
+            assert await guest_messages.send_due_messages(TODAY) == 1
+
+        delivery = await MessageDelivery.find_one(MessageDelivery.booking_id == booking.id)
+        assert delivery.template_id == template.id
+        assert (delivery.guest_name, delivery.checkin_date, delivery.checkout_date) == (
+            "Gary Guestson",
+            date(2026, 11, 3),
+            date(2026, 11, 5),
+        )
+        assert delivery.scheduled_for == date(2026, 10, 31)
+        assert (delivery.email_status, delivery.sent_at is not None) == ("sent", True)
+        assert delivery.recipient_email == guest.email
+        line = next(r.getMessage() for r in caplog.records if "sent for booking" in r.getMessage())
+        assert str(booking.id) in line and str(template.id) in line and "due 2026-10-31, 2 day(s) late" in line
 
     async def test_a_failed_sms_does_not_resend_the_email(self, client, guest, outbox, monkeypatch):
         await _template("booking_date", "after", 1)

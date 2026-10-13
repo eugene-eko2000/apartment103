@@ -11,14 +11,22 @@ image itself travels inside the email as an inline attachment — so it shows
 without the mail client fetching anything, and without the backend needing
 to know its own public URL.
 
-Scheduling. A template names a day relative to one of the booking's dates.
-For a run on day D, a booking is due when its anchor date plus (after) or
-minus (before) the offset lands on D. A run also looks back
-settings.guest_message_catch_up_days, so a missed run or a failed send is
-made up the next day — but never past the day the template was created
-(a new "1 day after booking" must not mail every guest who ever booked) nor
-before the booking itself was made (a booking made 3 days before check-in
-never owed the "7 days before check-in" message).
+Scheduling. A template names a day — the send day — relative to one of the
+booking's dates. A message is owed to an Active booking from its send day
+on, and every run sends whatever is owed and not yet sent. So a message
+whose day has passed still goes out, just late: a guest who books on the
+day of (or after) a message's send day — "3 days before check-in" for a
+booking made the day before check-in — gets it on the next run, and so does
+anything a down process or a failed email missed. Two limits:
+
+* A message is never owed from before its template existed: the moment it
+  became owed is the later of the send day and the booking date, and that
+  must not predate the template. Without this, a new "1 day after booking"
+  would mail every guest who ever booked.
+* A message meant for before the guest leaves (send day before check-out)
+  is dropped once the guest has checked out — arrival instructions after
+  departure only confuse. Messages scheduled on or after check-out are
+  unaffected.
 
 Sending. Each (template, booking) pair gets one MessageDelivery row,
 inserted before anything is sent; its unique index is what stops a second
@@ -252,31 +260,74 @@ def anchor_for_send_day(template: MessageTemplate, send_day: date) -> date:
     return send_day - offset if template.direction == "after" else send_day + offset
 
 
-def send_window(template: MessageTemplate, today: date) -> list[date]:
-    """The days a run on `today` still sends this template for, oldest first."""
-    first = max(today - timedelta(days=settings.guest_message_catch_up_days), template.created_at.date())
-    return [first + timedelta(days=i) for i in range((today - first).days + 1)]
+def owed_since(template: MessageTemplate, booking: Booking, send_day: date) -> date:
+    """When the message became owed: its send day, or the day the booking
+    was made if that was later (nothing is owed to a booking that doesn't
+    exist yet)."""
+    return max(send_day, booking.booking_date)
+
+
+def is_due(template: MessageTemplate, booking: Booking, today: date) -> date | None:
+    """The send day, if `template` is owed to `booking` on `today`; else None.
+
+    Only the schedule is judged here — whether it was already sent is the
+    delivery log's business (see _claim).
+    """
+    anchor = anchor_of(template, booking)
+    if anchor is None:
+        return None
+    send_day = send_day_for(template, anchor)
+    if send_day > today:
+        return None
+    if owed_since(template, booking, send_day) < template.created_at.date():
+        return None
+    checkout = checkout_of(booking)
+    if checkout is not None and send_day < checkout < today:
+        return None
+    return send_day
+
+
+async def _settled_booking_ids(template: MessageTemplate) -> list:
+    """Bookings this template needs no further attempt for: sent, skipped,
+    in flight, or failed with no attempts left."""
+    rows = await MessageDelivery.find(
+        MessageDelivery.template_id == template.id,
+        {
+            "$nor": [
+                {
+                    "email_status": "failed",
+                    "attempts": {"$lt": settings.guest_message_max_attempts},
+                }
+            ]
+        },
+    ).to_list()
+    return [row.booking_id for row in rows]
 
 
 async def due_bookings(template: MessageTemplate, today: date) -> list[tuple[Booking, date]]:
-    """(booking, day it fell due) for every Active booking this template is
-    due for in the window ending `today`."""
-    window = send_window(template, today)
-    if not window:
-        return []
-    anchors = [anchor_for_send_day(template, day) for day in window]
-    # The query matches any range of a multi-range stay; whether the match
-    # is the stay's actual check-in/check-out is decided below.
+    """(booking, send day) for every Active booking `template` is owed to
+    on `today` and that still needs sending — whether the send day is today
+    or already behind it."""
+    field = _ANCHOR_FIELDS[template.anchor]
+    created = template.created_at.date()
+    # A coarse Mongo pre-filter; is_due() makes the exact call. For a stay
+    # of several ranges the array field matches if any range does.
     candidates = await Booking.find(
-        {"status": "Active", _ANCHOR_FIELDS[template.anchor]: {"$in": [_encoder.encode(a) for a in anchors]}}
+        {
+            "status": "Active",
+            "_id": {"$nin": await _settled_booking_ids(template)},
+            field: {"$lte": _encoder.encode(anchor_for_send_day(template, today))},
+            # Booked since the template existed, or scheduled since then.
+            "$or": [
+                {"booking_date": {"$gte": _encoder.encode(created)}},
+                {field: {"$gte": _encoder.encode(anchor_for_send_day(template, created))}},
+            ],
+        }
     ).to_list()
     due: list[tuple[Booking, date]] = []
     for booking in candidates:
-        anchor = anchor_of(template, booking)
-        if anchor is None:
-            continue
-        send_day = send_day_for(template, anchor)
-        if send_day in window and send_day >= booking.booking_date:
+        send_day = is_due(template, booking, today)
+        if send_day is not None:
             due.append((booking, send_day))
     return due
 
@@ -309,14 +360,22 @@ async def _claim(template: MessageTemplate, booking: Booking, send_day: date) ->
         return None
 
 
-async def deliver(template: MessageTemplate, booking: Booking, send_day: date) -> bool:
+async def deliver(template: MessageTemplate, booking: Booking, send_day: date, today: date | None = None) -> bool:
     """Send `template` for `booking` unless it already went out. True when
-    the email was sent by this call."""
+    the email was sent by this call. `today` is the run's day, for saying
+    how late the message is."""
     delivery = await _claim(template, booking, send_day)
     if delivery is None:
         return False
 
+    # Which stay this is for, as it stood when sent — readable in the log
+    # even if the booking is later changed or the guest's data retired.
+    delivery.checkin_date = checkin_of(booking)
+    delivery.checkout_date = checkout_of(booking)
+
     guest = await booking.resolved_guest()
+    if guest is not None and not guest.is_redacted:
+        delivery.guest_name = f"{guest.first_name} {guest.family_name}"
     if guest is None or guest.is_redacted:
         delivery.email_status = delivery.sms_status = "skipped"
         delivery.email_error = "Guest record no longer available"
@@ -346,6 +405,16 @@ async def deliver(template: MessageTemplate, booking: Booking, send_day: date) -
     delivery.email_status = "sent"
     delivery.email_error = None
     delivery.sent_at = datetime.now(timezone.utc)
+    late_days = ((today or utc_today()) - send_day).days
+    logger.info(
+        "Guest message %r (%s) sent for booking %s to %s, due %s%s",
+        template.name,
+        template.id,
+        booking.id,
+        guest.email,
+        send_day.isoformat(),
+        f", {late_days} day(s) late" if late_days > 0 else "",
+    )
 
     try:
         await send_sms(guest.phone_number, render_sms(guest.preferred_language, message.subject))
@@ -367,7 +436,7 @@ async def send_due_messages(today: date | None = None) -> int:
     for template in await MessageTemplate.find(MessageTemplate.active == True).to_list():  # noqa: E712
         for booking, send_day in await due_bookings(template, today):
             try:
-                if await deliver(template, booking, send_day):
+                if await deliver(template, booking, send_day, today):
                     sent += 1
             except Exception:
                 # One bad booking must not stop the rest of the pass.
