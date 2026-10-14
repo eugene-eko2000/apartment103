@@ -17,8 +17,7 @@ from app.services import guest_messages
 pytestmark = pytest.mark.anyio
 
 TODAY = date(2026, 11, 2)
-# Templates exist well before TODAY unless a test says otherwise, so the
-# created_at bound doesn't interfere with the rule under test.
+# Templates exist well before TODAY unless a test says otherwise.
 LONG_AGO = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
 
@@ -215,20 +214,27 @@ class TestDueBookings:
         for template in (week_before, day_before, on_booking):
             assert [b.id for b, _ in await guest_messages.due_bookings(template, TODAY)] == [booking.id]
 
-    async def test_never_backfills_from_before_the_template_existed(self, client, guest):
+    async def test_a_new_template_is_owed_to_bookings_made_before_it(self, client, guest):
+        # Template created today; both bookings predate it, and one's send
+        # day (Oct 21) does too. Neither has had it, so both get it now.
         template = await _template("booking_date", "after", 1, created_at=datetime(2026, 11, 2, 9, tzinfo=timezone.utc))
-        await _booking(guest, date(2026, 12, 1), date(2026, 12, 5), date(2026, 10, 20))  # due Oct 21
-        due_today = await _booking(guest, date(2026, 12, 6), date(2026, 12, 8), date(2026, 11, 1))
+        older = await _booking(guest, date(2026, 12, 1), date(2026, 12, 5), date(2026, 10, 20))
+        newer = await _booking(guest, date(2026, 12, 6), date(2026, 12, 8), date(2026, 11, 1))
 
-        assert [b.id for b, _ in await guest_messages.due_bookings(template, TODAY)] == [due_today.id]
+        result = await guest_messages.due_bookings(template, TODAY)
+        assert sorted((b.id, day) for b, day in result) == sorted(
+            [(older.id, date(2026, 10, 21)), (newer.id, date(2026, 11, 2))]
+        )
 
-    async def test_a_booking_made_after_the_template_is_owed_even_past_messages(self, client, guest):
-        # Template created Nov 1; booked Nov 2 for a stay starting Nov 3, so
-        # "7 days before check-in" (Oct 27) predates the template but not the
-        # booking — the booking is what made it owed.
-        template = await _template("checkin", "before", 7, created_at=datetime(2026, 11, 1, tzinfo=timezone.utc))
-        booking = await _booking(guest, date(2026, 11, 3), date(2026, 11, 5), TODAY)
-        assert [b.id for b, _ in await guest_messages.due_bookings(template, TODAY)] == [booking.id]
+    async def test_a_new_pre_arrival_template_reaches_upcoming_stays_only(self, client, guest):
+        # Template created today. The upcoming stay gets "7 days before
+        # check-in" (Oct 27) late; the finished stay is past departure.
+        template = await _template("checkin", "before", 7, created_at=datetime(2026, 11, 2, 9, tzinfo=timezone.utc))
+        upcoming = await _booking(guest, date(2026, 11, 3), date(2026, 11, 5), date(2026, 9, 1))
+        await _booking(guest, date(2026, 10, 20), date(2026, 10, 25), date(2026, 9, 1))
+
+        result = await guest_messages.due_bookings(template, TODAY)
+        assert [(b.id, day) for b, day in result] == [(upcoming.id, date(2026, 10, 27))]
 
     async def test_pre_departure_messages_are_dropped_once_the_guest_has_left(self, client, guest):
         before_checkin = await _template("checkin", "before", 2)

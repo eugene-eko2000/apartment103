@@ -17,16 +17,12 @@ on, and every run sends whatever is owed and not yet sent. So a message
 whose day has passed still goes out, just late: a guest who books on the
 day of (or after) a message's send day — "3 days before check-in" for a
 booking made the day before check-in — gets it on the next run, and so does
-anything a down process or a failed email missed. Two limits:
-
-* A message is never owed from before its template existed: the moment it
-  became owed is the later of the send day and the booking date, and that
-  must not predate the template. Without this, a new "1 day after booking"
-  would mail every guest who ever booked.
-* A message meant for before the guest leaves (send day before check-out)
-  is dropped once the guest has checked out — arrival instructions after
-  departure only confuse. Messages scheduled on or after check-out are
-  unaffected.
+anything a down process or a failed email missed. The same goes for a
+template created later: every Active booking that hasn't had it yet is owed
+it, whenever it was made. One limit: a message meant for before the guest
+leaves (send day before check-out) is dropped once the guest has checked
+out — arrival instructions after departure only confuse. Messages scheduled
+on or after check-out are unaffected.
 
 Sending. Each (template, booking) pair gets one MessageDelivery row,
 inserted before anything is sent; its unique index is what stops a second
@@ -260,13 +256,6 @@ def anchor_for_send_day(template: MessageTemplate, send_day: date) -> date:
     return send_day - offset if template.direction == "after" else send_day + offset
 
 
-def owed_since(template: MessageTemplate, booking: Booking, send_day: date) -> date:
-    """When the message became owed: its send day, or the day the booking
-    was made if that was later (nothing is owed to a booking that doesn't
-    exist yet)."""
-    return max(send_day, booking.booking_date)
-
-
 def is_due(template: MessageTemplate, booking: Booking, today: date) -> date | None:
     """The send day, if `template` is owed to `booking` on `today`; else None.
 
@@ -278,8 +267,6 @@ def is_due(template: MessageTemplate, booking: Booking, today: date) -> date | N
         return None
     send_day = send_day_for(template, anchor)
     if send_day > today:
-        return None
-    if owed_since(template, booking, send_day) < template.created_at.date():
         return None
     checkout = checkout_of(booking)
     if checkout is not None and send_day < checkout < today:
@@ -309,7 +296,6 @@ async def due_bookings(template: MessageTemplate, today: date) -> list[tuple[Boo
     on `today` and that still needs sending — whether the send day is today
     or already behind it."""
     field = _ANCHOR_FIELDS[template.anchor]
-    created = template.created_at.date()
     # A coarse Mongo pre-filter; is_due() makes the exact call. For a stay
     # of several ranges the array field matches if any range does.
     candidates = await Booking.find(
@@ -317,11 +303,6 @@ async def due_bookings(template: MessageTemplate, today: date) -> list[tuple[Boo
             "status": "Active",
             "_id": {"$nin": await _settled_booking_ids(template)},
             field: {"$lte": _encoder.encode(anchor_for_send_day(template, today))},
-            # Booked since the template existed, or scheduled since then.
-            "$or": [
-                {"booking_date": {"$gte": _encoder.encode(created)}},
-                {field: {"$gte": _encoder.encode(anchor_for_send_day(template, created))}},
-            ],
         }
     ).to_list()
     due: list[tuple[Booking, date]] = []
