@@ -30,6 +30,10 @@ from app.db.mongo import init_mongo
 from app.jobs.scheduler import scheduler, start_scheduler
 
 logging.basicConfig(level=logging.INFO)
+# Only the app's own loggers go to DEBUG outside production. Third-party
+# libraries (pymongo, httpx, apscheduler, stripe) stay at INFO via the root
+# logger — at DEBUG they log every heartbeat and request and drown ours out.
+logging.getLogger("app").setLevel(settings.app_log_level)
 
 
 @asynccontextmanager

@@ -43,6 +43,8 @@ services:
         condition: service_healthy
     environment:
       APP_NAME: ${APP_NAME:-apartment103-backend}
+      # Defaults to production so a deploy env file missing ENVIRONMENT
+      # fails safe: no DEBUG logging, no test-marking of guest messages.
       ENVIRONMENT: ${ENVIRONMENT:-production}
       MONGO_URI: mongodb://mongo:27017
       MONGO_DB: ${MONGO_DB:-apartment103}

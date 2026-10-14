@@ -1,12 +1,21 @@
+import logging
 from decimal import Decimal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# ENVIRONMENT values that mean the live site. "production" is what
+# deploy/env/prod.env sets; "prod" is accepted too since it is the ENV_SLUG
+# for that stack and an easy value to reach for.
+PRODUCTION_ENVIRONMENTS = frozenset({"production", "prod"})
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_name: str = "apartment103-backend"
+    # "production" on the live site (deploy/env/prod.env), "preprod" on the
+    # staging stack, "local" in development. Drives the preprod test-marking
+    # in app.core.notifications and the log level below.
     environment: str = "local"
 
     mongo_uri: str = "mongodb://localhost:27017"
@@ -120,6 +129,19 @@ class Settings(BaseSettings):
     # Email attempts per message before a failed delivery is given up on —
     # one per daily run.
     guest_message_max_attempts: int = 3
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment.strip().lower() in PRODUCTION_ENVIRONMENTS
+
+    @property
+    def app_log_level(self) -> int:
+        """Level for the app's own loggers (everything under "app.").
+
+        DEBUG everywhere but production, where it would only add noise and
+        risk logging guest details into long-lived container logs.
+        """
+        return logging.INFO if self.is_production else logging.DEBUG
 
 
 settings = Settings()
